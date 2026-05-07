@@ -1,5 +1,4 @@
 -- EventBus Implementation
--- Pure Lua, no LÖVE dependencies
 
 local EventBus = {}
 EventBus.__index = EventBus

@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Architecture Refactor: OOP → Pure Table ECS
+
+**问题**：原设计使用OOP基类（System:extend, Component:extend），没有实际好处，增加复杂度。
+
+**变更**：
+- 删除 `src/ecs/system.lua` - OOP基类
+- 删除 `src/ecs/component.lua` - OOP基类
+- 所有系统改为纯表定义（6个文件）
+
+**新系统格式**：
+```lua
+local MovementSystem = {
+    priority = 1,
+    name = "MovementSystem",
+    init = function(self, world) ... end,
+    update = function(self, world, dt) ... end
+}
+return MovementSystem
+```
+
+**好处**：
+- 无元表开销
+- 更简洁，符合ECS原则
+- 代码更易理解和维护
+
+**Breaking Changes**:
+- 系统update函数签名改为 `update(self, world, dt)`
+- 移除 `:new()` 调用，直接传表给 `world:addSystem()`
+
 ## [0.1.0] - Initial Release
 
 ECS-based traditional roguelike with LÖVE2D

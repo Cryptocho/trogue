@@ -1,5 +1,4 @@
 -- ECS Core Implementation
--- Pure Lua, no LÖVE dependencies
 
 local World = {}
 World.__index = World
@@ -398,7 +397,7 @@ end
 function World:update(dt)
     for _, system in ipairs(self.systems) do
         if system.enabled ~= false and system.update then
-            system:update(dt, self)
+            system:update(self, dt)
         end
     end
 end

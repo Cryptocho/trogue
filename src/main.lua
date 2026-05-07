@@ -141,12 +141,17 @@ function initGameWorld()
     end
     
     -- Add systems in priority order
-    -- TurnSystem must be added first to track turn state
-    game.turnSystem = TurnSystem:new({priority = 0, name = "TurnSystem"})
-    game.world:addSystem(game.turnSystem)
+    game.world:addSystem(TurnSystem)
+    game.world:addSystem(MovementSystem)
+    game.world:addSystem(CombatSystem)
+    game.world:addSystem(AISystem)
+    game.world:addSystem(RenderSystem)
     
-    game.world:addSystem(MovementSystem:new({priority = 1, name = "MovementSystem"}))
-    game.world:addSystem(CombatSystem:new({priority = 2, name = "CombatSystem"}))
-    game.world:addSystem(AISystem:new({priority = 3, name = "AISystem"}))
-    game.world:addSystem(RenderSystem:new({priority = 4, name = "RenderSystem"}))
+    -- Store reference to TurnSystem
+    for _, sys in ipairs(game.world.systems) do
+        if sys.name == "TurnSystem" then
+            game.turnSystem = sys
+            break
+        end
+    end
 end

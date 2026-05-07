@@ -1,5 +1,4 @@
 -- PrototypeManager Implementation
--- Pure Lua, no LÖVE dependencies
 
 local PrototypeManager = {}
 PrototypeManager.__index = PrototypeManager
