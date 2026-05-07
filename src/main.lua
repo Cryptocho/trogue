@@ -27,6 +27,9 @@ local game = {
 }
 
 function love.load()
+    -- Set global default filter for pixel-perfect scaling
+    love.graphics.setDefaultFilter("nearest", "nearest")
+    
     game.events = EventBus:new()
     game.world = World:new()
     game.world.eventBus = game.events

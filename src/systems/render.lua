@@ -9,6 +9,9 @@ local RenderSystem = {
     TILE_SIZE = 16,
     TILES_PER_ROW = 8,
     
+    -- Scale factor for zooming the game view
+    SCALE = 2,
+    
     init = function(self, world)
         self.world = world
         self.tileset = nil
@@ -16,7 +19,6 @@ local RenderSystem = {
         
         -- Load tileset image
         self.tileset = love.graphics.newImage("assets/tileset.png")
-        self.tileset:setFilter("nearest", "nearest")
         
         -- Pre-create quads for each tile
         for i = 0, 7 do
@@ -41,9 +43,13 @@ local RenderSystem = {
         -- Find player position for camera
         local playerX, playerY = self:centerOnPlayer(world)
         
-        -- Calculate offset to center the view
-        local offsetX = screenWidth / 2 - playerX * self.TILE_SIZE - self.TILE_SIZE / 2
-        local offsetY = screenHeight / 2 - playerY * self.TILE_SIZE - self.TILE_SIZE / 2
+        -- Push current transform and apply scale for zooming
+        love.graphics.push()
+        love.graphics.scale(self.SCALE)
+        
+        -- Calculate offset to center the view (adjusted for scale)
+        local offsetX = screenWidth / 2 / self.SCALE - playerX * self.TILE_SIZE - self.TILE_SIZE / 2
+        local offsetY = screenHeight / 2 / self.SCALE - playerY * self.TILE_SIZE - self.TILE_SIZE / 2
         
         -- First pass: draw tiles
         self:drawTiles(world, offsetX, offsetY)
@@ -54,9 +60,13 @@ local RenderSystem = {
         -- Draw health bars
         self:drawHealthBars(world, offsetX, offsetY)
         
-        -- Draw FPS
+        -- Pop transform to restore original scale for UI
+        love.graphics.pop()
+        
+        -- Draw FPS (unaffected by scale)
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.print("FPS: " .. love.timer.getFPS(), 10, love.graphics.getHeight() - 20)
+        love.graphics.print("Scale: " .. self.SCALE .. "x", 10, love.graphics.getHeight() - 40)
     end,
     
     centerOnPlayer = function(self, world)
