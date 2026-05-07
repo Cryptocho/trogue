@@ -6,7 +6,13 @@ local TurnSystem = require("src.systems.turn")
 local MovementSystem = require("src.systems.movement")
 local CombatSystem = require("src.systems.combat")
 local AISystem = require("src.systems.ai")
+local MapRenderer = require("src.systems.map_renderer")
 local RenderSystem = require("src.systems.render")
+
+-- Load configuration
+local Config = require("src.config")
+TILE_SIZE = Config.TILE_SIZE
+SCALE = Config.SCALE
 
 local KEY_MOVEMENTS = {
     left = {dx = -1, dy = 0},
@@ -34,7 +40,6 @@ function love.load()
     game.world = World:new()
     game.world.eventBus = game.events
     game.prototypes = PrototypeManager:new(game.world)
-    game.prototypes:load("src.data.prototypes.tiles")
     game.prototypes:load("src.data.prototypes.entities")
     
     initGameWorld()
@@ -61,10 +66,53 @@ end
 
 function love.draw()
     if game.world then
+        -- Get camera position from player
+        local cameraX, cameraY = 0, 0
+        local players = game.world:query({"Player", "Position"})
+        if #players > 0 then
+            cameraX = players[1].components.Position.x
+            cameraY = players[1].components.Position.y
+        end
+        
+        -- Clear screen with black
+        love.graphics.clear(0, 0, 0, 1)
+        
+        local screenWidth = love.graphics.getWidth()
+        local screenHeight = love.graphics.getHeight()
+        
+        -- Calculate offset to center the view (using global constants)
+        local offsetX = screenWidth / 2 / SCALE - cameraX * TILE_SIZE - TILE_SIZE / 2
+        local offsetY = screenHeight / 2 / SCALE - cameraY * TILE_SIZE - TILE_SIZE / 2
+        
+        -- Push transform and scale
+        love.graphics.push()
+        love.graphics.scale(SCALE)
+        
+        -- Draw map tiles via MapRenderer
+        local mapRenderer = nil
+        for _, sys in ipairs(game.world.systems) do
+            if sys.name == "MapRenderer" then
+                mapRenderer = sys
+                break
+            end
+        end
+        if mapRenderer then
+            mapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
+        end
+        
+        -- Draw entities via RenderSystem
         local renderSystem = game:getRenderSystem()
         if renderSystem then
-            renderSystem:draw(game.world)
+            renderSystem:drawEntities(game.world, offsetX, offsetY)
+            renderSystem:drawHealthBars(game.world, offsetX, offsetY)
         end
+        
+        -- Pop transform
+        love.graphics.pop()
+        
+        -- Draw FPS (unaffected by scale)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, love.graphics.getHeight() - 20)
     end
     
     love.graphics.setColor(1, 1, 1, 1)
@@ -124,31 +172,40 @@ function initGameWorld()
         "################",
     }
     
+    -- Spawn only dynamic entities (player and enemies)
     for y, row in ipairs(mapData) do
         for x = 1, #row do
             local char = row:sub(x, x)
-            local tileType = "floor"
             
-            if char == "#" then
-                tileType = "wall"
-            elseif char == "@" then
-                tileType = "floor"
+            if char == "@" then
                 game.prototypes:spawn("player", {Position = {x = x, y = y}})
             elseif char == "g" then
-                tileType = "floor"
                 game.prototypes:spawn("goblin", {Position = {x = x, y = y}})
             end
-            
-            game.prototypes:spawn(tileType, {Position = {x = x, y = y}})
         end
     end
     
-    -- Add systems in priority order
+    -- Add MapRenderer system first (renders static tiles)
+    game.world:addSystem(MapRenderer)
+    
+    -- Add other systems in priority order
     game.world:addSystem(TurnSystem)
     game.world:addSystem(MovementSystem)
     game.world:addSystem(CombatSystem)
     game.world:addSystem(AISystem)
     game.world:addSystem(RenderSystem)
+    
+    -- Initialize MapRenderer with map data
+    local mapRenderer = nil
+    for _, sys in ipairs(game.world.systems) do
+        if sys.name == "MapRenderer" then
+            mapRenderer = sys
+            break
+        end
+    end
+    if mapRenderer then
+        mapRenderer:loadMap(mapData)
+    end
     
     -- Store reference to TurnSystem
     for _, sys in ipairs(game.world.systems) do

@@ -95,7 +95,20 @@ local MovementSystem = {
     end,
     
     checkCollision = function(self, entity, x, y)
-        -- Find solid entities at position
+        -- Check collision with map tiles first
+        local mapRenderer = nil
+        for _, sys in ipairs(self.world.systems) do
+            if sys.name == "MapRenderer" then
+                mapRenderer = sys
+                break
+            end
+        end
+        
+        if mapRenderer and mapRenderer:isSolid(x, y) then
+            return -1  -- Use -1 to indicate map tile collision
+        end
+        
+        -- Also check for solid entities (if any exist)
         local solids = self.world:query({"Solid", "Position"})
         
         for _, result in ipairs(solids) do
