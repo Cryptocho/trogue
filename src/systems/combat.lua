@@ -1,5 +1,6 @@
 -- Combat System
 -- Handles collision-based combat (touch damage)
+-- Now uses event-driven damage via RuleEngine
 
 local CombatSystem = {
     priority = 2,
@@ -9,7 +10,6 @@ local CombatSystem = {
         self.world = world
         self.events = world.eventBus
         
-        -- Register for collision and move events
         if self.events then
             self.events:on("MoveSucceeded", function(data)
                 self:onMoveSucceeded(data)
@@ -54,9 +54,28 @@ local CombatSystem = {
             return  -- No combat with non-actors (walls, etc.)
         end
         
-        -- Both take damage (ramming damage)
-        self:dealDamage(entity, target)
-        self:dealDamage(target, entity)
+        -- Emit damage requests for both parties (ramming damage)
+        if self.events then
+            -- Entity damages target
+            local damage = self:calcMeleeDamage(entity, true)
+            self.events:emit("DamageRequest", {
+                source = entity,
+                target = target,
+                effectId = "melee_attack",
+                baseValue = damage,
+                damageType = "physical",
+            })
+            
+            -- Target damages entity
+            damage = self:calcMeleeDamage(target, false)
+            self.events:emit("DamageRequest", {
+                source = target,
+                target = entity,
+                effectId = "melee_attack",
+                baseValue = damage,
+                damageType = "physical",
+            })
+        end
         
         -- If player attacked, end turn
         if isPlayer and self.events then
@@ -72,52 +91,36 @@ local CombatSystem = {
             if result.id ~= entity then
                 local pos = result.components.Position
                 if pos and pos.x == x and pos.y == y then
-                    -- Combat!
-                    self:dealDamage(entity, result.id)
+                    -- Combat! Emit damage request
+                    if self.events then
+                        local damage = self:calcMeleeDamage(entity, self.world.components.Player[entity])
+                        self.events:emit("DamageRequest", {
+                            source = entity,
+                            target = result.id,
+                            effectId = "melee_attack",
+                            baseValue = damage,
+                            damageType = "physical",
+                        })
+                    end
                 end
             end
         end
     end,
     
-    dealDamage = function(self, source, target)
-        local sourceHealth = self.world.components.Health[source]
-        local targetHealth = self.world.components.Health[target]
-        
-        if not targetHealth then
-            return
-        end
-        
+    -- Calculate melee damage based on source entity
+    calcMeleeDamage = function(self, source, isPlayer)
         -- Base damage
         local damage = 1
         
-        -- Check if source is player (could have weapons later)
-        if self.world.components.Player[source] then
-            damage = 2  -- Player deals more damage
+        -- Player deals more damage
+        if isPlayer then
+            damage = 2
         end
         
-        -- Apply damage
-        targetHealth.current = targetHealth.current - damage
-        
-        -- Emit damage event
-        if self.events then
-            self.events:emit("DamageDealt", {
-                source = source,
-                target = target,
-                amount = damage,
-                newHealth = targetHealth.current
-            })
-        end
-        
-        -- Check for death
-        if targetHealth.current <= 0 then
-            if self.events then
-                self.events:emit("EntityDied", {
-                    entity = target,
-                    killer = source
-                })
-            end
-        end
-    end
+        -- TODO: Could add buffs, weapons, etc. here
+        -- For now, just return base damage
+        return damage
+    end,
 }
 
 return CombatSystem

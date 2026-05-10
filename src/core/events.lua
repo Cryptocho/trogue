@@ -30,27 +30,47 @@ function EventBus:_rebuild(eventName)
         sorted[i] = entry
     end
     
-    -- Simple insertion sort by priority
-    for i = 2, #sorted do
-        local key = sorted[i]
-        local j = i - 1
-        while j >= 1 and sorted[j].priority > key.priority do
-            sorted[j + 1] = sorted[j]
-            j = j - 1
-        end
-        sorted[j + 1] = key
-    end
+    table.sort(sorted, function(a, b) return a.priority < b.priority end)
     
     self.sortedHandlers[eventName] = sorted
     self.dirty[eventName] = false
+end
+
+--- Get handlers for an event, optionally filtered by targetId
+-- @param eventName string
+-- @param targetId number|nil: if provided, only return handlers matching this targetId
+-- @return array: handler entries
+function EventBus:_getHandlers(eventName, targetId)
+    if self.dirty[eventName] then
+        self:_rebuild(eventName)
+    end
+    
+    local all = self.sortedHandlers[eventName]
+    if not all then
+        return {}
+    end
+    
+    if targetId == nil then
+        return all
+    end
+    
+    -- Filter by targetId (nil targetId means "all" handlers)
+    local filtered = {}
+    for _, entry in ipairs(all) do
+        if entry.targetId == nil or entry.targetId == targetId then
+            table.insert(filtered, entry)
+        end
+    end
+    return filtered
 end
 
 --- Subscribe to an event
 -- @param eventName string: name of the event
 -- @param handler function: callback function(data)
 -- @param priority number: optional, lower = called first (default 0)
+-- @param targetId number: optional, if set, only emitTo(targetId) will trigger this handler
 -- @return function: unsubscribe handler
-function EventBus:on(eventName, handler, priority)
+function EventBus:on(eventName, handler, priority, targetId)
     if priority == nil then
         priority = 0
     end
@@ -61,7 +81,8 @@ function EventBus:on(eventName, handler, priority)
     
     table.insert(self.listeners[eventName], {
         handler = handler,
-        priority = priority
+        priority = priority,
+        targetId = targetId
     })
     
     -- Mark as dirty (needs resort)
@@ -120,18 +141,13 @@ function EventBus:emit(eventName, data)
 end
 
 --- Emit an event to a specific target entity (directed event)
--- Use when the event target is known: "Entity 5 received 10 damage"
+-- Only handlers with matching targetId (or nil targetId) will be called
 -- @param targetId number: entity id that should handle this event
 -- @param eventName string
 -- @param data table: event data passed to handlers
 function EventBus:emitTo(targetId, eventName, data)
-    -- Rebuild cache if dirty
-    if self.dirty[eventName] then
-        self:_rebuild(eventName)
-    end
-    
-    local handlers = self.sortedHandlers[eventName]
-    if not handlers then
+    local handlers = self:_getHandlers(eventName, targetId)
+    if #handlers == 0 then
         return
     end
     
@@ -151,8 +167,24 @@ end
 -- @param eventName string
 -- @param data table
 function EventBus:emitToMany(targetIds, eventName, data)
+    -- Rebuild cache once before the loop
+    if self.dirty[eventName] then
+        self:_rebuild(eventName)
+    end
+    
+    local allHandlers = self.sortedHandlers[eventName] or {}
+    
     for _, targetId in ipairs(targetIds) do
-        self:emitTo(targetId, eventName, data)
+        -- Filter handlers for this target
+        for _, entry in ipairs(allHandlers) do
+            if entry.targetId == nil or entry.targetId == targetId then
+                local d = data and {target = targetId} or {target = targetId}
+                if data then
+                    for k, v in pairs(data) do d[k] = v end
+                end
+                entry.handler(d)
+            end
+        end
     end
 end
 

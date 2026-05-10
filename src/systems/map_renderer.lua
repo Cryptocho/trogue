@@ -53,11 +53,7 @@ end
 
 function MapRenderer:update(world, dt)
     -- TODO: 动态地图支持
-    -- 如果需要支持动态修改的地图（如开门、破坏墙壁等），在这里更新 tiles 数组
-    -- 可能的实现方式：
-    -- 1. 标记需要更新的瓦片位置
-    -- 2. 订阅事件系统，在收到地图变更事件时修改 tiles
-    -- 3. 对于需要动画的瓦片（如流水、草地摆动），存储动画状态
+    -- 动态修改地图（如开门、破坏墙壁等），在这里更新 tiles 数组
 end
 
 function MapRenderer:isSolid(x, y)
@@ -71,7 +67,6 @@ end
 
 function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
     -- Calculate visible area based on camera position
-    -- Uses Config constants
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
     
