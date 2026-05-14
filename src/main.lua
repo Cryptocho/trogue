@@ -334,13 +334,14 @@ function initGameWorld()
         end
     end
     
-    -- Initialize actor abilities
+    -- Initialize actor abilities (使用 ECS Ability 组件)
     local actors = game.world:query({"Actor", "Position"})
+    local AbilityComponent = require("src.components.ability")
     for _, result in ipairs(actors) do
+        -- 懒创建 Ability 组件
         local comp = game.ruleEngine:getAbilityComponent(result.id)
         if game.world.components.Player[result.id] then
-            -- Player has all abilities
-            comp.abilities = {"punch", "heal", "shield", "fireball"}
+            -- Player has all abilities (已在 RuleEngine 中自动设置)
         else
             -- Enemies only have melee attack
             comp.abilities = {"punch"}

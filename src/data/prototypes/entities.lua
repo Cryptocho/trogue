@@ -7,7 +7,8 @@ return {
         Renderable = {tileIndex = 2},
         Player = {},
         Health = {current = 20, max = 20},
-        Actor = {moveDelay = 0}  -- Player doesn't use AI movement
+        Actor = {moveDelay = 0},  -- Player doesn't use AI movement
+        Ability = {abilities = {"punch", "heal", "shield", "fireball"}, cooldowns = {}, resources = {mp = 50, maxMp = 50}}
     },
     
     -- Goblin enemy (index 3 in tileset)

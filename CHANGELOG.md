@@ -6,6 +6,41 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 数据迁移
+
+#### Added
+
+- `src/components/ability.lua` - AbilityComponent:
+  - 存储实体的 abilities/cooldowns/resources
+  - 提供 addAbility, setCooldown, getCooldown, consumeResource, restoreResource 方法
+
+- `src/components/buffs.lua` - BuffsComponent:
+  - 管理实体的 activeBuffs 列表
+  - 提供 addBuff, getBuff, hasBuff, removeBuff, tick 方法
+
+- `src/components/effect_tile.lua` - EffectTileComponent:
+  - 动态效果实体（毒、火、冰等）
+  - 包含 effectType, damage, duration, spreadChance 等字段
+  - 提供 createPoison, createFire, createIce 工厂方法
+
+#### Refactored
+
+- `src/core/rule_engine.lua` - 迁移至 ECS 组件:
+  - 删除 abilityComponents 内部缓存
+  - 改用 `world.components.Ability[entityId]` 查询
+  - 新增 `getOrCreateBuffsComponent()` 方法
+  - `getAbilityComponent()` 改为纯懒创建模式
+
+- `src/data/prototypes/entities.lua` - 原型预定义:
+  - Player 原型添加 Ability 组件
+  - 符合"组件在实体创建时预定义"原则
+
+#### Architecture
+
+- **数据位置统一**: 所有数据存储在 ECS 组件中，无外部缓存
+- **组件预定义原则**: Ability/Buffs 组件在原型中定义，系统仅处理懒创建
+- **RuleEngine 职责**: 规则判定与效果应用，通过事件驱动
+
 ### Core Features
 
 - Pure Lua ECS core (World, Entity, Component, System)

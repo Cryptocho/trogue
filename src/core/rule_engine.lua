@@ -1,10 +1,13 @@
 -- RuleEngine: 规则判定与效果应用
 -- Gameplay Rule Pipeline Layer 核心
--- MVP: 效果处理逻辑保留在 RuleEngine 内部，通过事件驱动
+-- MVP: 效果处理逻辑暂时保留在 RuleEngine 内部，通过事件驱动
+-- Phase 1: 已迁移使用 ECS 组件 Ability 和 Buffs
 
 local AbilityDef = require("src.data.definitions.ability")
 local EffectDef = require("src.data.definitions.effect")
 local BuffDef = require("src.data.definitions.buff")
+local AbilityComponent = require("src.components.ability")
+local BuffsComponent = require("src.components.buffs")
 
 local RuleEngine = {}
 RuleEngine.__index = RuleEngine
@@ -14,13 +17,10 @@ function RuleEngine:new(world, eventBus)
         world = world,
         events = eventBus,
         
-        -- Registry
+        -- Registry: 技能/效果/buff 定义
         abilities = {},   -- abilityId -> AbilityDefinition
         effects = {},     -- effectId -> EffectDefinition
         buffs = {},       -- buffId -> BuffDefinition
-        
-        -- Entity ability component cache
-        abilityComponents = {},  -- entityId -> {abilities = {}, cooldowns = {}, resources = {}}
     }
     setmetatable(instance, RuleEngine)
     
@@ -76,23 +76,33 @@ function RuleEngine:registerEvents()
     end, 100)
 end
 
--- Get entity ability component
+-- Get entity ability component from ECS (懒创建)
+-- 注意: Ability 组件应在原型中预定义，此处仅处理未预定义的情况
 function RuleEngine:getAbilityComponent(entityId)
-    if not self.abilityComponents[entityId] then
-        self.abilityComponents[entityId] = {
-            abilities = {},
-            cooldowns = {},
-            resources = {mp = 50, maxMp = 50},
-        }
-        
-        -- Initialize player default abilities
-        if self.world.components.Player and self.world.components.Player[entityId] then
-            self.abilityComponents[entityId].abilities = {
-                "punch", "heal", "shield", "fireball"
-            }
-        end
+    -- 首先确保 Ability 组件存储存在
+    if not self.world.components.Ability then
+        self.world.components.Ability = {}
     end
-    return self.abilityComponents[entityId]
+    
+    -- 如果不存在，懒创建 (适用于原型未定义 Ability 的情况)
+    if not self.world.components.Ability[entityId] then
+        self.world.components.Ability[entityId] = AbilityComponent:new()
+    end
+    
+    return self.world.components.Ability[entityId]
+end
+
+-- Ensure entity has Buffs component
+function RuleEngine:getOrCreateBuffsComponent(entityId)
+    if not self.world.components.Buffs then
+        self.world.components.Buffs = {}
+    end
+    
+    if not self.world.components.Buffs[entityId] then
+        self.world.components.Buffs[entityId] = BuffsComponent:new()
+    end
+    
+    return self.world.components.Buffs[entityId]
 end
 
 -- Check if ability can be used
@@ -336,9 +346,11 @@ function RuleEngine:_processDamage(data)
         return
     end
     
+    -- Get buffs component (ECS)
+    local buffs = self.world.components.Buffs and self.world.components.Buffs[data.target]
+    
     -- Check for shield absorption
     local shieldAbsorb = 0
-    local buffs = self.world.components.Buffs and self.world.components.Buffs[data.target]
     if buffs and buffs.activeBuffs then
         local shieldBuff = buffs.activeBuffs["shield"]
         if shieldBuff and shieldBuff.stacks > 0 then
@@ -427,17 +439,8 @@ end
 
 -- Private: Process buff apply
 function RuleEngine:_processBuffApply(data)
-    -- Ensure Buffs component exists
-    if not self.world.components.Buffs then
-        self.world.components.Buffs = {}
-    end
-    if not self.world.components.Buffs[data.target] then
-        self.world.components.Buffs[data.target] = {
-            activeBuffs = {}
-        }
-    end
-    
-    local buffs = self.world.components.Buffs[data.target]
+    -- 使用 ECS 组件
+    local buffs = self:getOrCreateBuffsComponent(data.target)
     local buffDef = self.buffs[data.buffId]
     
     if not buffDef then
@@ -522,24 +525,26 @@ end
 
 -- Turn end processing
 function RuleEngine:onTurnEnd()
-    -- Reduce cooldowns
-    for entityId, comp in pairs(self.abilityComponents) do
-        for abilityId, cd in pairs(comp.cooldowns) do
-            if cd > 0 then
-                local newCd = cd - 1
-                comp.cooldowns[abilityId] = newCd
-                if newCd == 0 and self.events then
-                    -- Cooldown just finished
-                    self.events:emit("CooldownFinished", {
-                        entity = entityId,
-                        abilityId = abilityId,
-                    })
+    -- Reduce cooldowns (使用 ECS Ability 组件)
+    if self.world.components.Ability then
+        for entityId, comp in pairs(self.world.components.Ability) do
+            for abilityId, cd in pairs(comp.cooldowns) do
+                if cd > 0 then
+                    local newCd = cd - 1
+                    comp.cooldowns[abilityId] = newCd
+                    if newCd == 0 and self.events then
+                        -- Cooldown just finished
+                        self.events:emit("CooldownFinished", {
+                            entity = entityId,
+                            abilityId = abilityId,
+                        })
+                    end
                 end
             end
         end
     end
     
-    -- Reduce buff durations and process ticks
+    -- Reduce buff durations and process ticks (使用 ECS Buffs 组件)
     if self.world.components.Buffs then
         for entityId, buffs in pairs(self.world.components.Buffs) do
             if buffs.activeBuffs then
