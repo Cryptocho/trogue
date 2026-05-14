@@ -6,6 +6,80 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### Phase 2: 组件规范化
+
+#### Added
+
+- `src/components/position.lua` - Position 组件定义，用于存储实体位置
+- `src/components/health.lua` - Health 组件定义，用于存储生命值和存活状态
+
+#### Refactored
+
+- `src/components/ability.lua` - 移除 `new()` 和实例方法，改为纯数据组件:
+  - 方法逻辑移至对应 System（AbilitySystem/RuleEngine）
+  - 符合 ECS "组件是数据、系统是逻辑" 原则
+
+- `src/components/buffs.lua` - 移除 `new()` 和实例方法，改为纯数据组件:
+  - 方法逻辑由 RuleEngine 实现
+
+- `src/components/effect_tile.lua` - 移除工厂方法，改为纯数据组件:
+  - 移除 createPoison/createFire/createIce 工厂方法
+  - 特殊效果实体使用预定义原型
+
+#### Architecture
+
+- **统一组件风格**: 所有组件为纯数据（raw data）
+- **无懒创建**: 组件必须预定义在原型中，系统不创建缺失的组件
+- **数据与逻辑分离**: 组件只存储数据，业务逻辑在 System 中实现
+
+### 输入系统重构
+
+#### Refactored
+
+- `src/systems/input.lua` - 完全重构为统一输入处理系统:
+  - 添加能力热键处理（KEY_ABILITIES）
+  - 提供 setTurnSystem() / setRuleEngine() 方法注入依赖
+  - 移除重复的移动键位定义（移至 InputSystem 唯一定义）
+  - handleKey() 统一处理移动和技能使用
+
+- `src/main.lua` - 简化为委托模式:
+  - love.keypressed 委托给 InputSystem:handleKey()
+  - 删除 handleMove() / handleAbility() 方法（移至 InputSystem）
+  - 添加 game:getSystem() 辅助方法
+  - InputSystem 和 AISystem 通过 setter 接收 RuleEngine 引用
+
+#### Architecture
+
+- **单一输入入口**: 所有玩家输入（移动、技能）统一由 InputSystem 处理
+- **委托模式**: main.lua 只负责初始化和渲染，业务逻辑委托给系统
+- **依赖注入**: 系统间依赖通过 setter 方法传递，避免手动设置
+
+### 组件优化
+
+#### Refactored
+
+- `src/components/ability.lua` - abilities 从数组改为 Set 结构:
+  - 格式从 `{abilityId1, abilityId2, ...}` 改为 `{abilityId = true, ...}`
+  - 新增 hasAbility() 方法实现 O(1) 查询
+  - 新增 removeAbility() / getAllAbilities() 辅助方法
+  - addAbility() 简化为 `abilities[abilityId] = true`
+
+- `src/components/actor.lua` - 添加详细文档注释:
+  - 说明组件用途（标记可执行动作的实体）
+  - 说明 Player 不应拥有此组件
+  - 添加 moveDelay 属性说明
+
+- `src/data/prototypes/entities.lua` - abilities 改为 Set 格式:
+  - `abilities = {punch = true, heal = true, ...}`
+
+- `src/core/rule_engine.lua` - canUse() 优化:
+  - 从数组遍历改为 Set 直接查询: `comp.abilities[abilityId]`
+  - 查询复杂度从 O(n) 降为 O(1)
+
+- `src/systems/ai.lua` - AISystem 优化:
+  - 添加 setRuleEngine() 方法支持依赖注入
+  - abilities 检查从 `#abilities == 0` 改为 `not next(abilities)`
+
 ### 数据迁移
 
 #### Added

@@ -6,6 +6,7 @@ local TurnSystem = require("src.systems.turn")
 local MovementSystem = require("src.systems.movement")
 local CombatSystem = require("src.systems.combat")
 local AISystem = require("src.systems.ai")
+local InputSystem = require("src.systems.input")
 local MapRenderer = require("src.systems.map_renderer")
 local RenderSystem = require("src.systems.render")
 local RuleEngineModule = require("src.core.rule_engine")
@@ -15,31 +16,12 @@ local Config = require("src.config")
 TILE_SIZE = Config.TILE_SIZE
 SCALE = Config.SCALE
 
--- Movement keys
-local KEY_MOVEMENTS = {
-    left = {dx = -1, dy = 0},
-    right = {dx = 1, dy = 0},
-    up = {dx = 0, dy = -1},
-    down = {dx = 0, dy = 1},
-    a = {dx = -1, dy = 0},
-    d = {dx = 1, dy = 0},
-    w = {dx = 0, dy = -1},
-    s = {dx = 0, dy = 1},
-}
-
--- Ability hotkeys
-local KEY_ABILITIES = {
-    ["1"] = "punch",
-    ["2"] = "heal",
-    ["3"] = "shield",
-    ["4"] = "fireball",
-}
-
 local game = {
     world = nil,
     events = nil,
     prototypes = nil,
     turnSystem = nil,
+    inputSystem = nil,
     ruleEngine = nil,
     selectedAbility = nil,
 }
@@ -125,19 +107,13 @@ function love.draw()
         love.graphics.scale(SCALE)
         
         -- Draw map tiles
-        local mapRenderer = nil
-        for _, sys in ipairs(game.world.systems) do
-            if sys.name == "MapRenderer" then
-                mapRenderer = sys
-                break
-            end
-        end
+        local mapRenderer = game:getSystem("MapRenderer")
         if mapRenderer then
             mapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
         end
         
         -- Draw entities
-        local renderSystem = game:getRenderSystem()
+        local renderSystem = game:getSystem("RenderSystem")
         if renderSystem then
             renderSystem:drawEntities(game.world, offsetX, offsetY)
             renderSystem:drawHealthBars(game.world, offsetX, offsetY)
@@ -203,75 +179,17 @@ function game:drawUI()
     end
 end
 
+-- Delegate all keyboard input to InputSystem
 function love.keypressed(key, scancode, isrepeat)
-    -- Check if turn system allows input
-    if game.turnSystem and not game.turnSystem:isInputAllowed() then
-        return
-    end
-    
-    -- Handle movement
-    local movement = KEY_MOVEMENTS[key]
-    if movement then
-        game:handleMove(movement)
-        return
-    end
-    
-    -- Handle ability hotkeys
-    local abilityId = KEY_ABILITIES[key]
-    if abilityId then
-        game:handleAbility(abilityId)
-        return
+    if game.inputSystem then
+        game.inputSystem:handleKey(key, scancode, isrepeat)
     end
 end
 
--- Handle movement
-function game:handleMove(movement)
-    local players = self.world:query({"Player", "Position"})
-    if #players == 0 then return end
-    
-    local playerId = players[1].id
-    self.turnSystem:startTurn()
-    
-    if self.events then
-        self.events:emit("MoveAttempt", {
-            entity = playerId,
-            dx = movement.dx,
-            dy = movement.dy,
-            isPlayer = true
-        })
-    end
-end
-
--- Handle ability use
-function game:handleAbility(abilityId)
-    local players = self.world:query({"Player", "Position"})
-    if #players == 0 then return end
-    
-    local playerId = players[1].id
-    
-    -- Check if ability is usable
-    local canUse, reason = self.ruleEngine:canUse(playerId, abilityId)
-    if not canUse then
-        print("Cannot use: " .. reason)
-        return
-    end
-    
-    -- Start turn
-    self.turnSystem:startTurn()
-    
-    -- Use ability - auto-select target
-    if self.events then
-        self.events:emit("AbilityUse", {
-            entity = playerId,
-            abilityId = abilityId,
-            targetId = nil  -- RuleEngine will select target automatically
-        })
-    end
-end
-
-function game:getRenderSystem()
+-- Get system by name
+function game:getSystem(systemName)
     for _, sys in ipairs(self.world.systems) do
-        if sys.name == "RenderSystem" then
+        if sys.name == systemName then
             return sys
         end
     end
@@ -309,42 +227,28 @@ function initGameWorld()
     game.world:addSystem(TurnSystem)
     game.world:addSystem(MovementSystem)
     game.world:addSystem(CombatSystem)
+    game.world:addSystem(InputSystem)
     game.world:addSystem(AISystem)
     game.world:addSystem(RenderSystem)
     
     -- Initialize MapRenderer
-    local mapRenderer = nil
-    for _, sys in ipairs(game.world.systems) do
-        if sys.name == "MapRenderer" then
-            mapRenderer = sys
-            break
-        end
-    end
+    local mapRenderer = game:getSystem("MapRenderer")
     if mapRenderer then
         mapRenderer:loadMap(mapData)
     end
     
-    -- Store system references
-    for _, sys in ipairs(game.world.systems) do
-        if sys.name == "TurnSystem" then
-            game.turnSystem = sys
-        elseif sys.name == "AISystem" then
-            -- Set RuleEngine reference
-            sys.ruleEngine = game.ruleEngine
-        end
+    -- 存储系统引用并设置系统间依赖
+    game.turnSystem = game:getSystem("TurnSystem")
+    game.inputSystem = game:getSystem("InputSystem")
+    
+    -- 设置系统间依赖（通过setter方法）
+    if game.inputSystem then
+        game.inputSystem:setTurnSystem(game.turnSystem)
+        game.inputSystem:setRuleEngine(game.ruleEngine)
     end
     
-    -- Initialize actor abilities (使用 ECS Ability 组件)
-    local actors = game.world:query({"Actor", "Position"})
-    local AbilityComponent = require("src.components.ability")
-    for _, result in ipairs(actors) do
-        -- 懒创建 Ability 组件
-        local comp = game.ruleEngine:getAbilityComponent(result.id)
-        if game.world.components.Player[result.id] then
-            -- Player has all abilities (已在 RuleEngine 中自动设置)
-        else
-            -- Enemies only have melee attack
-            comp.abilities = {"punch"}
-        end
+    local aiSystem = game:getSystem("AISystem")
+    if aiSystem then
+        aiSystem:setRuleEngine(game.ruleEngine)
     end
 end

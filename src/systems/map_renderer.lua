@@ -53,7 +53,8 @@ end
 
 function MapRenderer:update(world, dt)
     -- TODO: 动态地图支持
-    -- 动态修改地图（如开门、破坏墙壁等），在这里更新 tiles 数组
+    -- 待定
+    -- 动态修改地图（如开门、破坏墙壁等），在这里更新 tiles 数组 (或者动态直接作为实体?)
 end
 
 function MapRenderer:isSolid(x, y)

@@ -7,7 +7,7 @@ local AISystem = {
     name = "AISystem",
 }
 
--- 随机方向
+-- Random directions
 local DIRECTIONS = {
     {dx = -1, dy = 0},
     {dx = 1, dy = 0},
@@ -19,13 +19,18 @@ function AISystem:init(world)
     self.world = world
     self.events = world.eventBus
     self.waitingForPlayerTurn = true
-    self.ruleEngine = nil  -- 将在main.lua中设置
+    self.ruleEngine = nil  -- 设置通过 setRuleEngine()
     
     if self.events then
         self.events:on("PlayerTurnEnd", function()
             self.waitingForPlayerTurn = true
         end)
     end
+end
+
+-- 设置 RuleEngine 引用（由 main.lua 在 initGameWorld 后调用）
+function AISystem:setRuleEngine(ruleEngine)
+    self.ruleEngine = ruleEngine
 end
 
 function AISystem:update(world, dt)
@@ -46,12 +51,12 @@ function AISystem:update(world, dt)
             goto continue
         end
         
-        -- 尝试使用技能（如果有RuleEngine和技能）
+        -- Try use ability
         if self.ruleEngine then
             self:tryUseAbility(entity)
         end
         
-        -- 随机移动（70%几率）
+        -- Random move (70%)
         if math.random() < 0.7 then
             local dir = DIRECTIONS[math.random(#DIRECTIONS)]
             
@@ -74,24 +79,37 @@ function AISystem:update(world, dt)
     end
 end
 
--- 尝试使用技能
+-- Try use ability
 -- @param entityId number
 function AISystem:tryUseAbility(entityId)
     if not self.ruleEngine or not self.events then
         return
     end
     
-    -- 敌人技能列表（可以从组件读取，这里用简单的随机选择）
-    local enemyAbilities = {"punch"}
+    -- Get ability component
+    local abilityComp = self.world.components.Ability and self.world.components.Ability[entityId]
+    if not abilityComp or not abilityComp.abilities or not next(abilityComp.abilities) then
+        return  -- No abilities defined (使用 next() 检查空表)
+    end
     
-    -- 随机选择一个技能尝试使用
-    local abilityId = enemyAbilities[math.random(#enemyAbilities)]
+    -- Get all abilities as array for random selection
+    local abilitiesList = {}
+    for abilityId, _ in pairs(abilityComp.abilities) do
+        table.insert(abilitiesList, abilityId)
+    end
     
-    -- 检查技能是否可用
+    if #abilitiesList == 0 then
+        return
+    end
+    
+    -- Random select an ability to use
+    local abilityId = abilitiesList[math.random(#abilitiesList)]
+    
+    -- Check if ability is usable
     local canUse, reason = self.ruleEngine:canUse(entityId, abilityId)
     
     if canUse then
-        -- 查找范围内的玩家作为目标
+        -- Find players in range
         local pos = self.world.components.Position[entityId]
         if pos then
             local players = self.world:query({"Player", "Position"})
@@ -99,7 +117,7 @@ function AISystem:tryUseAbility(entityId)
                 local playerPos = playerResult.components.Position
                 local dist = math.abs(playerPos.x - pos.x) + math.abs(playerPos.y - pos.y)
                 
-                -- 如果玩家在技能范围内
+                -- If player is in range, use ability on it
                 if dist <= 1 then
                     self.events:emit("AbilityUse", {
                         entity = entityId,
