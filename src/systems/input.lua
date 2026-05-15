@@ -27,6 +27,7 @@ local InputSystem = {
     },
     
     enabled = true,
+    pendingClickTarget = nil,
 }
 
 function InputSystem:init(world, config)
@@ -178,6 +179,233 @@ function InputSystem:handleWait()
         self.turnSystem:startTurn()
         self.turnSystem:endPlayerTurn()
     end
+end
+
+-- Handle mouse click for movement
+-- @param x number: screen x position
+-- @param y number: screen y position
+function InputSystem:handleClick(x, y)
+    
+    
+    if not self.enabled then
+        
+        return
+    end
+    
+    if self.turnSystem and not self.turnSystem:isInputAllowed() then
+        
+        return
+    end
+    
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then
+        
+        return
+    end
+    
+    local playerId = players[1].id
+    local playerPos = players[1].components.Position
+    
+    
+    local mapRenderer = nil
+    for _, sys in ipairs(self.world.systems) do
+        if sys.name == "MapRenderer" then
+            mapRenderer = sys
+            break
+        end
+    end
+    
+    if not mapRenderer then
+        
+        return
+    end
+    
+    local Config = require("src.config")
+    local cameraX = playerPos.x
+    local cameraY = playerPos.y
+    local screenWidth = love.graphics.getWidth()
+    local screenHeight = love.graphics.getHeight()
+    
+    local offsetX = screenWidth / 2 / Config.SCALE - cameraX * Config.TILE_SIZE - Config.TILE_SIZE / 2
+    local offsetY = screenHeight / 2 / Config.SCALE - cameraY * Config.TILE_SIZE - Config.TILE_SIZE / 2
+    
+    local worldX = math.floor((x / Config.SCALE - offsetX) / Config.TILE_SIZE) + 1
+    local worldY = math.floor((y / Config.SCALE - offsetY) / Config.TILE_SIZE) + 1
+    
+    
+    
+    if worldX < 1 or worldY < 1 or worldX > mapRenderer.width or worldY > mapRenderer.height then
+        return
+    end
+    
+    if mapRenderer:isSolid(worldX, worldY) then
+        return
+    end
+    
+    local targetEntity = self:getEntityAt(worldX, worldY, playerId)
+    if targetEntity then
+        return
+    end
+    
+    local dx = worldX - playerPos.x
+    local dy = worldY - playerPos.y
+    local distance = math.abs(dx) + math.abs(dy)
+    
+    
+    
+    if self.turnSystem then
+        self.turnSystem:startTurn()
+    end
+    
+    local moveDx, moveDy
+    if distance == 1 then
+        
+        moveDx = dx
+        moveDy = dy
+    else
+        
+        local path = self:findPath(playerPos.x, playerPos.y, worldX, worldY, playerId, mapRenderer)
+        if path and #path > 1 then
+            local firstStep = path[2]
+            moveDx = firstStep.x - playerPos.x
+            moveDy = firstStep.y - playerPos.y
+        else
+            return
+        end
+    end
+    
+    if self.events then
+        self.events:emit("MoveAttempt", {
+            entity = playerId,
+            dx = moveDx,
+            dy = moveDy,
+            isPlayer = true
+        })
+    end
+end
+
+-- Get entity at position (excluding player)
+function InputSystem:getEntityAt(x, y, excludeEntity)
+    local entities = self.world:query({"Position", "Actor"})
+    for _, result in ipairs(entities) do
+        if result.id ~= excludeEntity then
+            local pos = result.components.Position
+            if pos and pos.x == x and pos.y == y then
+                return result.id
+            end
+        end
+    end
+    return nil
+end
+
+-- A* pathfinding
+function InputSystem:findPath(startX, startY, goalX, goalY, excludeEntity, mapRenderer)
+    
+    
+    local openSet = {}
+    local closedSet = {}
+    local cameFrom = {}
+    local gScore = {}
+    local fScore = {}
+    
+    local function heuristic(x1, y1, x2, y2)
+        return math.abs(x1 - x2) + math.abs(y1 - y2)
+    end
+    
+    local function nodeKey(x, y)
+        return x .. "," .. y
+    end
+    
+    local startKey = nodeKey(startX, startY)
+    gScore[startKey] = 0
+    fScore[startKey] = heuristic(startX, startY, goalX, goalY)
+    table.insert(openSet, {x = startX, y = startY})
+    
+    local directions = {
+        {dx = 0, dy = -1},
+        {dx = 0, dy = 1},
+        {dx = -1, dy = 0},
+        {dx = 1, dy = 0},
+    }
+    
+    local iterations = 0
+    local maxIterations = 1000
+    
+    while #openSet > 0 and iterations < maxIterations do
+        iterations = iterations + 1
+        
+        table.sort(openSet, function(a, b)
+            local fA = fScore[nodeKey(a.x, a.y)] or math.huge
+            local fB = fScore[nodeKey(b.x, b.y)] or math.huge
+            return fA < fB
+        end)
+        
+        local current = table.remove(openSet, 1)
+        local currentKey = nodeKey(current.x, current.y)
+        
+        if current.x == goalX and current.y == goalY then
+            
+            local path = {}
+            local curr = current
+            while curr do
+                table.insert(path, 1, curr)
+                curr = cameFrom[nodeKey(curr.x, curr.y)]
+            end
+            return path
+        end
+        
+        closedSet[currentKey] = true
+        
+        for _, dir in ipairs(directions) do
+            local neighborX = current.x + dir.dx
+            local neighborY = current.y + dir.dy
+            local neighborKey = nodeKey(neighborX, neighborY)
+            
+            if closedSet[neighborKey] then
+                goto continue
+            end
+            
+            if neighborX < 1 or neighborY < 1 or neighborX > mapRenderer.width or neighborY > mapRenderer.height then
+                goto continue
+            end
+            
+            if mapRenderer:isSolid(neighborX, neighborY) then
+                
+                goto continue
+            end
+            
+            local blockingEntity = self:getEntityAt(neighborX, neighborY, excludeEntity)
+            if blockingEntity then
+                
+                goto continue
+            end
+            
+            local tentativeG = (gScore[currentKey] or math.huge) + 1
+            
+            local inOpen = false
+            for _, node in ipairs(openSet) do
+                if node.x == neighborX and node.y == neighborY then
+                    inOpen = true
+                    break
+                end
+            end
+            
+            if not inOpen then
+                table.insert(openSet, {x = neighborX, y = neighborY})
+            end
+            
+            if tentativeG < (gScore[neighborKey] or math.huge) then
+                cameFrom[neighborKey] = current
+                gScore[neighborKey] = tentativeG
+                fScore[neighborKey] = tentativeG + heuristic(neighborX, neighborY, goalX, goalY)
+            end
+            
+            ::continue::
+        end
+    end
+    
+    
+    return nil
 end
 
 return InputSystem

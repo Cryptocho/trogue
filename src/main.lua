@@ -193,6 +193,13 @@ function love.keypressed(key, scancode, isrepeat)
     end
 end
 
+-- Delegate mouse input to InputSystem
+function love.mousepressed(x, y, button)
+    if game.inputSystem and button == 1 then
+        game.inputSystem:handleClick(x, y)
+    end
+end
+
 -- Get system by name
 function game:getSystem(systemName)
     for _, sys in ipairs(self.world.systems) do
