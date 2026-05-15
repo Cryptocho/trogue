@@ -237,11 +237,11 @@ function initGameWorld()
         mapRenderer:loadMap(mapData)
     end
     
-    -- 存储系统引用并设置系统间依赖
+    -- Store system references and set up inter-system dependencies
     game.turnSystem = game:getSystem("TurnSystem")
     game.inputSystem = game:getSystem("InputSystem")
     
-    -- 设置系统间依赖（通过setter方法）
+    -- Set up inter-system dependencies (via setter methods)
     if game.inputSystem then
         game.inputSystem:setTurnSystem(game.turnSystem)
         game.inputSystem:setRuleEngine(game.ruleEngine)

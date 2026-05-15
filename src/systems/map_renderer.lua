@@ -52,9 +52,9 @@ function MapRenderer:loadMap(mapData)
 end
 
 function MapRenderer:update(world, dt)
-    -- TODO: 动态地图支持
-    -- 待定
-    -- 动态修改地图（如开门、破坏墙壁等），在这里更新 tiles 数组 (或者动态直接作为实体?)
+    -- TODO: Dynamic map support
+    -- TBD
+    -- Dynamically modify map (e.g. open doors, destroy walls), update tiles array here (or as entities?)
 end
 
 function MapRenderer:isSolid(x, y)

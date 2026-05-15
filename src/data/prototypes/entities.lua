@@ -6,9 +6,9 @@ return {
     player = {
         Renderable = {tileIndex = 2},
         Player = {},
-        Health = {current = 20, max = 20},
+        Health = {current = 100, max = 100},
         Actor = {moveDelay = 0},  -- Player doesn't use AI movement
-        -- abilities 使用 Set 结构：{abilityId = true}
+        -- abilities use Set structure: {abilityId = true}
         Ability = {
             abilities = {punch = true, heal = true, shield = true, fireball = true},
             cooldowns = {},
@@ -20,7 +20,7 @@ return {
     goblin = {
         Renderable = {tileIndex = 3},
         Actor = {moveDelay = 0.5},  -- Move every 0.5 seconds
-        Health = {current = 5, max = 5},
+        Health = {current = 25, max = 25},
         Ability = {
             abilities = {punch = true},
             cooldowns = {},

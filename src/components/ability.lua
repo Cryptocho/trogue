@@ -1,12 +1,12 @@
--- AbilityComponent: 存储实体的能力、冷却、资源
--- 纯数据组件，方法逻辑在 AbilitySystem 中实现
+-- AbilityComponent: Stores entity abilities, cooldowns, and resources
+-- Pure data component, logic implemented in AbilitySystem
 
 local AbilityComponent = {
-    -- 能力列表（Set结构，用于O(1)查询）
+    -- Ability list (Set structure for O(1) lookup)
     abilities = {},      -- {abilityId = true, ...}
-    -- 冷却时间
+    -- Cooldown times
     cooldowns = {},      -- {abilityId = remainingTurns}
-    -- 资源（MP等）
+    -- Resources (MP, etc.)
     resources = {
         mp = 50,
         maxMp = 50,

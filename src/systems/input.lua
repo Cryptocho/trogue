@@ -1,6 +1,6 @@
 -- Input System
--- 统一处理所有玩家输入（移动、技能）
--- 架构：main.lua 的 love.keypressed 委托给此系统
+-- Unified handling of all player input (movement, abilities)
+-- Architecture: main.lua love.keypressed delegates to this system
 
 local InputSystem = {
     priority = 0,
@@ -35,15 +35,15 @@ function InputSystem:init(world, config)
     self.turnSystem = nil
     self.ruleEngine = nil
     
-    -- 启用系统
+    -- Enable system
     self.enabled = true
 end
 
 function InputSystem:update(world, dt)
-    -- 输入由 love.keypressed 回调处理，此处仅做状态检查
+    -- Input handled by love.keypressed callback, only status checks here
 end
 
--- 设置系统引用（由 main.lua 在 initGameWorld 后调用）
+-- Set system references (called by main.lua after initGameWorld)
 function InputSystem:setTurnSystem(turnSystem)
     self.turnSystem = turnSystem
 end
@@ -60,7 +60,7 @@ function InputSystem:isEnabled()
     return self.enabled
 end
 
--- 主入口：从 main.lua love.keypressed 调用
+-- Main entry point: called from main.lua love.keypressed
 -- @param key string
 -- @param scancode string
 -- @param isrepeat boolean
@@ -69,19 +69,19 @@ function InputSystem:handleKey(key, scancode, isrepeat)
         return
     end
     
-    -- 检查回合系统是否允许输入
+    -- Check if turn system allows input
     if self.turnSystem and not self.turnSystem:isInputAllowed() then
         return
     end
     
-    -- 处理移动
+    -- Handle movement
     local movement = self.KEY_MOVEMENTS[key]
     if movement then
         self:handleMove(movement)
         return
     end
     
-    -- 处理技能
+    -- Handle abilities
     local abilityId = self.KEY_ABILITIES[key]
     if abilityId then
         self:handleAbility(abilityId)
@@ -89,7 +89,7 @@ function InputSystem:handleKey(key, scancode, isrepeat)
     end
 end
 
--- 处理移动输入
+-- Handle movement input
 -- @param movement table: {dx, dy}
 function InputSystem:handleMove(movement)
     local players = self.world:query({"Player", "Position"})
@@ -99,12 +99,12 @@ function InputSystem:handleMove(movement)
     
     local playerId = players[1].id
     
-    -- 通知回合系统开始回合
+    -- Notify turn system to start turn
     if self.turnSystem then
         self.turnSystem:startTurn()
     end
     
-    -- 发出移动尝试事件
+    -- Emit move attempt event
     if self.events then
         self.events:emit("MoveAttempt", {
             entity = playerId,
@@ -115,7 +115,7 @@ function InputSystem:handleMove(movement)
     end
 end
 
--- 处理技能使用
+-- Handle ability usage
 -- @param abilityId string
 function InputSystem:handleAbility(abilityId)
     local players = self.world:query({"Player", "Position"})
@@ -125,7 +125,7 @@ function InputSystem:handleAbility(abilityId)
     
     local playerId = players[1].id
     
-    -- 检查技能是否可用
+    -- Check if ability is usable
     if self.ruleEngine then
         local canUse, reason = self.ruleEngine:canUse(playerId, abilityId)
         if not canUse then
@@ -134,17 +134,17 @@ function InputSystem:handleAbility(abilityId)
         end
     end
     
-    -- 通知回合系统开始回合
+    -- Notify turn system to start turn
     if self.turnSystem then
         self.turnSystem:startTurn()
     end
     
-    -- 发出技能使用事件（自动选择目标）
+    -- Emit ability use event (auto-select target)
     if self.events then
         self.events:emit("AbilityUse", {
             entity = playerId,
             abilityId = abilityId,
-            targetId = nil  -- RuleEngine 将自动选择目标
+            targetId = nil  -- RuleEngine will auto-select target
         })
     end
 end

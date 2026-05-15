@@ -19,7 +19,7 @@ function AISystem:init(world)
     self.world = world
     self.events = world.eventBus
     self.waitingForPlayerTurn = true
-    self.ruleEngine = nil  -- 设置通过 setRuleEngine()
+    self.ruleEngine = nil  -- Set via setRuleEngine()
     
     if self.events then
         self.events:on("PlayerTurnEnd", function()
@@ -28,7 +28,7 @@ function AISystem:init(world)
     end
 end
 
--- 设置 RuleEngine 引用（由 main.lua 在 initGameWorld 后调用）
+-- Set RuleEngine reference (called by main.lua after initGameWorld)
 function AISystem:setRuleEngine(ruleEngine)
     self.ruleEngine = ruleEngine
 end
@@ -89,7 +89,7 @@ function AISystem:tryUseAbility(entityId)
     -- Get ability component
     local abilityComp = self.world.components.Ability and self.world.components.Ability[entityId]
     if not abilityComp or not abilityComp.abilities or not next(abilityComp.abilities) then
-        return  -- No abilities defined (使用 next() 检查空表)
+        return  -- No abilities defined (use next() to check empty table)
     end
     
     -- Get all abilities as array for random selection

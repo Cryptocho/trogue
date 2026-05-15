@@ -1,4 +1,4 @@
--- HealthComponent: 生命值和状态
+-- HealthComponent: Health and status
 local HealthComponent = {
     current = 10,
     max = 10,

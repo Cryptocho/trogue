@@ -1,5 +1,5 @@
--- BuffsComponent: 管理实体上的所有buff
--- 纯数据组件，方法逻辑在 RuleEngine 中实现
+-- BuffsComponent: Manages all buffs on an entity
+-- Pure data component, logic implemented in RuleEngine
 
 local BuffsComponent = {
     activeBuffs = {}, -- {buffId = {duration, stacks, source, definition}}

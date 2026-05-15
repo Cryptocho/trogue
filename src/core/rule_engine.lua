@@ -1,6 +1,6 @@
     -- RuleEngine: Rule and Effect Application Engine
-    -- Gameplay Rule Pipeline Layer 核心
-    -- MVP: 效果处理逻辑暂时保留在 RuleEngine 内部，通过事件驱动
+    -- Gameplay Rule Pipeline Layer Core
+    -- MVP: Effect processing logic is temporarily kept inside RuleEngine, driven by events
 
     local AbilityDef = require("src.data.definitions.ability")
     local EffectDef = require("src.data.definitions.effect")

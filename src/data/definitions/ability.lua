@@ -1,23 +1,23 @@
--- AbilityDefinition: 技能定义
--- Mod Layer 数据结构
+-- AbilityDefinition: Ability definitions
+-- Mod Layer data structure
 
--- 技能模式
+-- Ability modes
 local AbilityMode = {
-    ACTIVATED = "activated",     -- 主动技能
-    SUSTAINED = "sustained",    -- 持续技能
-    PASSIVE = "passive",        -- 被动技能
+    ACTIVATED = "activated",     -- Activated ability
+    SUSTAINED = "sustained",     -- Sustained ability
+    PASSIVE = "passive",         -- Passive ability
 }
 
--- 目标类型
+-- Target types
 local TargetType = {
-    SELF = "self",              -- 自身
-    SINGLE = "single",          -- 单体目标
-    AREA = "area",              -- AOE区域
-    LINE = "line",              -- 线性
-    CONE = "cone",              -- 锥形
+    SELF = "self",               -- Self
+    SINGLE = "single",           -- Single target
+    AREA = "area",               -- AOE area
+    LINE = "line",               -- Linear
+    CONE = "cone",               -- Cone
 }
 
--- 效果类型
+-- Effect types
 local EffectType = {
     DAMAGE = "damage",
     HEAL = "heal",
@@ -26,62 +26,62 @@ local EffectType = {
     TELEPORT = "teleport",
 }
 
--- 创建技能定义
--- @param def table: 技能定义数据
+-- Create ability definition
+-- @param def table: Ability definition data
 -- @return AbilityDefinition
 local function createAbilityDefinition(def)
     return {
-        -- 基本信息
+        -- Basic info
         id = def.id or error("Ability id required"),
         name = def.name or def.id,
         description = def.description or "",
         
-        -- 技能模式 (MVP只支持activated)
+        -- Ability mode (MVP only supports activated)
         mode = def.mode or AbilityMode.ACTIVATED,
         
-        -- 冷却 (回合数)
+        -- Cooldown (turns)
         cooldown = def.cooldown or 0,
-        minCooldown = def.minCooldown or 0,  -- 最小冷却(天赋减少)
+        minCooldown = def.minCooldown or 0,  -- Min cooldown (talent reduction)
         
-        -- 消耗
+        -- Cost
         cost = def.cost or {},  -- {mp = 10, hp = 0, etc.}
         
-        -- 目标选择
+        -- Target selection
         targetType = def.targetType or TargetType.SINGLE,
-        range = def.range or 1,        -- 技能范围
-        radius = def.radius or 0,      -- AOE半径
+        range = def.range or 1,        -- Ability range
+        radius = def.radius or 0,       -- AOE radius
         
-        -- 效果列表
+        -- Effect list
         effects = def.effects or {},    -- {effectId1, effectId2, ...}
         
-        -- 图标/资源
+        -- Icon/resource
         icon = def.icon or nil,
         
-        -- 施放动画时间(可选)
+        -- Cast animation time (optional)
         castTime = def.castTime or 0,
         
-        -- 标签
+        -- Tags
         tags = def.tags or {},
     }
 end
 
--- 默认导出
+-- Default export
 return {
-    -- 常量
+    -- Constants
     Mode = AbilityMode,
     TargetType = TargetType,
     EffectType = EffectType,
     
-    -- 工厂函数
+    -- Factory function
     create = createAbilityDefinition,
     
-    -- 内置技能 (MVP用)
+    -- Built-in abilities (for MVP)
     builtin = {
-        -- 基础攻击
+        -- Basic attack
         punch = createAbilityDefinition({
             id = "punch",
-            name = "拳击",
-            description = "近战攻击，造成少量伤害",
+            name = "Punch",
+            description = "Melee attack, deals minor damage",
             mode = AbilityMode.ACTIVATED,
             cooldown = 0,
             cost = {},
@@ -90,11 +90,11 @@ return {
             effects = {"damage_physical"},
         }),
         
-        -- 治疗
+        -- Heal
         heal = createAbilityDefinition({
             id = "heal",
-            name = "治疗",
-            description = "恢复生命值",
+            name = "Heal",
+            description = "Restore health",
             mode = AbilityMode.ACTIVATED,
             cooldown = 3,
             cost = {mp = 5},
@@ -103,11 +103,11 @@ return {
             effects = {"heal_minor"},
         }),
         
-        -- 火球术
+        -- Fireball
         fireball = createAbilityDefinition({
             id = "fireball",
-            name = "火球术",
-            description = "对一个区域造成火焰伤害",
+            name = "Fireball",
+            description = "Deal fire damage to an area",
             mode = AbilityMode.ACTIVATED,
             cooldown = 4,
             cost = {mp = 15},
@@ -117,11 +117,11 @@ return {
             effects = {"damage_fire", "burn"},
         }),
         
-        -- 护盾
+        -- Shield
         shield = createAbilityDefinition({
             id = "shield",
-            name = "护盾",
-            description = "给自己施加护盾Buff",
+            name = "Shield",
+            description = "Apply shield buff to self",
             mode = AbilityMode.ACTIVATED,
             cooldown = 5,
             cost = {mp = 10},

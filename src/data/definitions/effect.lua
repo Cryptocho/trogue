@@ -1,7 +1,7 @@
--- EffectDefinition: 效果定义
--- Mod Layer 数据结构
+-- EffectDefinition: Effect definitions
+-- Mod Layer data structure
 
--- 效果类型
+-- Effect types
 local EffectType = {
     DAMAGE = "damage",
     HEAL = "heal",
@@ -9,7 +9,7 @@ local EffectType = {
     DEBUFF = "debuff",
 }
 
--- 伤害类型
+-- Damage types
 local DamageType = {
     PHYSICAL = "physical",
     FIRE = "fire",
@@ -19,102 +19,102 @@ local DamageType = {
     ARCANE = "arcane",
 }
 
--- 创建效果定义
--- @param def table: 效果定义数据
+-- Create effect definition
+-- @param def table: Effect definition data
 -- @return EffectDefinition
 local function createEffectDefinition(def)
     return {
-        -- 基本信息
+        -- Basic info
         id = def.id or error("Effect id required"),
         name = def.name or def.id,
         description = def.description or "",
         
-        -- 效果类型
+        -- Effect type
         type = def.type or EffectType.DAMAGE,
         
-        -- 伤害/治疗数值
+        -- Damage/heal value
         value = def.value or 0,
         valueScale = def.valueScale or {},  -- {stat = "strength", perLevel = 1}
         
-        -- 伤害类型 (如果是damage)
+        -- Damage type (if damage)
         damageType = def.damageType or DamageType.PHYSICAL,
         
-        -- Buff/Buf类型引用 (如果是buff/debuff)
+        -- Buff/debuff type reference (if buff/debuff)
         buffId = def.buffId or nil,
         
-        -- 持续时间 (如果是持续效果)
+        -- Duration (if persistent effect)
         duration = def.duration or 0,
         
-        -- 标签
+        -- Tags
         tags = def.tags or {},
     }
 end
 
--- 默认导出
+-- Default export
 return {
-    -- 常量
+    -- Constants
     Type = EffectType,
     DamageType = DamageType,
     
-    -- 工厂函数
+    -- Factory function
     create = createEffectDefinition,
     
-    -- 内置效果 (MVP用)
+    -- Built-in effects (for MVP)
     builtin = {
-        -- 物理伤害
+        -- Physical damage
         damage_physical = createEffectDefinition({
             id = "damage_physical",
-            name = "物理伤害",
-            description = "造成物理伤害",
+            name = "Physical Damage",
+            description = "Deals physical damage",
             type = EffectType.DAMAGE,
             value = 5,
             damageType = DamageType.PHYSICAL,
         }),
         
-        -- 火焰伤害
+        -- Fire damage
         damage_fire = createEffectDefinition({
             id = "damage_fire",
-            name = "火焰伤害",
-            description = "造成火焰伤害",
+            name = "Fire Damage",
+            description = "Deals fire damage",
             type = EffectType.DAMAGE,
             value = 8,
             damageType = DamageType.FIRE,
         }),
         
-        -- 治愈
+        -- Minor heal
         heal_minor = createEffectDefinition({
             id = "heal_minor",
-            name = "轻微治疗",
-            description = "恢复少量生命",
+            name = "Minor Heal",
+            description = "Restores minor health",
             type = EffectType.HEAL,
             value = 10,
         }),
         
-        -- 护盾Buff
+        -- Shield buff
         buff_shield = createEffectDefinition({
             id = "buff_shield",
-            name = "护盾",
-            description = "获得护盾保护",
+            name = "Shield",
+            description = "Grants shield protection",
             type = EffectType.BUFF,
             buffId = "shield",
             duration = 3,
         }),
         
-        -- 燃烧Debuff
+        -- Burn debuff
         burn = createEffectDefinition({
             id = "burn",
-            name = "燃烧",
-            description = "每回合受到火焰伤害",
+            name = "Burn",
+            description = "Takes fire damage each turn",
             type = EffectType.DEBUFF,
             buffId = "burning",
             duration = 2,
         }),
         
-        -- 燃烧伤害 (DOT tick)
+        -- Burn damage (DOT tick)
         burn_damage = createEffectDefinition({
             id = "burn_damage",
-            name = "燃烧伤害",
-            description = "燃烧DOT伤害",
+            name = "Burn Damage",
+            description = "Burn DOT damage",
             type = EffectType.DAMAGE,
             value = 3,
             damageType = DamageType.FIRE,

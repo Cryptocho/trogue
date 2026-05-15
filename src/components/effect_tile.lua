@@ -1,13 +1,13 @@
--- EffectTileComponent: 动态效果实体组件（毒、火等）
--- 纯数据组件，用作特殊地形实体，支持蔓延、叠加等动态效果
+-- EffectTileComponent: Dynamic effect entity component (poison, fire, etc.)
+-- Pure data component, used as special terrain entities, supports spread, stacking, etc.
 
 local EffectTileComponent = {
     effectType = "",   -- "poison", "fire", "ice"...
-    damage = 0,        -- 每回合伤害
-    duration = 0,      -- 剩余回合
-    spreadChance = 0,  -- 蔓延概率
-    tickRate = 1,      -- 每回合触发
-    owner = nil,       -- 创建者entityId
+    damage = 0,        -- Damage per turn
+    duration = 0,      -- Remaining turns
+    spreadChance = 0,  -- Spread probability
+    tickRate = 1,      -- Trigger per turn
+    owner = nil,       -- Creator entityId
 }
 
 return EffectTileComponent
