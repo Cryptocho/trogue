@@ -5,3 +5,7 @@
 !/src/**
 !/fonts/
 !/fonts/**
+!/tools/
+!/tools/**
+!/tests/
+!/tests/**
