@@ -103,6 +103,12 @@ function InputSystem:handleKey(key, scancode, isrepeat)
         self:handleAbility(abilityId)
         return
     end
+    
+    -- Handle wait (skip turn)
+    if key == "space" then
+        self:handleWait()
+        return
+    end
 end
 
 -- Handle movement input
@@ -163,6 +169,14 @@ function InputSystem:handleAbility(abilityId)
             abilityId = abilityId,
             targetId = nil  -- RuleEngine will auto-select target
         })
+    end
+end
+
+-- Handle wait (skip turn)
+function InputSystem:handleWait()
+    if self.turnSystem then
+        self.turnSystem:startTurn()
+        self.turnSystem:endPlayerTurn()
     end
 end
 

@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 加入跳过回合机制
+
+- 影响的文件: `src\systems\input.lua`
+
 ### 组件规范化
 
 #### Added
