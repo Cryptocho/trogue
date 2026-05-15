@@ -6,6 +6,30 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 八向移动
+
+- 影响的文件: `src/systems/input.lua`, `src/systems/movement.lua`
+- 添加斜向移动
+- 键盘组合移动: 0.18秒窗口期内连续按两个方向键，合并为斜向移动
+  - 直接按斜向键立即执行，不走缓冲区
+  - 缓冲区最多取前两个按键组合
+- 鼠标点击移动: 支持直接斜向移动到相邻目标格
+- A*寻路扩展: 支持八方向寻路
+
+### 点击与寻路
+
+- 影响的文件: `src\systems\input.lua`, `src\systems\movement.lua`, `src\main.lua`
+- 添加鼠标点击移动功能: 点击屏幕任意位置移动到对应方格
+- 添加 A* 寻路算法: 非相邻方格自动寻路接近目标
+- 移动规则:
+  - 目标方格是墙体或有事生存在上方时，无法移动
+  - 相邻方格(曼哈顿距离=1)直接移动
+  - 非相邻方格使用 A* 寻路，每次点击只移动一格
+- 相关函数:
+  - `InputSystem:handleClick(x, y)` - 处理鼠标点击
+  - `InputSystem:findPath()` - A* 寻路实现
+  - `InputSystem:getEntityAt()` - 检查位置是否有其他生物
+
 ### 加入跳过回合机制
 
 - 影响的文件: `src\systems\input.lua`

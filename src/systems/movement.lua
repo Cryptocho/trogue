@@ -24,19 +24,19 @@ local MovementSystem = {
         local entity = data.entity
         local dx = data.dx or 0
         local dy = data.dy or 0
-        
+
         -- Get current position
         local pos = self.world.components.Position[entity]
         if not pos then
             return
         end
-        
+
         local newX = pos.x + dx
         local newY = pos.y + dy
-        
+
         -- Check for collision with Solid entities at target position
         local collision = self:checkCollision(entity, newX, newY)
-        
+
         if collision then
             -- Emit collision event
             if self.events then
@@ -47,7 +47,7 @@ local MovementSystem = {
                     y = newY,
                     isPlayer = data.isPlayer
                 })
-                
+
                 -- Player bump into wall = turn ends
                 if data.isPlayer then
                     self.events:emit("PlayerTurnEnd", {})
@@ -55,7 +55,7 @@ local MovementSystem = {
             end
             return
         end
-        
+
         -- Check if another entity (non-solid) is at target position
         local targetEntity = self:getEntityAt(newX, newY)
         if targetEntity and targetEntity ~= entity then
@@ -68,7 +68,7 @@ local MovementSystem = {
                     y = newY,
                     isPlayer = data.isPlayer
                 })
-                
+
                 -- Player bump into entity = turn ends
                 if data.isPlayer then
                     self.events:emit("PlayerTurnEnd", {})
@@ -76,11 +76,11 @@ local MovementSystem = {
             end
             return
         end
-        
+
         -- Move is clear - update position
         pos.x = newX
         pos.y = newY
-        
+
         -- Emit success event
         if self.events then
             self.events:emit("MoveSucceeded", {
@@ -93,7 +93,7 @@ local MovementSystem = {
             })
         end
     end,
-    
+
     checkCollision = function(self, entity, x, y)
         -- Check collision with map tiles first
         local mapRenderer = nil
@@ -103,14 +103,14 @@ local MovementSystem = {
                 break
             end
         end
-        
+
         if mapRenderer and mapRenderer:isSolid(x, y) then
             return -1  -- Use -1 to indicate map tile collision
         end
-        
+
         -- Also check for solid entities (if any exist)
         local solids = self.world:query({"Solid", "Position"})
-        
+
         for _, result in ipairs(solids) do
             if result.id ~= entity then
                 local solidPos = result.components.Position
@@ -119,7 +119,7 @@ local MovementSystem = {
                 end
             end
         end
-        
+
         return nil
     end,
     

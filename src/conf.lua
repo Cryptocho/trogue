@@ -2,6 +2,7 @@
 -- Trogue ECS Demo
 
 function love.conf(t)
+    t.console = true
     t.window.title = "Trogue Demo"
     t.window.width = 640
     t.window.height = 480
