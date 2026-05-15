@@ -6,14 +6,15 @@ return {
     player = {
         Renderable = {tileIndex = 2},
         Player = {},
-        Health = {current = 100, max = 100},
+        Health = {current = 10, max = 10},
         Actor = {moveDelay = 0},  -- Player doesn't use AI movement
         -- abilities use Set structure: {abilityId = true}
         Ability = {
             abilities = {punch = true, heal = true, shield = true, fireball = true},
             cooldowns = {},
             resources = {mp = 50, maxMp = 50}
-        }
+        },
+        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },
     
     -- Goblin enemy (index 3 in tileset)
@@ -26,6 +27,7 @@ return {
             cooldowns = {},
             resources = {mp = 30, maxMp = 30}
         },
+        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },
     
     -- Rat enemy (index 4 in tileset)
@@ -38,6 +40,7 @@ return {
             cooldowns = {},
             resources = {mp = 20, maxMp = 20}
         },
+        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },
     
     -- Orc enemy (index 5 in tileset)
@@ -50,6 +53,7 @@ return {
             cooldowns = {},
             resources = {mp = 40, maxMp = 40}
         },
+        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },
     
     -- Poison pool (index 6 in tileset) - MVP prototype only, system not implemented

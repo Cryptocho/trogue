@@ -37,6 +37,22 @@ function InputSystem:init(world, config)
     
     -- Enable system
     self.enabled = true
+    
+    -- Listen for AbilityUsed to end turn after successful ability use
+    if self.events then
+        self.events:on("AbilityUsed", function(data)
+            if data and data.entity then
+                -- Check if it's the player who used the ability
+                local players = self.world:query({"Player"})
+                for _, player in ipairs(players) do
+                    if player.id == data.entity then
+                        self.events:emit("PlayerTurnEnd", {})
+                        break
+                    end
+                end
+            end
+        end)
+    end
 end
 
 function InputSystem:update(world, dt)
@@ -140,6 +156,7 @@ function InputSystem:handleAbility(abilityId)
     end
     
     -- Emit ability use event (auto-select target)
+    -- PlayerTurnEnd will be emitted in AbilityUsed event handler
     if self.events then
         self.events:emit("AbilityUse", {
             entity = playerId,

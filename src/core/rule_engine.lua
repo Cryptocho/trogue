@@ -68,6 +68,11 @@
         self.events:on("TurnEnd", function()
             self:onTurnEnd()
         end, 100)
+        
+        -- Listen for buff tick (DOT/HOT damage)
+        self.events:on("BuffTickRequest", function(data)
+            self:_processBuffTick(data)
+        end, 100)
     end
 
     -- Get entity ability component from ECS
@@ -159,10 +164,10 @@
         end
         
         -- Execute effects via events
-        self:applyAbility(entityId, ability, targetId)
+        local success = self:applyAbility(entityId, ability, targetId)
         
-        -- Emit success event
-        if self.events then
+        -- Only emit success if ability had valid targets
+        if success and self.events then
             self.events:emit("AbilityUsed", {
                 entity = entityId,
                 abilityId = abilityId,
@@ -219,10 +224,16 @@
             for _, result in ipairs(entities) do
                 local entityPos = result.components.Position
                 local dist = math.abs(entityPos.x - pos.x) + math.abs(entityPos.y - pos.y)
-                if dist <= range then
+                if dist <= range and result.id ~= sourceId then
                     table.insert(targets, result.id)
                 end
             end
+        end
+        
+        -- If no targets, don't emit success (ability fizzled)
+        if #targets == 0 then
+            print("[RuleEngine] No valid targets for ability: " .. ability.id)
+            return false
         end
         
         -- Emit effect requests for each target
@@ -231,6 +242,8 @@
                 self:applyEffect(effectId, sourceId, targetId)
             end
         end
+        
+        return true
     end
 
     -- Apply effect (emit request event)
@@ -442,6 +455,17 @@
         end
     end
 
+    -- Private: Process buff tick (DOT/HOT damage)
+    function RuleEngine:_processBuffTick(data)
+        if not data.entity or not data.effectId then
+            print("[RuleEngine] BuffTickRequest missing entity or effectId")
+            return
+        end
+        
+        -- Apply the tick effect (damage or heal)
+        self:applyEffect(data.effectId, data.source, data.entity)
+    end
+
     -- Turn end processing (Orchestrator, emit events only)
     function RuleEngine:onTurnEnd()
         self:_reduceCooldowns()
@@ -474,26 +498,34 @@
 
     -- Private: Process buff ticks and expiration
     function RuleEngine:_processBuffTicks()
-        if not self.world.components.Buffs then return end
+        if not self.world.components.Buffs then 
+            print("[RuleEngine] No Buffs component found")
+            return 
+        end
         
         for entityId, buffs in pairs(self.world.components.Buffs) do
             if not buffs.activeBuffs then goto continue end
             
             for buffId, buffData in pairs(buffs.activeBuffs) do
-                -- Emit tick event if buff has tickEffect
-                if buffData.definition and buffData.definition.tickEffect and self.events then
-                    self.events:emit("BuffTickRequest", {
-                        entity = entityId,
-                        buffId = buffId,
-                        effectId = buffData.definition.tickEffect,
-                        source = buffData.source,
-                        stacks = buffData.stacks,
-                    })
+                -- First reduce duration and check expiration
+                buffData.duration = buffData.duration - 1
+                
+                -- Only emit tick and keep buff if duration is still >= 0 after reduction
+                if buffData.duration >= 0 then
+                    -- Emit tick event if buff has tickEffect (tick happens AFTER this turn)
+                    if buffData.definition and buffData.definition.tickEffect and self.events then
+                        self.events:emit("BuffTickRequest", {
+                            entity = entityId,
+                            buffId = buffId,
+                            effectId = buffData.definition.tickEffect,
+                            source = buffData.source,
+                            stacks = buffData.stacks,
+                        })
+                    end
                 end
                 
-                -- Reduce duration and check expiration
-                buffData.duration = buffData.duration - 1
-                if buffData.duration <= 0 then
+                -- Remove buff if duration expired
+                if buffData.duration < 0 then
                     buffs.activeBuffs[buffId] = nil
                     if self.events then
                         self.events:emit("BuffExpired", {

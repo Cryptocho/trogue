@@ -94,12 +94,12 @@ return {
         heal = createAbilityDefinition({
             id = "heal",
             name = "Heal",
-            description = "Restore health",
+            description = "Restore health to self",
             mode = AbilityMode.ACTIVATED,
             cooldown = 3,
             cost = {mp = 5},
-            targetType = TargetType.SINGLE,
-            range = 3,
+            targetType = TargetType.SELF,
+            range = 0,
             effects = {"heal_minor"},
         }),
         

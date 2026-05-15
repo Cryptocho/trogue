@@ -85,11 +85,18 @@ end
 function love.draw()
     if game.world then
         -- Get camera position from player
-        local cameraX, cameraY = 0, 0
+        local cameraX, cameraY = nil, nil
         local players = game.world:query({"Player", "Position"})
         if #players > 0 then
             cameraX = players[1].components.Position.x
             cameraY = players[1].components.Position.y
+            -- Save last known player position
+            game.lastCameraX = cameraX
+            game.lastCameraY = cameraY
+        else
+            -- Player dead or not found, keep last position
+            cameraX = game.lastCameraX or 0
+            cameraY = game.lastCameraY or 0
         end
         
         -- Clear screen with black

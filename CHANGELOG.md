@@ -6,12 +6,24 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
-### Phase 2: 组件规范化
+### 组件规范化
 
 #### Added
 
 - `src/components/position.lua` - Position 组件定义，用于存储实体位置
 - `src/components/health.lua` - Health 组件定义，用于存储生命值和存活状态
+- Buffs 组件添加到所有实体原型 (player, goblin, rat, orc)
+
+#### Bug Fixes
+
+- 治疗技能改为 SELF 目标类型（heal → targetType = SELF）
+- 玩家死亡后摄像机保持最后位置（保存 lastCameraX/Y）
+- Fireball DOT 伤害从 3 改为 8
+- 释放技能后正确进入下一个回合（监听 AbilityUsed 事件后触发 PlayerTurnEnd）
+- Fireball 范围伤害不包含施法者自身（排除 sourceId）
+- Punch 无目标时不消耗回合（applyAbility 返回 false 时不发 AbilityUsed）
+- DOT/BuffTick 正确处理（先减 duration 再触发 tick）
+- burn buff duration 从 2 改为 3（确保从下一回合开始结算）
 
 #### Refactored
 

@@ -107,7 +107,7 @@ return {
             description = "Takes fire damage each turn",
             type = EffectType.DEBUFF,
             buffId = "burning",
-            duration = 2,
+            duration = 3,  -- +1 so tick starts from NEXT turn, lasts for 2 ticks
         }),
         
         -- Burn damage (DOT tick)
@@ -116,7 +116,7 @@ return {
             name = "Burn Damage",
             description = "Burn DOT damage",
             type = EffectType.DAMAGE,
-            value = 3,
+            value = 8,
             damageType = DamageType.FIRE,
         }),
     },
