@@ -30,7 +30,6 @@ local InputSystem = {
 
     enabled = true,
     pendingClickTarget = nil,
-
     keyBuffer = {},
     keyBufferWindow = 0.18,
     keyBufferTimer = 0,
@@ -340,7 +339,7 @@ function InputSystem:handleClick(x, y)
         moveDx = dx
         moveDy = dy
     end
-    
+
     if self.events then
         self.events:emit("MoveAttempt", {
             entity = playerId,
@@ -478,7 +477,7 @@ function InputSystem:findPath(startX, startY, goalX, goalY, excludeEntity, mapRe
         end
     end
 
-    return nil
+return nil
 end
 
 return InputSystem
