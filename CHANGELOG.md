@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### UI Update
+
+- 影响的文件: `src/main.lua`, `src/systems/input.lua`
+- 重构技能栏 UI:
+  - 技能框改为小方块图标，横向排列于屏幕下方
+  - 血条和蓝条移至屏幕最下方居中显示，同一行排列
+  - 冷却状态：图标上覆盖半透明黑色层并显示剩余回合数
+  - 资源不足状态：图标上覆盖红色半透明层
+  - 按键编号 `1`/`2`/`3`/`4` 移至技能框右下角
+- 新增技能图标加载:
+  - `hit.png` → punch
+  - `heal.png` → heal
+  - `defend.png` → shield
+  - `fireball.png` → fireball
+- InputSystem 按键 1-4 现在会设置 `game.selectedAbility` 标记选中技能
+
 ### 坐标系统提取
 
 - 影响的文件: `src/core/coordinates.lua` (新建), `src/systems/map_renderer.lua`, `src/systems/render.lua`, `src/systems/ai.lua`, `src/systems/input.lua`, `src/core/rule_engine.lua`

@@ -110,6 +110,9 @@ function InputSystem:handleKey(key, scancode, isrepeat)
 
     local abilityId = self.KEY_ABILITIES[key]
     if abilityId then
+        if game then
+            game.selectedAbility = abilityId
+        end
         self:handleAbility(abilityId)
         return
     end

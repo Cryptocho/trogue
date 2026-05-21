@@ -39,6 +39,13 @@ function love.load()
     -- Create RuleEngine
     game.ruleEngine = RuleEngineModule.RuleEngine:new(game.world, game.events)
     
+game.skillIcons = {
+        punch = love.graphics.newImage("assets/hit.png"),
+        heal = love.graphics.newImage("assets/heal.png"),
+        shield = love.graphics.newImage("assets/defend.png"),
+        fireball = love.graphics.newImage("assets/fireball.png"),
+    }
+
     initGameWorld()
     
     -- Register debug event handlers
@@ -138,52 +145,92 @@ function love.draw()
     love.graphics.print("FPS: " .. love.timer.getFPS(), 10, love.graphics.getHeight() - 20)
 end
 
--- Draw UI (ability bar, etc.)
+-- Draw UI (ability bar, health bar, mp bar)
 function game:drawUI()
     love.graphics.setColor(1, 1, 1, 1)
-    
-    -- Get player ID
-    local players = self.world:query({"Player", "Position"})
-    if #players == 0 then return end
-    local playerId = players[1].id
-    
-    -- Draw ability bar
+
+    local screenWidth = love.graphics.getWidth()
+    local screenHeight = love.graphics.getHeight()
+
+    local playerId = self:getPlayerId()
+    if not playerId then return end
+
     local abilities = {"punch", "heal", "shield", "fireball"}
-    local abilityNames = {"[1]Punch", "[2]Heal", "[3]Shield", "[4]Fireball"}
-    local y = 50
-    
-    love.graphics.print("=== ABILITIES ===", 10, y)
-    y = y + 20
-    
+    local boxSize = 48
+    local boxPadding = 8
+    local barHeight = 20
+    local barWidth = 200
+    local barPadding = 16
+    local barY = screenHeight - barHeight - 10
+    local skillY = barY - boxSize - boxPadding
+
+    local totalBarWidth = barWidth * 2 + barPadding
+    local barStartX = (screenWidth - totalBarWidth) / 2
+
+    local totalSkillWidth = #abilities * boxSize + (#abilities - 1) * boxPadding
+    local skillStartX = (screenWidth - totalSkillWidth) / 2
+
     for i, abilityId in ipairs(abilities) do
+        local bx = skillStartX + (i - 1) * (boxSize + boxPadding)
         local info = self.ruleEngine:getAbilityInfo(playerId, abilityId)
         local cd = info.currentCooldown or 0
-        local status = ""
-        
-        if cd > 0 then
-            status = " [CD:" .. cd .. "]"
-        elseif not info.canUse then
-            status = " [disabled]"
+        local canUse = info.canUse
+
+        if i == self.selectedAbility then
+            love.graphics.setColor(0.3, 0.5, 1, 1)
+            love.graphics.rectangle("fill", bx - 3, skillY - 3, boxSize + 6, boxSize + 6, 4, 4)
         end
-        
-        love.graphics.print(abilityNames[i] .. status, 10, y)
-        y = y + 18
+
+        love.graphics.setColor(1, 1, 1, 1)
+        local icon = self.skillIcons[abilityId]
+        if icon then
+            love.graphics.draw(icon, bx, skillY, 0, boxSize / icon:getWidth(), boxSize / icon:getHeight())
+        end
+
+        if cd > 0 then
+            love.graphics.setColor(0, 0, 0, 0.6)
+            love.graphics.rectangle("fill", bx, skillY, boxSize, boxSize)
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.printf(tostring(cd), bx, skillY + 14, boxSize, "center")
+        elseif not canUse then
+            love.graphics.setColor(1, 0, 0, 0.4)
+            love.graphics.rectangle("fill", bx, skillY, boxSize, boxSize)
+        end
+
+        love.graphics.setColor(0, 0, 0, 0.7)
+        love.graphics.rectangle("fill", bx + boxSize - 18, skillY + boxSize - 16, 16, 14, 3, 3)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.printf( i , bx + boxSize - 18, skillY + boxSize - 14, 16, "center")
     end
-    
-    -- Show MP
-    local comp = self.ruleEngine:getAbilityComponent(playerId)
-    local mp = comp and comp.resources and comp.resources.mp or 0
-    local maxMp = comp and comp.resources and comp.resources.maxMp or 50
-    love.graphics.print("MP: " .. mp .. "/" .. maxMp, 10, y + 10)
-    
-    -- Show turn status
-    local turnStatus = self.turnSystem and (" Turn: " .. self.turnSystem:getTurnCount()) or ""
-    love.graphics.print("Trogue - WASD move, 1-4 abilities" .. turnStatus, 10, 10)
-    
-    -- Show selected ability
-    if self.selectedAbility then
-        love.graphics.print("Selected: " .. self.selectedAbility, 10, y + 30)
-    end
+
+    local healthComp = self.world:getComponent(playerId, "Health")
+    local currentHealth = healthComp and healthComp.current or 0
+    local maxHealth = healthComp and healthComp.max or 100
+
+    local abilComp = self.ruleEngine:getAbilityComponent(playerId)
+    local currentMp = abilComp and abilComp.resources and abilComp.resources.mp or 0
+    local maxMp = abilComp and abilComp.resources and abilComp.resources.maxMp or 50
+
+    love.graphics.setColor(0.8, 0.8, 0.8, 1)
+    love.graphics.rectangle("fill", barStartX, barY, barWidth, barHeight, 4, 4)
+    love.graphics.setColor(1, 0.2, 0.2, 1)
+    love.graphics.rectangle("fill", barStartX, barY, barWidth * (currentHealth / maxHealth), barHeight, 4, 4)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf(string.format("HP %d/%d", currentHealth, maxHealth), barStartX, barY + 3, barWidth, "center")
+
+    local mpBarX = barStartX + barWidth + barPadding
+    love.graphics.setColor(0.8, 0.8, 0.8, 1)
+    love.graphics.rectangle("fill", mpBarX, barY, barWidth, barHeight, 4, 4)
+    love.graphics.setColor(0.2, 0.4, 1, 1)
+    love.graphics.rectangle("fill", mpBarX, barY, barWidth * (currentMp / maxMp), barHeight, 4, 4)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf(string.format("MP %d/%d", currentMp, maxMp), mpBarX, barY + 3, barWidth, "center")
+end
+
+function game:getPlayerId()
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return nil end
+    return players[1].id
 end
 
 -- Delegate all keyboard input to InputSystem
