@@ -2,6 +2,8 @@
 -- Turn-based AI for enemy movement and abilities
 -- Gameplay Rule Pipeline Layer
 
+local Coordinates = require("src.core.coordinates")
+
 local AISystem = {
     priority = 3,
     name = "AISystem",
@@ -115,7 +117,7 @@ function AISystem:tryUseAbility(entityId)
             local players = self.world:query({"Player", "Position"})
             for _, playerResult in ipairs(players) do
                 local playerPos = playerResult.components.Position
-                local dist = math.abs(playerPos.x - pos.x) + math.abs(playerPos.y - pos.y)
+                local dist = Coordinates:manhattanDistance(pos.x, pos.y, playerPos.x, playerPos.y)
                 
                 -- If player is in range, use ability on it
                 if dist <= 1 then

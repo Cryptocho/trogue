@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 坐标系统提取
+
+- 影响的文件: `src/core/coordinates.lua` (新建), `src/systems/map_renderer.lua`, `src/systems/render.lua`, `src/systems/ai.lua`, `src/systems/input.lua`, `src/core/rule_engine.lua`
+- 新建 `Coordinates` 模块，统一坐标计算逻辑:
+  - `tileToWorld()` / `worldToTile()` - 瓦片与像素世界坐标互转
+  - `screenToTile()` / `tileToScreen()` - 屏幕像素与瓦片坐标互转（考虑相机偏移）
+  - `manhattanDistance()` / `chebyshevDistance()` / `euclideanDistance()` - 三种距离计算
+  - `isInRange()` / `isInArea()` - 范围判断
+  - `getNeighbors()` - 获取相邻格子（支持8方向）
+  - `findPath()` - 通用 A* 寻路算法
+- 消除距离计算重复代码（曼哈顿距离分散在 movement/ai/rule_engine/input 4处）
+- `MapRenderer:isSolid()` 改用 `Coordinates:isInBounds()` 做边界检查
+- `input.lua` 的 A* 寻路委托给 `Coordinates:findPath()`，保留 `isPassable` / `getBlockingEntity` 回调接口
+
 ### 八向移动
 
 - 影响的文件: `src/systems/input.lua`, `src/systems/movement.lua`

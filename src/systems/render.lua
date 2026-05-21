@@ -2,6 +2,7 @@
 -- Renders dynamic entities (player, enemies) - tiles handled by MapRenderer
 
 local Config = require("src.config")
+local Coordinates = require("src.core.coordinates")
 
 local RenderSystem = {
     priority = 4,
@@ -40,8 +41,9 @@ function RenderSystem:drawEntities(world, offsetX, offsetY)
         
         if result.components.Player or result.components.Actor then
             if pos and renderable then
-                local x = (pos.x - 1) * Config.TILE_SIZE + offsetX
-                local y = (pos.y - 1) * Config.TILE_SIZE + offsetY
+                local wx, wy = Coordinates:tileToWorld(pos.x, pos.y)
+                local x = wx + offsetX
+                local y = wy + offsetY
                 
                 local quad = self.quads[renderable.tileIndex]
                 if quad then

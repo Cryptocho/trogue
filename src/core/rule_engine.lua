@@ -7,6 +7,7 @@
     local BuffDef = require("src.data.definitions.buff")
     local AbilityComponent = require("src.components.ability")
     local BuffsComponent = require("src.components.buffs")
+    local Coordinates = require("src.core.coordinates")
 
     local RuleEngine = {}
     RuleEngine.__index = RuleEngine
@@ -205,7 +206,7 @@
                 for _, result in ipairs(actors) do
                     if result.id ~= sourceId then
                         local actorPos = result.components.Position
-                        local dist = math.abs(actorPos.x - pos.x) + math.abs(actorPos.y - pos.y)
+                        local dist = Coordinates:manhattanDistance(actorPos.x, actorPos.y, pos.x, pos.y)
                         if dist <= range and dist < nearestDist then
                             nearestDist = dist
                             nearest = result.id
@@ -223,7 +224,7 @@
             local entities = self.world:query({"Position"})
             for _, result in ipairs(entities) do
                 local entityPos = result.components.Position
-                local dist = math.abs(entityPos.x - pos.x) + math.abs(entityPos.y - pos.y)
+                local dist = Coordinates:manhattanDistance(entityPos.x, entityPos.y, pos.x, pos.y)
                 if dist <= range and result.id ~= sourceId then
                     table.insert(targets, result.id)
                 end

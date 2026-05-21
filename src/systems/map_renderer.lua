@@ -2,6 +2,7 @@
 -- Renders static map tiles from 2D array instead of ECS entities
 
 local Config = require("src.config")
+local Coordinates = require("src.core.coordinates")
 
 local MapRenderer = {
     priority = 0,  -- Run before RenderSystem
@@ -58,12 +59,10 @@ function MapRenderer:update(world, dt)
 end
 
 function MapRenderer:isSolid(x, y)
-    -- Check if tile at position is solid (wall)
-    -- Returns true for walls, false for floors
-    if y >= 1 and y <= self.height and x >= 1 and x <= self.width then
-        return self.tiles[y][x] == 1  -- 1 = wall
+    if not Coordinates:isInBounds(x, y, self.width, self.height) then
+        return false
     end
-    return false
+    return self.tiles[y][x] == 1
 end
 
 function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
@@ -87,8 +86,8 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
             local quad = self.quads[tileIndex]
             
             if quad then
-                local screenX = (x - 1) * Config.TILE_SIZE + offsetX
-                local screenY = (y - 1) * Config.TILE_SIZE + offsetY
+                local screenX, screenY = Coordinates:tileToScreen(x, y, cameraX, cameraY,
+                    screenWidth, screenHeight, SCALE)
                 love.graphics.draw(self.tileset, quad, screenX, screenY)
             end
         end
