@@ -11,3 +11,5 @@
 !/tests/**
 !/AGENTS.md
 !/worldmap.drawio
+!/temp/
+!/temp/**
