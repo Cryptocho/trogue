@@ -10,12 +10,13 @@ local TurnSystem = {
 function TurnSystem:init(world)
     self.world = world
     self.events = world.eventBus
-    self.currentPhase = "player"
+    self.currentPhase = "player"  -- player / enemy / processing
     self.turnInProgress = false
     self.turnCount = 1
     self.inputAllowed = true
 
     if self.events then
+        -- Listen for move attempt to start turn
         self.events:on("MoveAttempt", function(data)
             if data.isPlayer then
                 self.turnInProgress = true
@@ -23,10 +24,12 @@ function TurnSystem:init(world)
             end
         end, 0)
 
+        -- Listen for player turn end
         self.events:on("PlayerTurnEnd", function()
             self.inputAllowed = false
         end, 0)
 
+        -- Listen for turn end
         self.events:on("TurnEnd", function(data)
             self.turnInProgress = false
             self.inputAllowed = true
@@ -37,8 +40,10 @@ function TurnSystem:init(world)
 end
 
 function TurnSystem:update(world, dt)
+    -- Turn logic primarily event-driven
 end
 
+-- Start player turn
 function TurnSystem:startTurn()
     self.currentPhase = "player"
     self.turnInProgress = true
@@ -49,6 +54,7 @@ function TurnSystem:startTurn()
     end
 end
 
+-- End player turn
 function TurnSystem:endPlayerTurn()
     if self.currentPhase ~= "player" then return end
 
@@ -59,14 +65,17 @@ function TurnSystem:endPlayerTurn()
     end
 end
 
+-- Check if input is allowed
 function TurnSystem:isInputAllowed()
     return self.inputAllowed
 end
 
+-- Get turn count
 function TurnSystem:getTurnCount()
     return self.turnCount
 end
 
+-- Get current phase
 function TurnSystem:getPhase()
     return self.currentPhase
 end

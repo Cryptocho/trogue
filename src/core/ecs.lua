@@ -1,9 +1,10 @@
 -- ECS Core Implementation
 
+-- Spatial Hash for O(1) spatial queries
 local function createSpatialHash(cellSize)
     local instance = {
         cellSize = cellSize or 1,
-        cells = {},
+        cells = {},  -- "x,y" -> {entityId -> entityId}
     }
 
     instance.insert = function(self, entityId, x, y)
@@ -76,12 +77,14 @@ local function createSpatialHash(cellSize)
     return instance
 end
 
+-- Built-in component for marking entity destruction
 local function createShouldDespawn(reason)
     return {
         reason = reason,
     }
 end
 
+-- Create a new World instance
 local function createWorld()
     local instance = {
         nextEntityId = 1,
@@ -93,6 +96,9 @@ local function createWorld()
         spatialHash = createSpatialHash(1),
     }
 
+    -- Create a new entity with the given components
+    -- @param components table: {ComponentName = {...}, ...} or Component instances
+    -- @return number: entity id
     instance.spawn = function(self, components)
         local id = self.nextEntityId
         self.nextEntityId = self.nextEntityId + 1
@@ -107,6 +113,10 @@ local function createWorld()
         return id
     end
 
+    -- Add a component to an entity
+    -- @param entityId number
+    -- @param componentName string
+    -- @param componentData table or Component instance
     instance.addComponent = function(self, entityId, componentName, componentData)
         local isInstance = componentData and componentData._isComponent
 
@@ -130,13 +140,18 @@ local function createWorld()
         end
         self.entities[entityId][componentName] = self.components[componentName][entityId]
 
+        -- Update spatial hash if this is a Position component
         if componentName == "Position" and componentData then
             local pos = isInstance and componentData.data or componentData
             self.spatialHash:insert(entityId, pos.x or 0, pos.y or 0)
         end
     end
 
+    -- Remove a component from an entity
+    -- @param entityId number
+    -- @param componentName string
     instance.removeComponent = function(self, entityId, componentName)
+        -- Update spatial hash before removing Position
         if componentName == "Position" then
             local oldPos = self.components[componentName] and self.components[componentName][entityId]
             if oldPos then
@@ -158,10 +173,16 @@ local function createWorld()
         end
     end
 
+    -- Mark entity for destruction (add ShouldDespawn component)
+    -- @param entityId number
+    -- @param reason string: optional reason
     instance.despawn = function(self, entityId, reason)
         self:addComponent(entityId, "ShouldDespawn", createShouldDespawn(reason))
     end
 
+    -- Actually destroy entities marked with ShouldDespawn
+    -- Call this in a CleanupSystem or at end of frame
+    -- @return array: {entityId, reason} of destroyed entities
     instance.processDespawns = function(self)
         local destroyed = {}
         local results = self:query({"ShouldDespawn"})
@@ -181,12 +202,15 @@ local function createWorld()
         return destroyed
     end
 
+    -- Internal: Actually destroy an entity
     instance._destroyEntity = function(self, entityId)
+        -- Remove from spatial hash first
         local pos = self.components.Position and self.components.Position[entityId]
         if pos then
             self.spatialHash:remove(entityId, pos.x or 0, pos.y or 0)
         end
 
+        -- Remove all components
         if self.entities[entityId] then
             local componentNames = {}
             for componentName, _ in pairs(self.entities[entityId]) do
@@ -204,6 +228,10 @@ local function createWorld()
         self.entities[entityId] = nil
     end
 
+    -- Get a component by entity and name (encapsulated access)
+    -- @param entityId number
+    -- @param componentName string
+    -- @return component data or nil
     instance.getComponent = function(self, entityId, componentName)
         if self.components[componentName] then
             return self.components[componentName][entityId]
@@ -211,11 +239,16 @@ local function createWorld()
         return nil
     end
 
+    -- Set a component data for an entity
+    -- @param entityId number
+    -- @param componentName string
+    -- @param data new component data
     instance.setComponent = function(self, entityId, componentName, data)
         if not self.components[componentName] then
             self.components[componentName] = {}
         end
 
+        -- Handle Position updates in spatial hash
         if componentName == "Position" then
             local oldPos = self.components[componentName] and self.components[componentName][entityId]
             if oldPos then
@@ -233,13 +266,21 @@ local function createWorld()
         end
     end
 
+    -- Check if entity has a component
+    -- @param entityId number
+    -- @param componentName string
+    -- @return boolean
     instance.hasComponent = function(self, entityId, componentName)
         return self.components[componentName] and self.components[componentName][entityId] ~= nil
     end
 
+    -- Query entities that have all specified components
+    -- @param componentNames array: {"Component1", "Component2", ...}
+    -- @param options table: optional {readOnly = true} for read-only results
+    -- @return array: {{id = number, components = table}, ...}
     instance.query = function(self, componentNames, options)
         options = options or {}
-        local readOnly = options.readOnly ~= false
+        local readOnly = options.readOnly ~= false  -- Default to true
 
         if #componentNames == 0 then
             local results = {}
@@ -288,12 +329,13 @@ local function createWorld()
                 local components = self.entities[entityId]
 
                 if readOnly then
+                    -- Create read-only proxy using metatable
                     components = setmetatable({}, {
                         __index = self.entities[entityId],
                         __newindex = function()
                             error("Cannot modify query result directly. Use World:setComponent() instead.")
                         end,
-                        __metatable = false
+                        __metatable = false  -- Prevent getmetatable
                     })
                 end
 
@@ -307,6 +349,8 @@ local function createWorld()
         return results
     end
 
+    -- Add a system to the world
+    -- @param system table
     instance.addSystem = function(self, system)
         if system.priority == nil then
             system.priority = 0
@@ -330,6 +374,8 @@ local function createWorld()
         end
     end
 
+    -- Update all systems
+    -- @param dt number: delta time in seconds
     instance.update = function(self, dt)
         for _, system in ipairs(self.systems) do
             if system.enabled ~= false and system.update then
@@ -338,14 +384,20 @@ local function createWorld()
         end
     end
 
+    -- Get all entities (for internal use)
     instance.getEntities = function(self)
         return self.entities
     end
 
+    -- Get component storage for a component type (internal use)
     instance.getComponentStorage = function(self, componentName)
         return self.components[componentName]
     end
 
+    -- Get component instance (if it's a Component instance)
+    -- @param entityId number
+    -- @param componentName string
+    -- @return Component instance or nil
     instance.getComponentInstance = function(self, entityId, componentName)
         if self.componentInstances[entityId] then
             return self.componentInstances[entityId][componentName]
@@ -353,6 +405,7 @@ local function createWorld()
         return nil
     end
 
+    -- Get spatial hash for O(1) spatial queries
     instance.getSpatialHash = function(self)
         return self.spatialHash
     end

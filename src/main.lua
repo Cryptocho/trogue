@@ -11,6 +11,7 @@ local InputSystem = require("src.systems.input")
 local MapRenderer = require("src.systems.map_renderer")
 local RenderSystem = require("src.systems.render")
 local RuleEngineModule = require("src.core.rule_engine")
+local MapGenerator = require("src.utils.map_generator")
 
 -- Load configuration
 local Config = require("src.config")
@@ -259,30 +260,34 @@ function game:getSystem(systemName)
 end
 
 function initGameWorld()
-    local mapData = {
-        "################",
-        "#..............#",
-        "#..............#",
-        "#....@.........#",
-        "#..............#",
-        "#......g.......#",
-        "#..............#",
-        "#..............#",
-        "################",
-    }
+    local mapData = MapGenerator.generateMap("forest", 60, 60, {
+        treeMinDist = 2.0,
+        densityThreshold = 0.5,
+        fbmOctaves = 6,
+        fbmPersistence = 0.5,
+        fbmScale = 4.0,
+        poissonMaxAttempts = 5,
+        poissonSeed = nil
+    })
     
-    -- Spawn entities
-    for y, row in ipairs(mapData) do
-        for x = 1, #row do
-            local char = row:sub(x, x)
-            
-            if char == "@" then
-                game.prototypes:spawn("player", {Position = {x = x, y = y}})
-            elseif char == "g" then
-                game.prototypes:spawn("goblin", {Position = {x = x, y = y}})
+    -- Find nearest floor tile to center and spawn player
+    local centerX, centerY = 30, 30
+    local bestX, bestY = centerX, centerY
+    local bestDist = math.huge
+    
+    for y = 1, 60 do
+        for x = 1, 60 do
+            if mapData[y]:sub(x, x) == "." then
+                local d = math.abs(x - centerX) + math.abs(y - centerY)
+                if d < bestDist then
+                    bestDist = d
+                    bestX, bestY = x, y
+                end
             end
         end
     end
+    
+    game.prototypes:spawn("player", {Position = {x = bestX, y = bestY}})
     
     -- Add systems (by priority)
     game.world:addSystem(MapRenderer)

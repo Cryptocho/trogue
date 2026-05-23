@@ -1,4 +1,4 @@
-local perlin = require("perlin")
+local perlin = require("src.utils.perlin")
 
 local function clamp(v, mn, mx)
     return math.min(math.max(v, mn), mx)

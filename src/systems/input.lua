@@ -43,11 +43,14 @@ function InputSystem:init(world, config)
     self.turnSystem = nil
     self.ruleEngine = nil
 
+    -- Enable system
     self.enabled = true
 
+    -- Listen for AbilityUsed to end turn after successful ability use
     if self.events then
         self.events:on("AbilityUsed", function(data)
             if data and data.entity then
+                -- Check if it's the player who used the ability
                 local players = self.world:query({"Player"})
                 for _, player in ipairs(players) do
                     if player.id == data.entity then
@@ -69,6 +72,7 @@ function InputSystem:update(world, dt)
     end
 end
 
+-- Set system references (called by main.lua after initGameWorld)
 function InputSystem:setTurnSystem(turnSystem)
     self.turnSystem = turnSystem
 end
@@ -85,6 +89,10 @@ function InputSystem:isEnabled()
     return self.enabled
 end
 
+-- Main entry point: called from main.lua love.keypressed
+-- @param key string
+-- @param scancode string
+-- @param isrepeat boolean
 function InputSystem:handleKey(key, scancode, isrepeat)
     if not self.enabled then
         return
@@ -168,6 +176,8 @@ function InputSystem:processKeyBuffer()
     end
 end
 
+-- Handle movement input
+-- @param movement table: {dx, dy}
 function InputSystem:handleMove(movement)
     local players = self.world:query({"Player", "Position"})
     if #players == 0 then
@@ -176,10 +186,12 @@ function InputSystem:handleMove(movement)
 
     local playerId = players[1].id
 
+    -- Notify turn system to start turn
     if self.turnSystem then
         self.turnSystem:startTurn()
     end
 
+    -- Emit move attempt event
     if self.events then
         self.events:emit("MoveAttempt", {
             entity = playerId,
@@ -190,6 +202,8 @@ function InputSystem:handleMove(movement)
     end
 end
 
+-- Handle ability usage
+-- @param abilityId string
 function InputSystem:handleAbility(abilityId)
     local players = self.world:query({"Player", "Position"})
     if #players == 0 then
@@ -198,6 +212,7 @@ function InputSystem:handleAbility(abilityId)
 
     local playerId = players[1].id
 
+    -- Check if ability is usable
     if self.ruleEngine then
         local canUse, reason = self.ruleEngine:canUse(playerId, abilityId)
         if not canUse then
@@ -206,19 +221,23 @@ function InputSystem:handleAbility(abilityId)
         end
     end
 
+    -- Notify turn system to start turn
     if self.turnSystem then
         self.turnSystem:startTurn()
     end
 
+    -- Emit ability use event (auto-select target)
+    -- PlayerTurnEnd will be emitted in AbilityUsed event handler
     if self.events then
         self.events:emit("AbilityUse", {
             entity = playerId,
             abilityId = abilityId,
-            targetId = nil
+            targetId = nil  -- RuleEngine will auto-select target
         })
     end
 end
 
+-- Handle wait (skip turn)
 function InputSystem:handleWait()
     if self.turnSystem then
         self.turnSystem:startTurn()
@@ -226,6 +245,9 @@ function InputSystem:handleWait()
     end
 end
 
+-- Handle mouse click for movement
+-- @param x number: screen x position
+-- @param y number: screen y position
 function InputSystem:handleClick(x, y)
     if not self.enabled then
         return
@@ -321,6 +343,7 @@ function InputSystem:handleClick(x, y)
     end
 end
 
+-- Get entity at position (excluding player)
 function InputSystem:getEntityAt(x, y, excludeEntity)
     local entities = self.world:query({"Position", "Actor"})
     for _, result in ipairs(entities) do
@@ -334,6 +357,7 @@ function InputSystem:getEntityAt(x, y, excludeEntity)
     return nil
 end
 
+-- A* pathfinding
 function InputSystem:findPath(startX, startY, goalX, goalY, excludeEntity, mapRenderer)
     local function isPassable(tx, ty)
         if not Coordinates.isInBounds(tx, ty, mapRenderer.width, mapRenderer.height) then

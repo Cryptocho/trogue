@@ -1,5 +1,6 @@
 -- RuleEngine: Rule and Effect Application Engine
 -- Gameplay Rule Pipeline Layer Core
+-- MVP: Effect processing logic is temporarily kept inside RuleEngine, driven by events
 
 local AbilityDef = require("src.data.definitions.ability")
 local EffectDef = require("src.data.definitions.effect")
@@ -11,11 +12,14 @@ local function createRuleEngine(world, eventBus)
     local instance = {
         world = world,
         events = eventBus,
-        abilities = {},
-        effects = {},
-        buffs = {},
+
+        -- Registry: Ability/effect/buff definitions
+        abilities = {},   -- abilityId -> AbilityDefinition
+        effects = {},     -- effectId -> EffectDefinition
+        buffs = {},       -- buffId -> BuffDefinition
     }
 
+    -- Load built-in definitions
     for id, ability in pairs(AbilityDef.builtin) do
         instance.abilities[id] = ability
     end
@@ -26,8 +30,10 @@ local function createRuleEngine(world, eventBus)
         instance.buffs[id] = buff
     end
 
+    -- Register event handlers
     _ruleEngineRegisterEvents(instance)
 
+    -- Bind methods
     instance.canUse = function(self, entityId, abilityId)
         return _ruleEngineCanUse(self, entityId, abilityId)
     end
@@ -63,34 +69,44 @@ local function createRuleEngine(world, eventBus)
     return instance
 end
 
+-- Register event handlers
 function _ruleEngineRegisterEvents(self)
     if not self.events then return end
 
+    -- Listen for ability use request
     self.events:on("AbilityUse", function(data)
         _ruleEngineTryUseAbility(self, data.entity, data.abilityId, data.targetId)
     end, 0)
 
+    -- Listen for damage request (processed internally)
     self.events:on("DamageRequest", function(data)
         _processDamage(self, data)
     end, 100)
 
+    -- Listen for heal request
     self.events:on("HealRequest", function(data)
         _processHeal(self, data)
     end, 100)
 
+    -- Listen for buff apply request
     self.events:on("BuffApplyRequest", function(data)
         _processBuffApply(self, data)
     end, 100)
 
+    -- Listen for turn end
     self.events:on("TurnEnd", function()
         _ruleEngineOnTurnEnd(self)
     end, 100)
 
+    -- Listen for buff tick (DOT/HOT damage)
     self.events:on("BuffTickRequest", function(data)
         _processBuffTick(self, data)
     end, 100)
 end
 
+-- Get entity ability component from ECS
+-- @param entityId number
+-- @return AbilityComponent or nil if not defined
 function _ruleEngineGetAbilityComponent(self, entityId)
     if not self.world.components.Ability then
         return nil
@@ -98,6 +114,9 @@ function _ruleEngineGetAbilityComponent(self, entityId)
     return self.world.components.Ability[entityId]
 end
 
+-- Get entity buffs component from ECS
+-- @param entityId number
+-- @return BuffsComponent or nil if not defined
 function _ruleEngineGetBuffsComponent(self, entityId)
     if not self.world.components.Buffs then
         return nil
@@ -105,6 +124,10 @@ function _ruleEngineGetBuffsComponent(self, entityId)
     return self.world.components.Buffs[entityId]
 end
 
+-- Check if ability can be used
+-- @param entityId number
+-- @param abilityId string
+-- @return boolean, string (canUse, reason)
 function _ruleEngineCanUse(self, entityId, abilityId)
     local ability = self.abilities[abilityId]
     if not ability then
@@ -116,15 +139,18 @@ function _ruleEngineCanUse(self, entityId, abilityId)
         return false, "Entity has no Ability component"
     end
 
+    -- Check if entity has this ability (O(1) lookup with Set)
     if not comp.abilities[abilityId] then
         return false, "Ability not learned"
     end
 
+    -- Check cooldown
     local cd = comp.cooldowns[abilityId] or 0
     if cd > 0 then
         return false, "On cooldown (" .. cd .. ")"
     end
 
+    -- Check resource cost
     for resource, cost in pairs(ability.cost) do
         local current = comp.resources[resource] or 0
         if current < cost then
@@ -135,7 +161,13 @@ function _ruleEngineCanUse(self, entityId, abilityId)
     return true, "Can use"
 end
 
+-- Try to use ability
+-- @param entityId number
+-- @param abilityId string
+-- @param targetId number (optional)
+-- @return boolean, string
 function _ruleEngineTryUseAbility(self, entityId, abilityId, targetId)
+    -- Check if can use
     local canUse, reason = _ruleEngineCanUse(self, entityId, abilityId)
     if not canUse then
         if self.events then
@@ -151,16 +183,20 @@ function _ruleEngineTryUseAbility(self, entityId, abilityId, targetId)
     local ability = self.abilities[abilityId]
     local comp = _ruleEngineGetAbilityComponent(self, entityId)
 
+    -- Deduct resources
     for resource, cost in pairs(ability.cost) do
         comp.resources[resource] = comp.resources[resource] - cost
     end
 
+    -- Set cooldown
     if ability.cooldown > 0 then
         comp.cooldowns[abilityId] = ability.cooldown
     end
 
+    -- Execute effects via events
     local success = _ruleEngineApplyAbility(self, entityId, ability, targetId)
 
+    -- Only emit success if ability had valid targets
     if success and self.events then
         self.events:emit("AbilityUsed", {
             entity = entityId,
@@ -172,6 +208,10 @@ function _ruleEngineTryUseAbility(self, entityId, abilityId, targetId)
     return true, "Success"
 end
 
+-- Apply ability effects
+-- @param sourceId number
+-- @param ability AbilityDefinition
+-- @param targetId number (optional)
 function _ruleEngineApplyAbility(self, sourceId, ability, targetId)
     local pos = self.world.components.Position[sourceId]
     if not pos then
@@ -181,10 +221,12 @@ function _ruleEngineApplyAbility(self, sourceId, ability, targetId)
 
     local targets = {}
 
+    -- Determine targets
     if ability.targetType == AbilityDef.TargetType.SELF then
         table.insert(targets, sourceId)
 
     elseif ability.targetType == AbilityDef.TargetType.SINGLE then
+        -- Auto-select nearest valid target if none specified
         if not targetId then
             local range = ability.range
             local actors = self.world:query({"Position", "Health", "Actor"})
@@ -218,11 +260,13 @@ function _ruleEngineApplyAbility(self, sourceId, ability, targetId)
         end
     end
 
+    -- If no targets, don't emit success (ability fizzled)
     if #targets == 0 then
         print("[RuleEngine] No valid targets for ability: " .. ability.id)
         return false
     end
 
+    -- Emit effect requests for each target
     for _, targetId in ipairs(targets) do
         for _, effectId in ipairs(ability.effects) do
             _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
@@ -232,6 +276,10 @@ function _ruleEngineApplyAbility(self, sourceId, ability, targetId)
     return true
 end
 
+-- Apply effect (emit request event)
+-- @param effectId string
+-- @param sourceId number
+-- @param targetId number
 function _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
     local effect = self.effects[effectId]
     if not effect then
@@ -241,6 +289,7 @@ function _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
 
     if not self.events then return end
 
+    -- Emit appropriate request event based on effect type
     if effect.type == EffectDef.Type.DAMAGE then
         self.events:emit("DamageRequest", {
             source = sourceId,
@@ -271,6 +320,7 @@ function _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
     end
 end
 
+-- Private: Process damage
 function _processDamage(self, data)
     local targetHealth = self.world.components.Health[data.target]
     if not targetHealth then
@@ -278,21 +328,26 @@ function _processDamage(self, data)
         return
     end
 
+    -- Get buffs component (ECS)
     local buffs = self.world.components.Buffs and self.world.components.Buffs[data.target]
 
+    -- Check for shield absorption
     local shieldAbsorb = 0
     if buffs and buffs.activeBuffs then
         local shieldBuff = buffs.activeBuffs["shield"]
         if shieldBuff and shieldBuff.stacks > 0 then
-            shieldAbsorb = shieldBuff.stacks * 10
+            shieldAbsorb = shieldBuff.stacks * 10  -- Each stack absorbs 10 damage
         end
     end
 
+    -- Calculate final damage
     local damage = data.baseValue
     if shieldAbsorb > 0 then
         if shieldAbsorb >= damage then
+            -- Shield absorbs all
             shieldAbsorb = shieldAbsorb - damage
             damage = 0
+            -- Update shield
             if buffs and buffs.activeBuffs["shield"] then
                 if shieldAbsorb <= 0 then
                     buffs.activeBuffs["shield"] = nil
@@ -307,6 +362,7 @@ function _processDamage(self, data)
                 end
             end
         else
+            -- Partial absorption
             damage = damage - shieldAbsorb
             buffs.activeBuffs["shield"] = nil
             if self.events then
@@ -318,10 +374,12 @@ function _processDamage(self, data)
         end
     end
 
+    -- Apply damage
     if damage > 0 then
         targetHealth.current = targetHealth.current - damage
     end
 
+    -- Emit damage done event
     if self.events then
         self.events:emit("DamageDealt", {
             source = data.source,
@@ -334,9 +392,11 @@ function _processDamage(self, data)
         })
     end
 
+    -- Check for death
     _ruleEngineCheckDeath(self, data.target, data.source)
 end
 
+-- Private: Process heal
 function _processHeal(self, data)
     local targetHealth = self.world.components.Health[data.target]
     if not targetHealth then
@@ -344,9 +404,11 @@ function _processHeal(self, data)
         return
     end
 
+    -- Calculate actual heal amount (cap at max health)
     local healAmount = math.min(data.baseValue, targetHealth.max - targetHealth.current)
     targetHealth.current = targetHealth.current + healAmount
 
+    -- Emit heal applied event
     if self.events then
         self.events:emit("HealingApplied", {
             source = data.source,
@@ -357,7 +419,9 @@ function _processHeal(self, data)
     end
 end
 
+-- Private: Process buff apply
 function _processBuffApply(self, data)
+    -- Use buffs component
     local buffs = _ruleEngineGetBuffsComponent(self, data.target)
     if not buffs then
         print("[RuleEngine] No Buffs component for entity: " .. data.target)
@@ -374,6 +438,7 @@ function _processBuffApply(self, data)
     local existing = buffs.activeBuffs[data.buffId]
 
     if existing then
+        -- Handle stack type
         if buffDef.stackType == BuffDef.StackType.REPLACE then
             existing.duration = data.duration
             existing.stacks = 1
@@ -386,6 +451,7 @@ function _processBuffApply(self, data)
             existing.duration = data.duration
         end
     else
+        -- New buff
         buffs.activeBuffs[data.buffId] = {
             duration = data.duration,
             stacks = 1,
@@ -394,6 +460,7 @@ function _processBuffApply(self, data)
         }
     end
 
+    -- Emit buff added event
     if self.events then
         self.events:emit("BuffAdded", {
             entity = data.target,
@@ -404,6 +471,7 @@ function _processBuffApply(self, data)
     end
 end
 
+-- Private: Check and handle death
 function _ruleEngineCheckDeath(self, entityId, killerId)
     local health = self.world.components.Health[entityId]
     if not health then return end
@@ -418,15 +486,18 @@ function _ruleEngineCheckDeath(self, entityId, killerId)
     end
 end
 
+-- Private: Process buff tick (DOT/HOT damage)
 function _processBuffTick(self, data)
     if not data.entity or not data.effectId then
         print("[RuleEngine] BuffTickRequest missing entity or effectId")
         return
     end
 
+    -- Apply the tick effect (damage or heal)
     _ruleEngineApplyEffect(self, data.effectId, data.source, data.entity)
 end
 
+-- Turn end processing (Orchestrator, emit events only)
 function _ruleEngineOnTurnEnd(self)
     _reduceCooldowns(self)
     _processBuffTicks(self)
@@ -436,6 +507,7 @@ function _ruleEngineOnTurnEnd(self)
     end
 end
 
+-- Private: Reduce cooldowns for all entities
 function _reduceCooldowns(self)
     if not self.world.components.Ability then return end
 
@@ -455,6 +527,7 @@ function _reduceCooldowns(self)
     end
 end
 
+-- Private: Process buff ticks and expiration
 function _processBuffTicks(self)
     if not self.world.components.Buffs then
         print("[RuleEngine] No Buffs component found")
@@ -465,9 +538,12 @@ function _processBuffTicks(self)
         if not buffs.activeBuffs then goto continue end
 
         for buffId, buffData in pairs(buffs.activeBuffs) do
+            -- First reduce duration and check expiration
             buffData.duration = buffData.duration - 1
 
+            -- Only emit tick and keep buff if duration is still >= 0 after reduction
             if buffData.duration >= 0 then
+                -- Emit tick event if buff has tickEffect (tick happens AFTER this turn)
                 if buffData.definition and buffData.definition.tickEffect and self.events then
                     self.events:emit("BuffTickRequest", {
                         entity = entityId,
@@ -479,6 +555,7 @@ function _processBuffTicks(self)
                 end
             end
 
+            -- Remove buff if duration expired
             if buffData.duration < 0 then
                 buffs.activeBuffs[buffId] = nil
                 if self.events then
@@ -494,10 +571,12 @@ function _processBuffTicks(self)
     end
 end
 
+-- Get ability info
 function _ruleEngineGetAbilityInfo(self, entityId, abilityId)
     local ability = self.abilities[abilityId]
     local comp = _ruleEngineGetAbilityComponent(self, entityId)
 
+    -- Handle missing Ability component
     if not comp then
         return {
             definition = ability,
@@ -507,6 +586,7 @@ function _ruleEngineGetAbilityInfo(self, entityId, abilityId)
         }
     end
 
+    -- Check if can use (already handles nil comp internally)
     local canUse, reason = _ruleEngineCanUse(self, entityId, abilityId)
 
     return {
@@ -517,6 +597,4 @@ function _ruleEngineGetAbilityInfo(self, entityId, abilityId)
     }
 end
 
-return {
-    createRuleEngine = createRuleEngine,
-}
+return {createRuleEngine = createRuleEngine}

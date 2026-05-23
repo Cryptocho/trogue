@@ -3,6 +3,7 @@
 -- 1-based tile coordinates (consistent with Lua tables)
 
 local TILE_SIZE = 16
+local origin = "top-left"
 
 local function tileToWorld(tx, ty)
     return (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE

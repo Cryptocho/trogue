@@ -7,8 +7,8 @@ Usage:
     python generate_tileset.py [tile_size]
     
 Output:
-    assets/tileset.png - Tileset image with characters
-    assets/tileset_info.lua - Lua file mapping character names to indices
+    src/assets/tileset.png - Tileset image with characters
+    src/assets/tileset_info.lua - Lua file mapping character names to indices
 """
 
 import os
@@ -33,6 +33,8 @@ TILES = [
     ("!", (255, 100, 255), (80, 0, 80)),           # item
     # Index 7: Item (gold)
     ("*", (255, 215, 0), (100, 80, 0)),            # item
+    # Index 8: Tree (solid)
+    ("^", (34, 139, 34), (20, 80, 20)),           # tree
 ]
 
 TILES_PER_ROW = 8
@@ -44,7 +46,7 @@ def generate_tileset(tile_size=16):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
     font_path = os.path.join(project_root, "fonts", "BigBlueTerm437NerdFontMono-Regular.ttf")
-    assets_dir = os.path.join(project_root, "assets")
+    assets_dir = os.path.join(project_root, "src", "assets")
     
     # Check font exists
     if not os.path.exists(font_path):

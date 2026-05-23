@@ -111,6 +111,8 @@ local function sampleWithDensity(s, densityMap, width, height, minDist, maxAttem
     threshold = threshold or 0.0
 
     local function getDensity(tx, ty)
+        tx = floor(tx)
+        ty = floor(ty)
         if tx < 1 or tx > width or ty < 1 or ty > height then return 0 end
         local row = densityMap[ty]
         return row and (row[tx] or 0) or 0
@@ -150,7 +152,7 @@ local function sampleWithDensity(s, densityMap, width, height, minDist, maxAttem
             local newX, newY = randomInAnnulus(s, point.x, point.y, s.minDist, s.maxDist)
             if isValidPoint(s, newX, newY, s.minDist) then
                 local d = getDensity(newX, newY)
-                if d > threshold and rng(s) < d then
+                if d > threshold then
                     table.insert(active, addPoint(s, newX, newY))
                     found = true
                     break

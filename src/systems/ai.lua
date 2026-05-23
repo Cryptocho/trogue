@@ -9,6 +9,7 @@ local AISystem = {
     name = "AISystem",
 }
 
+-- Random directions
 local DIRECTIONS = {
     {dx = -1, dy = 0},
     {dx = 1, dy = 0},
@@ -20,7 +21,7 @@ function AISystem:init(world)
     self.world = world
     self.events = world.eventBus
     self.waitingForPlayerTurn = true
-    self.ruleEngine = nil
+    self.ruleEngine = nil  -- Set via setRuleEngine()
 
     if self.events then
         self.events:on("PlayerTurnEnd", function()
@@ -29,11 +30,13 @@ function AISystem:init(world)
     end
 end
 
+-- Set RuleEngine reference (called by main.lua after initGameWorld)
 function AISystem:setRuleEngine(ruleEngine)
     self.ruleEngine = ruleEngine
 end
 
 function AISystem:update(world, dt)
+    -- Only act when waiting for player turn
     if not self.waitingForPlayerTurn then
         return
     end
@@ -45,14 +48,17 @@ function AISystem:update(world, dt)
     for _, result in ipairs(actors) do
         local entity = result.id
 
+        -- Skip player
         if world.components.Player[entity] then
             goto continue
         end
 
+        -- Try use ability
         if self.ruleEngine then
             self:tryUseAbility(entity)
         end
 
+        -- Random move (70%)
         if math.random() < 0.7 then
             local dir = DIRECTIONS[math.random(#DIRECTIONS)]
 
@@ -69,21 +75,26 @@ function AISystem:update(world, dt)
         ::continue::
     end
 
+    -- Turn complete
     if self.events then
         self.events:emit("TurnEnd", {})
     end
 end
 
+-- Try use ability
+-- @param entityId number
 function AISystem:tryUseAbility(entityId)
     if not self.ruleEngine or not self.events then
         return
     end
 
+    -- Get ability component
     local abilityComp = self.world.components.Ability and self.world.components.Ability[entityId]
     if not abilityComp or not abilityComp.abilities or not next(abilityComp.abilities) then
-        return
+        return  -- No abilities defined (use next() to check empty table)
     end
 
+    -- Get all abilities as array for random selection
     local abilitiesList = {}
     for abilityId, _ in pairs(abilityComp.abilities) do
         table.insert(abilitiesList, abilityId)
@@ -93,11 +104,14 @@ function AISystem:tryUseAbility(entityId)
         return
     end
 
+    -- Random select an ability to use
     local abilityId = abilitiesList[math.random(#abilitiesList)]
 
+    -- Check if ability is usable
     local canUse, reason = self.ruleEngine:canUse(entityId, abilityId)
 
     if canUse then
+        -- Find players in range
         local pos = self.world.components.Position[entityId]
         if pos then
             local players = self.world:query({"Player", "Position"})
@@ -105,6 +119,7 @@ function AISystem:tryUseAbility(entityId)
                 local playerPos = playerResult.components.Position
                 local dist = Coordinates.manhattanDistance(pos.x, pos.y, playerPos.x, playerPos.y)
 
+                -- If player is in range, use ability on it
                 if dist <= 1 then
                     self.events:emit("AbilityUse", {
                         entity = entityId,
