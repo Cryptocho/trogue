@@ -23,6 +23,7 @@ function MapRenderer:init(world)
 
     -- Load tileset image
     self.tileset = love.graphics.newImage("assets/tileset.png")
+    self.tileset:setFilter("nearest", "nearest")
 
     -- Pre-create quads for each tile
     for i = 0, 8 do
@@ -90,7 +91,7 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
             if quad then
                 local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
                     screenWidth, screenHeight, SCALE)
-                love.graphics.draw(self.tileset, quad, screenX, screenY)
+                love.graphics.draw(self.tileset, quad, math.floor(screenX), math.floor(screenY))
             end
         end
     end
