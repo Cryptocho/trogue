@@ -2,58 +2,55 @@
 -- Unified coordinate system for tile/pixel conversions and distance calculations
 -- 1-based tile coordinates (consistent with Lua tables)
 
-local Coordinates = {
-    TILE_SIZE = 16,
-    origin = "top-left",
-}
+local TILE_SIZE = 16
 
-function Coordinates:tileToWorld(tx, ty)
-    return (tx - 1) * self.TILE_SIZE, (ty - 1) * self.TILE_SIZE
+local function tileToWorld(tx, ty)
+    return (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE
 end
 
-function Coordinates:worldToTile(wx, wy)
-    return math.floor(wx / self.TILE_SIZE) + 1,
-           math.floor(wy / self.TILE_SIZE) + 1
+local function worldToTile(wx, wy)
+    return math.floor(wx / TILE_SIZE) + 1,
+           math.floor(wy / TILE_SIZE) + 1
 end
 
-function Coordinates:screenToTile(screenX, screenY, cameraX, cameraY, screenWidth, screenHeight, scale)
-    local offsetX = screenWidth / 2 / scale - cameraX * self.TILE_SIZE - self.TILE_SIZE / 2
-    local offsetY = screenHeight / 2 / scale - cameraY * self.TILE_SIZE - self.TILE_SIZE / 2
-    return self:worldToTile(screenX / scale - offsetX, screenY / scale - offsetY)
+local function screenToTile(screenX, screenY, cameraX, cameraY, screenWidth, screenHeight, scale)
+    local offsetX = screenWidth / 2 / scale - cameraX * TILE_SIZE - TILE_SIZE / 2
+    local offsetY = screenHeight / 2 / scale - cameraY * TILE_SIZE - TILE_SIZE / 2
+    return worldToTile(screenX / scale - offsetX, screenY / scale - offsetY)
 end
 
-function Coordinates:tileToScreen(tx, ty, cameraX, cameraY, screenWidth, screenHeight, scale)
-    local offsetX = screenWidth / 2 / scale - cameraX * self.TILE_SIZE - self.TILE_SIZE / 2
-    local offsetY = screenHeight / 2 / scale - cameraY * self.TILE_SIZE - self.TILE_SIZE / 2
-    local wx, wy = self:tileToWorld(tx, ty)
+local function tileToScreen(tx, ty, cameraX, cameraY, screenWidth, screenHeight, scale)
+    local offsetX = screenWidth / 2 / scale - cameraX * TILE_SIZE - TILE_SIZE / 2
+    local offsetY = screenHeight / 2 / scale - cameraY * TILE_SIZE - TILE_SIZE / 2
+    local wx, wy = tileToWorld(tx, ty)
     return wx + offsetX, wy + offsetY
 end
 
-function Coordinates:isInBounds(tx, ty, width, height)
+local function isInBounds(tx, ty, width, height)
     return tx >= 1 and tx <= width and ty >= 1 and ty <= height
 end
 
-function Coordinates:manhattanDistance(tx1, ty1, tx2, ty2)
+local function manhattanDistance(tx1, ty1, tx2, ty2)
     return math.abs(tx2 - tx1) + math.abs(ty2 - ty1)
 end
 
-function Coordinates:chebyshevDistance(tx1, ty1, tx2, ty2)
+local function chebyshevDistance(tx1, ty1, tx2, ty2)
     return math.max(math.abs(tx2 - tx1), math.abs(ty2 - ty1))
 end
 
-function Coordinates:euclideanDistance(tx1, ty1, tx2, ty2)
+local function euclideanDistance(tx1, ty1, tx2, ty2)
     return math.sqrt((tx2 - tx1)^2 + (ty2 - ty1)^2)
 end
 
-function Coordinates:isInRange(tx1, ty1, tx2, ty2, range)
-    return self:manhattanDistance(tx1, ty1, tx2, ty2) <= range
+local function isInRange(tx1, ty1, tx2, ty2, range)
+    return manhattanDistance(tx1, ty1, tx2, ty2) <= range
 end
 
-function Coordinates:isInArea(tx1, ty1, tx2, ty2, radius)
-    return self:euclideanDistance(tx1, ty1, tx2, ty2) <= radius
+local function isInArea(tx1, ty1, tx2, ty2, radius)
+    return euclideanDistance(tx1, ty1, tx2, ty2) <= radius
 end
 
-function Coordinates:getNeighbors(tx, ty, width, height, diagonal)
+local function getNeighbors(tx, ty, width, height, diagonal)
     local neighbors = {}
     local dirs
     if diagonal then
@@ -63,14 +60,19 @@ function Coordinates:getNeighbors(tx, ty, width, height, diagonal)
     end
     for _, d in ipairs(dirs) do
         local nx, ny = tx + d[1], ty + d[2]
-        if self:isInBounds(nx, ny, width, height) then
+        if isInBounds(nx, ny, width, height) then
             table.insert(neighbors, {x = nx, y = ny})
         end
     end
     return neighbors
 end
 
-function Coordinates:findPath(startX, startY, goalX, goalY, isPassable, getBlockingEntity, getEntityAt)
+local function diagonalCost(dx, dy)
+    if dx ~= 0 and dy ~= 0 then return 1.414 end
+    return 1
+end
+
+local function findPath(startX, startY, goalX, goalY, isPassable, getBlockingEntity)
     local openSet = {}
     local closedSet = {}
     local cameFrom = {}
@@ -89,11 +91,11 @@ function Coordinates:findPath(startX, startY, goalX, goalY, isPassable, getBlock
     }
 
     local function heuristic(x1, y1, x2, y2)
-        return self:chebyshevDistance(x1, y1, x2, y2)
+        return chebyshevDistance(x1, y1, x2, y2)
     end
 
     local function getMoveCost(dx, dy)
-        return self:diagonalCost(dx, dy)
+        return diagonalCost(dx, dy)
     end
 
     local function nodeKey(x, y)
@@ -178,9 +180,19 @@ function Coordinates:findPath(startX, startY, goalX, goalY, isPassable, getBlock
     return nil
 end
 
-function Coordinates:diagonalCost(dx, dy)
-    if dx ~= 0 and dy ~= 0 then return 1.414 end
-    return 1
-end
-
-return Coordinates
+return {
+    TILE_SIZE = TILE_SIZE,
+    tileToWorld = tileToWorld,
+    worldToTile = worldToTile,
+    screenToTile = screenToTile,
+    tileToScreen = tileToScreen,
+    isInBounds = isInBounds,
+    manhattanDistance = manhattanDistance,
+    chebyshevDistance = chebyshevDistance,
+    euclideanDistance = euclideanDistance,
+    isInRange = isInRange,
+    isInArea = isInArea,
+    getNeighbors = getNeighbors,
+    findPath = findPath,
+    diagonalCost = diagonalCost,
+}

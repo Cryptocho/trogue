@@ -15,13 +15,11 @@
 └─────────────────┬───────────────────────┘
 ┌─────────────────▼───────────────────────┐
 │        Gameplay Rule Pipeline Layer     │
-│  事件系统、能力系统、效果系统、回合系统       │
-│  (规划中)                                │
+│    事件系统、能力系统、效果系统、回合系统     │
 └─────────────────┬───────────────────────┘
 ┌─────────────────▼───────────────────────┐
 │               ECS Layer                 │
 │  实体管理、组件存储、基础系统、渲染系统       │
-│  ✅ 已完成基础 Demo                      │
 └─────────────────┬───────────────────────┘
 ┌─────────────────▼───────────────────────┐
 │              Engine Layer               │
@@ -216,3 +214,125 @@ RuleEngine 是 Gameplay Rule Pipeline Layer 的核心，通过事件驱动处理
 4. 更新CHANGELOG.md
 5. 写commit message等待确认
 6. 确认后提交所有变更(包括和这次计划无关的)并推送
+
+---
+
+## 编码风格规范
+
+### 概述
+
+所有代码统一为**纯数据驱动**风格，消除 OOP metatable 模式，保持组件/定义/原型为纯数据表。
+
+### 规则
+
+#### 1. 组件（Components）
+
+必须是纯数据表，不使用 metatable/OOP：
+
+```lua
+-- 正确
+local Health = { current = 100, max = 100 }
+
+-- 错误 - 使用了 setmetatable
+local Health = {}
+setmetatable(Health, { __index = ... })
+```
+
+#### 2. 定义（Definitions）
+
+工厂函数返回纯数据表，不使用 `setmetatable`：
+
+```lua
+-- 正确
+local function createAbilityDef(id, config)
+    return {
+        id = id,
+        name = config.name,
+        cost = config.cost or {},
+        cooldown = config.cooldown or 0,
+    }
+end
+
+-- 错误
+local Ability = {}
+setmetatable(Ability, { __index = ... })
+function Ability:new() ... end
+```
+
+#### 3. 原型（Prototypes）
+
+纯数据表，不使用 OOP 模式。
+
+#### 4. 核心类（Core Classes）
+
+使用工厂函数而非 `:new()` 构造和 `__index` metatable：
+
+```lua
+-- 正确
+local function createWorld()
+    return {
+        nextEntityId = 1,
+        entities = {},
+        components = {},
+    }
+end
+
+-- 错误
+local World = {}
+World.__index = World
+function World:new()
+    return setmetatable({}, World)
+end
+```
+
+#### 5. 系统（Systems）
+
+统一使用 `function SystemName:methodName(self, ...)` 方法简写语法：
+
+```lua
+-- 正确
+local MySystem = {
+    priority = 1,
+    name = "MySystem",
+}
+
+function MySystem:init(world)
+    self.world = world
+end
+
+function MySystem:update(world, dt)
+    -- ...
+end
+
+-- 错误 - 使用内联函数
+local MySystem = {
+    priority = 1,
+    name = "MySystem",
+    init = function(self, world)
+        self.world = world
+    end,
+}
+```
+
+#### 6. Coordinates 模块
+
+使用纯函数，不使用 `self` 和 OOP 方法语法：
+
+```lua
+-- 正确
+local TILE_SIZE = 16
+
+local function tileToWorld(tx, ty)
+    return (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE
+end
+
+-- 错误
+local Coordinates = { TILE_SIZE = 16 }
+function Coordinates:tileToWorld(tx, ty)
+    return (tx - 1) * self.TILE_SIZE, (ty - 1) * self.TILE_SIZE
+end
+```
+
+#### 7. 禁止模式
+
+`setmetatable(obj, some_metatable)` + `__index` 的 OOP 模式严格禁止使用。

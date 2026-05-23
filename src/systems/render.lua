@@ -41,7 +41,7 @@ function RenderSystem:drawEntities(world, offsetX, offsetY)
         
         if result.components.Player or result.components.Actor then
             if pos and renderable then
-                local wx, wy = Coordinates:tileToWorld(pos.x, pos.y)
+                local wx, wy = Coordinates.tileToWorld(pos.x, pos.y)
                 local x = wx + offsetX
                 local y = wy + offsetY
                 

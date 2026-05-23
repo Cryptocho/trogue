@@ -1,7 +1,8 @@
 -- Trogue ECS Demo - Main Entry Point
-local World = require("src.core.ecs").World
-local EventBus = require("src.core.events").EventBus
-local PrototypeManager = require("src.utils.prototype").PrototypeManager
+local ECS = require("src.core.ecs")
+local EventBusModule = require("src.core.events")
+local PrototypeManagerModule = require("src.utils.prototype")
+local RuleEngineModule = require("src.core.rule_engine")
 local TurnSystem = require("src.systems.turn")
 local MovementSystem = require("src.systems.movement")
 local CombatSystem = require("src.systems.combat")
@@ -29,15 +30,15 @@ local game = {
 function love.load()
     -- Set global default filter for pixel-perfect scaling
     love.graphics.setDefaultFilter("nearest", "nearest")
-    
-    game.events = EventBus:new()
-    game.world = World:new()
+
+    game.events = EventBusModule.createEventBus()
+    game.world = ECS.createWorld()
     game.world.eventBus = game.events
-    game.prototypes = PrototypeManager:new(game.world)
+    game.prototypes = PrototypeManagerModule.createPrototypeManager(game.world)
     game.prototypes:load("src.data.prototypes.entities")
-    
+
     -- Create RuleEngine
-    game.ruleEngine = RuleEngineModule.RuleEngine:new(game.world, game.events)
+    game.ruleEngine = RuleEngineModule.createRuleEngine(game.world, game.events)
     
 game.skillIcons = {
         punch = love.graphics.newImage("assets/hit.png"),
