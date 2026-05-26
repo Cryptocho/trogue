@@ -6,13 +6,18 @@ return {
     player = {
         Renderable = {tileIndex = 2},
         Player = {},
-        Health = {current = 10, max = 10},
+        Stats = {
+            base = {strength = 10, agility = 5, intelligence = 5, vitality = 10},
+            current = {hp = 10, mp = 50},
+            max = {hp = 10, mp = 50},
+            computed = {physicalDamageBonus = 0, critChance = 0.05, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            modifiers = {},
+        },
         Actor = {moveDelay = 0},  -- Player doesn't use AI movement
         -- abilities use Set structure: {abilityId = true}
         Ability = {
             abilities = {punch = true, heal = true, shield = true, fireball = true},
             cooldowns = {},
-            resources = {mp = 50, maxMp = 50}
         },
         Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },
@@ -21,11 +26,16 @@ return {
     goblin = {
         Renderable = {tileIndex = 3},
         Actor = {moveDelay = 0.5},  -- Move every 0.5 seconds
-        Health = {current = 25, max = 25},
+        Stats = {
+            base = {strength = 8, agility = 6, intelligence = 3, vitality = 8},
+            current = {hp = 25, mp = 30},
+            max = {hp = 25, mp = 30},
+            computed = {physicalDamageBonus = 0, critChance = 0.05, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            modifiers = {},
+        },
         Ability = {
             abilities = {punch = true},
             cooldowns = {},
-            resources = {mp = 30, maxMp = 30}
         },
         Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },
@@ -34,11 +44,16 @@ return {
     rat = {
         Renderable = {tileIndex = 4},
         Actor = {moveDelay = 0.3},  -- Faster than goblins
-        Health = {current = 3, max = 3},
+        Stats = {
+            base = {strength = 4, agility = 8, intelligence = 2, vitality = 3},
+            current = {hp = 3, mp = 20},
+            max = {hp = 3, mp = 20},
+            computed = {physicalDamageBonus = 0, critChance = 0.10, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            modifiers = {},
+        },
         Ability = {
             abilities = {punch = true},
             cooldowns = {},
-            resources = {mp = 20, maxMp = 20}
         },
         Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },
@@ -47,11 +62,16 @@ return {
     orc = {
         Renderable = {tileIndex = 5},
         Actor = {moveDelay = 0.8},  -- Slower
-        Health = {current = 10, max = 10},
+        Stats = {
+            base = {strength = 12, agility = 3, intelligence = 2, vitality = 12},
+            current = {hp = 10, mp = 40},
+            max = {hp = 10, mp = 40},
+            computed = {physicalDamageBonus = 0, critChance = 0.03, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            modifiers = {},
+        },
         Ability = {
             abilities = {punch = true},
             cooldowns = {},
-            resources = {mp = 40, maxMp = 40}
         },
         Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
     },

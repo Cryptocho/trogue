@@ -336,3 +336,7 @@ end
 #### 7. 禁止模式
 
 `setmetatable(obj, some_metatable)` + `__index` 的 OOP 模式严格禁止使用。
+
+#### 8. 回复风格
+
+回复用户时总是使用中文，禁止使用mermaid

@@ -55,13 +55,13 @@ function RenderSystem:drawEntities(world, offsetX, offsetY)
 end
 
 function RenderSystem:drawHealthBars(world, offsetX, offsetY)
-    local entities = world:query({"Position", "Health", "Renderable"})
+    local entities = world:query({"Position", "Stats", "Renderable"})
     
     for _, result in ipairs(entities) do
         local pos = result.components.Position
-        local health = result.components.Health
+        local stats = result.components.Stats
         
-        if (result.components.Player or result.components.Actor) and pos and health then
+        if (result.components.Player or result.components.Actor) and pos and stats then
             local x = (pos.x - 1) * Config.TILE_SIZE + offsetX
             local y = (pos.y - 1) * Config.TILE_SIZE + offsetY - 4
             
@@ -70,7 +70,7 @@ function RenderSystem:drawHealthBars(world, offsetX, offsetY)
             love.graphics.rectangle("fill", x, y, Config.TILE_SIZE, 3)
             
             -- Health bar
-            local healthPercent = health.current / health.max
+            local healthPercent = stats.current.hp / stats.max.hp
             if healthPercent > 0.5 then
                 love.graphics.setColor(0, 0.8, 0, 1)
             elseif healthPercent > 0.25 then

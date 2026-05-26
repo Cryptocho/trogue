@@ -74,8 +74,8 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
     local screenHeight = love.graphics.getHeight()
 
     -- Visible tile range
-    local viewWidth = screenWidth / SCALE / Config.TILE_SIZE
-    local viewHeight = screenHeight / SCALE / Config.TILE_SIZE
+    local viewWidth = screenWidth / Config.SCALE / Config.TILE_SIZE
+    local viewHeight = screenHeight / Config.SCALE / Config.TILE_SIZE
 
     local startX = math.max(1, math.floor(cameraX - viewWidth / 2))
     local endX = math.min(self.width, math.ceil(cameraX + viewWidth / 2))
@@ -90,7 +90,7 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
 
             if quad then
                 local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
-                    screenWidth, screenHeight, SCALE)
+                    screenWidth, screenHeight, Config.SCALE)
                 love.graphics.draw(self.tileset, quad, math.floor(screenX), math.floor(screenY))
             end
         end
