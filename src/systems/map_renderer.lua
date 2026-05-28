@@ -15,17 +15,30 @@ local MapRenderer = {
 
     -- Graphics resources
     tileset = nil,
+    floorImage = nil,   -- image.png used as tiled floor texture
     quads = {},
 }
 
 function MapRenderer:init(world)
     self.world = world
 
-    -- Load tileset image
+    -- Load tileset for non-floor tiles (walls, traps, etc.)
     self.tileset = love.graphics.newImage("assets/tileset.png")
     self.tileset:setFilter("nearest", "nearest")
 
-    -- Pre-create quads for each tile
+    -- Load image.png as tiled floor texture
+    self.floorImage = love.graphics.newImage("assets/pixel-set-library/dungen-tile/image.png")
+    self.floorImage:setFilter("nearest", "nearest")
+    local imgW, imgH = self.floorImage:getDimensions()
+    -- Scale floor image so it fits within a single tile cell without stretching
+    self.floorScale = math.min(Config.TILE_SIZE / imgW, Config.TILE_SIZE / imgH)
+    -- Centered offset within each tile cell
+    self.floorDrawW = imgW * self.floorScale
+    self.floorDrawH = imgH * self.floorScale
+    self.floorOffsetX = (Config.TILE_SIZE - self.floorDrawW) / 2
+    self.floorOffsetY = (Config.TILE_SIZE - self.floorDrawH) / 2
+
+    -- Pre-create quads for each tile (walls, traps use tileset)
     for i = 0, 8 do
         local tx = (i % Config.TILES_PER_ROW) * Config.TILE_SIZE
         local ty = math.floor(i / Config.TILES_PER_ROW) * Config.TILE_SIZE
@@ -86,12 +99,21 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
     for y = startY, endY do
         for x = startX, endX do
             local tileIndex = self.tiles[y][x]
-            local quad = self.quads[tileIndex]
+            local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
+                screenWidth, screenHeight, SCALE)
+            screenX = math.floor(screenX)
+            screenY = math.floor(screenY)
 
-            if quad then
-                local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
-                    screenWidth, screenHeight, SCALE)
-                love.graphics.draw(self.tileset, quad, math.floor(screenX), math.floor(screenY))
+            if tileIndex == 0 then
+                -- Floor: draw image.png tiled, centered within the tile cell
+                love.graphics.draw(self.floorImage, screenX + self.floorOffsetX, screenY + self.floorOffsetY,
+                                   0, self.floorScale, self.floorScale)
+            else
+                -- Walls, traps, etc.: draw from tileset quad
+                local quad = self.quads[tileIndex]
+                if quad then
+                    love.graphics.draw(self.tileset, quad, screenX, screenY)
+                end
             end
         end
     end

@@ -8,18 +8,29 @@ local RenderSystem = {
     priority = 4,
     name = "RenderSystem",
     
-    -- Quads for entity sprites
-    tileset = nil,
+    tileset = nil,      -- tileset.png (enemies + map)
+    playerImage = nil,  -- image.png (player sprite, scaled to TILE_SIZE)
     quads = {},
 }
 
 function RenderSystem:init(world)
     self.world = world
     
-    -- Load tileset image
+    -- Load tileset for enemies + map (unchanged)
     self.tileset = love.graphics.newImage("assets/tileset.png")
     
-    -- Pre-create quads for each tile
+    -- Load image.png for player sprite and scale it to TILE_SIZE
+    self.playerImage = love.graphics.newImage("assets/image.png")
+    local imgW, imgH = self.playerImage:getDimensions()
+    -- Scale factor: fit within TILE_SIZE while preserving aspect ratio
+    self.playerScale = math.min(Config.TILE_SIZE / imgW, Config.TILE_SIZE / imgH)
+    -- Centered offset so the image aligns at the bottom of the tile cell
+    self.playerDrawW = imgW * self.playerScale
+    self.playerDrawH = imgH * self.playerScale
+    self.playerOffsetX = (Config.TILE_SIZE - self.playerDrawW) / 2
+    self.playerOffsetY = Config.TILE_SIZE - self.playerDrawH
+    
+    -- Pre-create quads for each tile (enemies use tileset)
     for i = 0, 7 do
         local tx = (i % Config.TILES_PER_ROW) * Config.TILE_SIZE
         local ty = math.floor(i / Config.TILES_PER_ROW) * Config.TILE_SIZE
@@ -45,9 +56,17 @@ function RenderSystem:drawEntities(world, offsetX, offsetY)
                 local x = wx + offsetX
                 local y = wy + offsetY
                 
-                local quad = self.quads[renderable.tileIndex]
-                if quad then
-                    love.graphics.draw(self.tileset, quad, x, y)
+                if result.components.Player then
+                    -- Player: draw image.png scaled to fit TILE_SIZE (preserve aspect ratio)
+                    local drawX = x + self.playerOffsetX
+                    local drawY = y + self.playerOffsetY
+                    love.graphics.draw(self.playerImage, drawX, drawY, 0, self.playerScale, self.playerScale)
+                else
+                    -- Enemy: draw from tileset quad as before
+                    local quad = self.quads[renderable.tileIndex]
+                    if quad then
+                        love.graphics.draw(self.tileset, quad, x, y)
+                    end
                 end
             end
         end
