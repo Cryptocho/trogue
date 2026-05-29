@@ -124,6 +124,16 @@ function _ruleEngineGetBuffsComponent(self, entityId)
     return self.world.components.Buffs[entityId]
 end
 
+-- Get entity Stats component from ECS
+-- @param entityId number
+-- @return StatsComponent or nil if not defined
+function _ruleEngineGetStatsComponent(self, entityId)
+    if not self.world.components.Stats then
+        return nil
+    end
+    return self.world.components.Stats[entityId]
+end
+
 -- Check if ability can be used
 -- @param entityId number
 -- @param abilityId string
@@ -151,8 +161,9 @@ function _ruleEngineCanUse(self, entityId, abilityId)
     end
 
     -- Check resource cost
+    local stats = _ruleEngineGetStatsComponent(self, entityId)
     for resource, cost in pairs(ability.cost) do
-        local current = comp.resources[resource] or 0
+        local current = stats and stats.current[resource] or 0
         if current < cost then
             return false, "Not enough " .. resource
         end
@@ -184,8 +195,11 @@ function _ruleEngineTryUseAbility(self, entityId, abilityId, targetId)
     local comp = _ruleEngineGetAbilityComponent(self, entityId)
 
     -- Deduct resources
+    local stats = _ruleEngineGetStatsComponent(self, entityId)
     for resource, cost in pairs(ability.cost) do
-        comp.resources[resource] = comp.resources[resource] - cost
+        if stats then
+            stats.current[resource] = stats.current[resource] - cost
+        end
     end
 
     -- Set cooldown
@@ -229,7 +243,7 @@ function _ruleEngineApplyAbility(self, sourceId, ability, targetId)
         -- Auto-select nearest valid target if none specified
         if not targetId then
             local range = ability.range
-            local actors = self.world:query({"Position", "Health", "Actor"})
+            local actors = self.world:query({"Position", "Stats", "Actor"})
             local nearest = nil
             local nearestDist = math.huge
             for _, result in ipairs(actors) do
@@ -322,9 +336,9 @@ end
 
 -- Private: Process damage
 function _processDamage(self, data)
-    local targetHealth = self.world.components.Health[data.target]
-    if not targetHealth then
-        print("[RuleEngine] No Health component for target: " .. data.target)
+    local stats = _ruleEngineGetStatsComponent(self, data.target)
+    if not stats then
+        print("[RuleEngine] No Stats component for target: " .. data.target)
         return
     end
 
@@ -376,7 +390,7 @@ function _processDamage(self, data)
 
     -- Apply damage
     if damage > 0 then
-        targetHealth.current = targetHealth.current - damage
+        stats.current.hp = stats.current.hp - damage
     end
 
     -- Emit damage done event
@@ -388,7 +402,7 @@ function _processDamage(self, data)
             actualDamage = damage,
             damageType = data.damageType,
             blocked = shieldAbsorb,
-            newHealth = targetHealth.current,
+            newHealth = stats.current.hp,
         })
     end
 
@@ -398,15 +412,15 @@ end
 
 -- Private: Process heal
 function _processHeal(self, data)
-    local targetHealth = self.world.components.Health[data.target]
-    if not targetHealth then
-        print("[RuleEngine] No Health component for target: " .. data.target)
+    local stats = _ruleEngineGetStatsComponent(self, data.target)
+    if not stats then
+        print("[RuleEngine] No Stats component for target: " .. data.target)
         return
     end
 
     -- Calculate actual heal amount (cap at max health)
-    local healAmount = math.min(data.baseValue, targetHealth.max - targetHealth.current)
-    targetHealth.current = targetHealth.current + healAmount
+    local healAmount = math.min(data.baseValue, stats.max.hp - stats.current.hp)
+    stats.current.hp = stats.current.hp + healAmount
 
     -- Emit heal applied event
     if self.events then
@@ -414,7 +428,7 @@ function _processHeal(self, data)
             source = data.source,
             target = data.target,
             amount = healAmount,
-            newHealth = targetHealth.current,
+            newHealth = stats.current.hp,
         })
     end
 end
@@ -473,10 +487,10 @@ end
 
 -- Private: Check and handle death
 function _ruleEngineCheckDeath(self, entityId, killerId)
-    local health = self.world.components.Health[entityId]
-    if not health then return end
+    local stats = _ruleEngineGetStatsComponent(self, entityId)
+    if not stats then return end
 
-    if health.current <= 0 then
+    if stats.current.hp <= 0 then
         if self.events then
             self.events:emit("EntityDied", {
                 entity = entityId,

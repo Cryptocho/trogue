@@ -87,8 +87,8 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
     local screenHeight = love.graphics.getHeight()
 
     -- Visible tile range
-    local viewWidth = screenWidth / SCALE / Config.TILE_SIZE
-    local viewHeight = screenHeight / SCALE / Config.TILE_SIZE
+    local viewWidth = screenWidth / Config.SCALE / Config.TILE_SIZE
+    local viewHeight = screenHeight / Config.SCALE / Config.TILE_SIZE
 
     local startX = math.max(1, math.floor(cameraX - viewWidth / 2))
     local endX = math.min(self.width, math.ceil(cameraX + viewWidth / 2))
@@ -100,20 +100,19 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
         for x = startX, endX do
             local tileIndex = self.tiles[y][x]
             local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
-                screenWidth, screenHeight, SCALE)
+                screenWidth, screenHeight, Config.SCALE)
             screenX = math.floor(screenX)
             screenY = math.floor(screenY)
+
+            local quad = self.quads[tileIndex]
 
             if tileIndex == 0 then
                 -- Floor: draw image.png tiled, centered within the tile cell
                 love.graphics.draw(self.floorImage, screenX + self.floorOffsetX, screenY + self.floorOffsetY,
                                    0, self.floorScale, self.floorScale)
-            else
+            elseif quad then
                 -- Walls, traps, etc.: draw from tileset quad
-                local quad = self.quads[tileIndex]
-                if quad then
-                    love.graphics.draw(self.tileset, quad, screenX, screenY)
-                end
+                love.graphics.draw(self.tileset, quad, screenX, screenY)
             end
         end
     end

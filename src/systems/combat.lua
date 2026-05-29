@@ -86,7 +86,7 @@ end
 
 function CombatSystem:checkCombat(entity, x, y)
     -- Find actors at the same position (enemies to fight)
-    local entities = self.world:query({"Position", "Health", "Actor"})
+    local entities = self.world:query({"Position", "Stats", "Actor"})
 
     for _, result in ipairs(entities) do
         if result.id ~= entity then

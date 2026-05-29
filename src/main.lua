@@ -15,9 +15,6 @@ local MapGenerator = require("src.utils.map_generator")
 
 -- Load configuration
 local Config = require("src.config")
-TILE_SIZE = Config.TILE_SIZE
-SCALE = Config.SCALE
-
 local game = {
     world = nil,
     events = nil,
@@ -115,12 +112,12 @@ function love.draw()
         local screenHeight = love.graphics.getHeight()
         
         -- Calculate offset to center the view
-        local offsetX = screenWidth / 2 / SCALE - cameraX * TILE_SIZE - TILE_SIZE / 2
-        local offsetY = screenHeight / 2 / SCALE - cameraY * TILE_SIZE - TILE_SIZE / 2
+        local offsetX = screenWidth / 2 / Config.SCALE - cameraX * Config.TILE_SIZE - Config.TILE_SIZE / 2
+        local offsetY = screenHeight / 2 / Config.SCALE - cameraY * Config.TILE_SIZE - Config.TILE_SIZE / 2
         
         -- Push transform and scale
         love.graphics.push()
-        love.graphics.scale(SCALE)
+        love.graphics.scale(Config.SCALE)
         
         -- Draw map tiles
         local mapRenderer = game:getSystem("MapRenderer")
@@ -205,13 +202,12 @@ function game:drawUI()
         love.graphics.printf( i , bx + boxSize - 18, skillY + boxSize - 14, 16, "center")
     end
 
-    local healthComp = self.world:getComponent(playerId, "Health")
-    local currentHealth = healthComp and healthComp.current or 0
-    local maxHealth = healthComp and healthComp.max or 100
+    local statsComp = self.world:getComponent(playerId, "Stats")
+    local currentHealth = statsComp and statsComp.current and statsComp.current.hp or 0
+    local maxHealth = statsComp and statsComp.max and statsComp.max.hp or 100
 
-    local abilComp = self.ruleEngine:getAbilityComponent(playerId)
-    local currentMp = abilComp and abilComp.resources and abilComp.resources.mp or 0
-    local maxMp = abilComp and abilComp.resources and abilComp.resources.maxMp or 50
+    local currentMp = statsComp and statsComp.current and statsComp.current.mp or 0
+    local maxMp = statsComp and statsComp.max and statsComp.max.mp or 50
 
     love.graphics.setColor(0.8, 0.8, 0.8, 1)
     love.graphics.rectangle("fill", barStartX, barY, barWidth, barHeight, 4, 4)
