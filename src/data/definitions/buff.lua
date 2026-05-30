@@ -96,5 +96,16 @@ return {
                 physicalDamageBonus = 3,
             },
         }),
+
+        -- Passive Strength buff (permanent, applied by passive ability)
+        passive_strength_buff = createBuffDefinition({
+            id = "passive_strength_buff",
+            name = "Passive Strength",
+            description = "+3 physical damage (passive)",
+            type = BuffType.BUFF,
+            stackType = BuffStackType.REPLACE,
+            maxStack = 1,
+            statModifiers = {physicalDamageBonus = 3},
+        }),
     },
 }

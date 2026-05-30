@@ -10,7 +10,7 @@ local AISystem = require("src.systems.ai")
 local InputSystem = require("src.systems.input")
 local MapRenderer = require("src.systems.map_renderer")
 local RenderSystem = require("src.systems.render")
-local RuleEngineModule = require("src.core.rule_engine")
+local WeaponSystem = require("src.systems.weapon_system")
 local MapGenerator = require("src.utils.map_generator")
 local TweenSystem = require("src.systems.tween_system")
 
@@ -59,6 +59,7 @@ game.skillIcons = {
     
     game.events:on("EntityDied", function(data)
         print("Entity " .. data.entity .. " died")
+        game.ruleEngine:removePassiveAbilities(data.entity)
         game.world:despawn(data.entity, "death")
     end)
     
@@ -153,7 +154,7 @@ function love.draw()
     love.graphics.print("FPS: " .. love.timer.getFPS(), 10, love.graphics.getHeight() - 20)
 end
 
--- Draw UI (ability bar, health bar, mp bar)
+-- Draw UI (ability bar, health bar, energy bar)
 function game:drawUI()
     love.graphics.setColor(1, 1, 1, 1)
 
@@ -215,8 +216,8 @@ function game:drawUI()
     local currentHealth = statsComp and statsComp.current and statsComp.current.hp or 0
     local maxHealth = statsComp and statsComp.max and statsComp.max.hp or 100
 
-    local currentMp = statsComp and statsComp.current and statsComp.current.mp or 0
-    local maxMp = statsComp and statsComp.max and statsComp.max.mp or 50
+    local currentEnergy = statsComp and statsComp.current and statsComp.current.energy or 0
+    local maxEnergy = statsComp and statsComp.max and statsComp.max.energy or 50
 
     love.graphics.setColor(0.8, 0.8, 0.8, 1)
     love.graphics.rectangle("fill", barStartX, barY, barWidth, barHeight, 4, 4)
@@ -225,13 +226,13 @@ function game:drawUI()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf(string.format("HP %d/%d", currentHealth, maxHealth), barStartX, barY + 3, barWidth, "center")
 
-    local mpBarX = barStartX + barWidth + barPadding
+    local energyBarX = barStartX + barWidth + barPadding
     love.graphics.setColor(0.8, 0.8, 0.8, 1)
-    love.graphics.rectangle("fill", mpBarX, barY, barWidth, barHeight, 4, 4)
+    love.graphics.rectangle("fill", energyBarX, barY, barWidth, barHeight, 4, 4)
     love.graphics.setColor(0.2, 0.4, 1, 1)
-    love.graphics.rectangle("fill", mpBarX, barY, barWidth * (currentMp / maxMp), barHeight, 4, 4)
+    love.graphics.rectangle("fill", energyBarX, barY, barWidth * (currentEnergy / maxEnergy), barHeight, 4, 4)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf(string.format("MP %d/%d", currentMp, maxMp), mpBarX, barY + 3, barWidth, "center")
+    love.graphics.printf(string.format("Energy %d/%d", currentEnergy, maxEnergy), energyBarX, barY + 3, barWidth, "center")
 end
 
 function game:getPlayerId()
@@ -293,6 +294,10 @@ function initGameWorld()
     end
     
     game.prototypes:spawn("player", {Position = {x = bestX, y = bestY}})
+    local playerId = game:getPlayerId()
+    if playerId then
+        game.ruleEngine:applyPassiveAbilities(playerId)
+    end
     
     -- Add systems (by priority)
     game.world:addSystem(MapRenderer)
@@ -300,6 +305,7 @@ function initGameWorld()
     game.world:addSystem(TweenSystem)
     game.world:addSystem(MovementSystem)
     game.world:addSystem(CombatSystem)
+    game.world:addSystem(WeaponSystem)
     game.world:addSystem(InputSystem)
     game.world:addSystem(AISystem)
     game.world:addSystem(RenderSystem)

@@ -35,6 +35,11 @@ local function createEffectDefinition(def)
         -- Damage/heal value
         value = def.value or 0,
         valueScale = def.valueScale or {},  -- {stat = "strength", perLevel = 1}
+
+        -- Formula-based damage (optional, overrides value when present)
+        -- Structure: { basePercent = 0.5, statScaling = {{stat="strength", multiplier=3}, ...}, flatBonus = 0 }
+        -- Formula: weaponBaseDamage * basePercent + sum(statValue * multiplier) + flatBonus + weaponPhysicalDamageBonus
+        valueFormula = def.valueFormula or nil,
         
         -- Damage type (if damage)
         damageType = def.damageType or DamageType.PHYSICAL,
@@ -47,6 +52,12 @@ local function createEffectDefinition(def)
         
         -- Tags
         tags = def.tags or {},
+
+        -- Probability check (optional)
+        -- chance: number | nil — fixed probability 0~1, nil = 100% trigger
+        -- chanceFormula: table | nil — formula-based probability, overrides chance when present
+        chance = def.chance or nil,
+        chanceFormula = def.chanceFormula or nil,
     }
 end
 

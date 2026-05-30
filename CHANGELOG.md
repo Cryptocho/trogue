@@ -6,6 +6,63 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 概率判定系统
+
+- 影响的文件: `src/data/definitions/effect.lua`, `src/core/rule_engine.lua`, `src/systems/ai.lua`
+- `EffectDefinition` 新增 `chance` / `chanceFormula` 可选字段，支持效果概率触发
+- `_ruleEngineApplyEffect` 在 event emit 前插入概率判定位，`chanceFormula` 优先于 `chance`，两者未设置时保持 100% 向后兼容
+- 新增 `_evaluateChanceFormula(entityId, formula)` 辅助函数：`basePercent + sum(stats.base[stat] * multiplier)`，cap 1.0，源实体无 StatsComponent 时退化为 `basePercent`
+- `chanceFormula` 读取 `stats.base`（原始属性），不受 buff/modifier 影响
+- 6 个内置效果定义（damage_physical/damage_fire/heal_minor/buff_shield/burn/burn_damage）保持 chance=nil 默认 100% 行为
+- Code Review 修复：新增 `RuleEngine:getAbilityDef(abilityId)` 公开 getter，`AISystem:tryUseAbility` 通过该方法查询能力定义替代直接访问私有字段
+
+### 精力值与MP统一为能量
+
+- 影响的文件: `src/components/stats.lua`, `src/data/prototypes/entities.lua`, `src/data/definitions/ability.lua`, `src/main.lua`, `doc/Attributes_and_Grouth.md`, `doc/SkillTree/Two-handed_sword.md`, `AGENTS.md`, `temp.md`
+- `StatsComponent.current/max` 中 `mp` + `stamina` 合并为 `energy`，移除死代码 `stamina`
+- 4 个原型（player/goblin/rat/orc）的 Stats 统一迁移至 `energy` 字段
+- 能力消耗 `cost = {mp = N}` 改为 `cost = {energy = N}`
+- UI 渲染：MP 条改为 Energy 条，标签使用英文 `"Energy %d/%d"`
+- 设计文档 `Attributes_and_Grouth.md` 中"精力值 (MP)"统一为"能量 (Energy)"
+- 技能树文档 `Two-handed_sword.md` 中 mp/魔力/精力 统一为能量
+- `rule_engine.lua` 使用通用 `pairs(ability.cost)` 迭代，无需修改
+
+### 被动技能系统
+
+- 影响的文件: `src/data/definitions/buff.lua`, `src/data/definitions/ability.lua`, `src/core/rule_engine.lua`, `src/data/prototypes/entities.lua`, `src/main.lua`, `src/systems/ai.lua`
+- `_ruleEngineCanUse` 拒绝 `AbilityMode.PASSIVE` 模式的能力（被动技能无法手动释放）
+- 新增 `_ruleEngineApplyPassiveAbilities(entityId)`：实体生成后扫描 PASSIVE 能力，通过内部 `BuffApplyRequest` 施加 `permanent=true` 的永久 Buff
+- 新增 `_ruleEngineRemovePassiveAbilities(entityId)`：实体死亡前清理永久 Buff 及其 `stats.modifiers` 条目并重算 `computed`
+- `_processBuffTicks` 跳过 `buffData.permanent` 为 true 的 Buff（不递减 duration、不移除、不发射 tick）
+- `_processBuffApply` 创建和更新 Buff 时传播 `permanent` 标记
+- `createAbilityDefinition` 新增 `passiveBuff` 字段，指向被动能力对应的 Buff ID
+- 新增 `passive_strength` 被动能力 + `passive_strength_buff` 永久 Buff（`physicalDamageBonus = 3`），作为管道验证占位
+- Player 原型 `Ability.abilities` 新增 `passive_strength = true`
+- `AISystem:tryUseAbility` 过滤 `mode == "passive"` 的能力，避免 AI 尝试使用被动技能
+- `main.lua` 玩家 spawn 后调用 `applyPassiveAbilities`，`EntityDied` 前调用 `removePassiveAbilities`
+
+### statModifiers 管道与 Shield 去硬编码
+
+- 影响的文件: `src/components/stats.lua`, `src/core/rule_engine.lua`
+- `StatsComponent` 新增 `_baseComputed` 内部字段，由 `_recalcComputed` 首次调用时懒初始化
+- 新增 `_recalcComputed(stats)` 纯函数：重置 computed 到基准值，遍历 `modifiers` 累加，`computed[field] ~= nil` 过滤非 computed 字段
+- `_processBuffApply` 在 buff 应用后写入 `stats.modifiers[buffId]`，STACK 类型乘以 stacks 后再调用 `_recalcComputed`
+- `_processBuffTicks` 在 buff 过期移除后清理 `modifiers[buffId]` 并重算
+- `_processDamage` shield 吸收值从 `stats.modifiers["shield"].damageAbsorb` 读取，替代硬编码 `10`；破盾时同步清理 `modifiers` 并调用 `_recalcComputed`
+
+### 武器系统占位与公式化伤害
+
+- 影响的文件: `src/components/weapon.lua` (新建), `src/systems/weapon_system.lua` (新建), `src/components/stats.lua`, `src/data/definitions/effect.lua`, `src/data/prototypes/entities.lua`, `src/core/rule_engine.lua`, `src/main.lua`
+- 新增 `WeaponComponent` 纯数据组件：type/baseDamage/armorPenetration/physicalDamageBonus，为装备系统预留占位
+- 新增 `WeaponSystem` 占位系统（priority=5）：提供 getBaseDamage/getWeaponType/getArmorPenetration/getPhysicalDamageBonus 四个查询方法
+- `StatsComponent` 扩展：base 新增 tenacity，current/max 新增 energy，computed 新增 counterChance/magicResistance/darkResistance/heroicChance/armorPenetration/damageReduction
+- `EffectDefinition` 新增 `valueFormula` 可选字段，支持公式化动态伤害计算
+- `RuleEngine._evaluateFormula()` 实现武器伤害公式：`weaponBaseDamage * basePercent + sum(statValue * multiplier) + flatBonus + weaponPhysicalDamageBonus`
+- `RuleEngine._processDamage()` 在护盾吸收前执行公式求值，`DamageDealt.amount` 改为原始公式伤害值
+- `RuleEngine._evaluateFormula()` / `_getArmorPenetration()` 委托 `WeaponSystem` 查询武器属性，消除重复代码
+- 4 个原型（player/goblin/rat/orc）均添加 Weapon 组件（玩家大剑 baseDamage=20，敌人 fists baseDamage=2），Stats 同步扩展新字段
+- `main.lua` 清理重复 RuleEngineModule require，注册 WeaponSystem
+
 ### 属性与玩家系统扩展
 
 - 影响的文件: `src/components/stats.lua`, `src/components/player.lua`, `src/data/prototypes/entities.lua`, `doc/Attributes_and_Grouth.md`
@@ -30,7 +87,7 @@ ECS-based traditional roguelike with LÖVE2D
 - 影响的文件: `src/main.lua`, `src/systems/input.lua`
 - 重构技能栏 UI:
   - 技能框改为小方块图标，横向排列于屏幕下方
-  - 血条和蓝条移至屏幕最下方居中显示，同一行排列
+  - 血条和能量条移至屏幕最下方居中显示，同一行排列
   - 冷却状态：图标上覆盖半透明黑色层并显示剩余回合数
   - 资源不足状态：图标上覆盖红色半透明层
   - 按键编号 `1`/`2`/`3`/`4` 移至技能框右下角

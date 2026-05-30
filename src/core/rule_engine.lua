@@ -66,6 +66,18 @@ local function createRuleEngine(world, eventBus)
         return _ruleEngineGetBuffsComponent(self, entityId)
     end
 
+    instance.applyPassiveAbilities = function(self, entityId)
+        return _ruleEngineApplyPassiveAbilities(self, entityId)
+    end
+
+    instance.removePassiveAbilities = function(self, entityId)
+        return _ruleEngineRemovePassiveAbilities(self, entityId)
+    end
+
+    instance.getAbilityDef = function(self, abilityId)
+        return _ruleEngineGetAbilityDef(self, abilityId)
+    end
+
     return instance
 end
 
@@ -102,6 +114,13 @@ function _ruleEngineRegisterEvents(self)
     self.events:on("BuffTickRequest", function(data)
         _processBuffTick(self, data)
     end, 100)
+end
+
+-- Get ability definition by ID
+-- @param abilityId string
+-- @return AbilityDefinition or nil
+function _ruleEngineGetAbilityDef(self, abilityId)
+    return self.abilities[abilityId]
 end
 
 -- Get entity ability component from ECS
@@ -142,6 +161,10 @@ function _ruleEngineCanUse(self, entityId, abilityId)
     local ability = self.abilities[abilityId]
     if not ability then
         return false, "Ability not found: " .. abilityId
+    end
+
+    if ability.mode == AbilityDef.Mode.PASSIVE then
+        return false, "Passive ability cannot be activated"
     end
 
     local comp = _ruleEngineGetAbilityComponent(self, entityId)
@@ -301,6 +324,17 @@ function _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
         return
     end
 
+    -- 概率判定
+    local triggerChance = nil
+    if effect.chanceFormula then
+        triggerChance = _evaluateChanceFormula(self, sourceId, effect.chanceFormula)
+    elseif effect.chance then
+        triggerChance = effect.chance
+    end
+    if triggerChance and math.random() >= triggerChance then
+        return
+    end
+
     if not self.events then return end
 
     -- Emit appropriate request event based on effect type
@@ -334,6 +368,82 @@ function _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
     end
 end
 
+-- Get WeaponSystem reference from world (lazy cache)
+-- @param self RuleEngine instance
+-- @return WeaponSystem table or nil
+function _getWeaponSystem(self)
+    if not self._weaponSystem then
+        for _, sys in ipairs(self.world.systems or {}) do
+            if sys.name == "WeaponSystem" then
+                self._weaponSystem = sys
+                break
+            end
+        end
+    end
+    return self._weaponSystem
+end
+
+-- Evaluate damage formula
+-- Formula: weaponBaseDamage * basePercent + sum(statValue * multiplier) + flatBonus + weaponPhysicalDamageBonus
+-- @param sourceId number Attack source entity
+-- @param formula table { basePercent, statScaling, flatBonus }
+-- @return number Final damage value
+function _evaluateFormula(self, sourceId, formula)
+    local damage = 0
+    local stats = _ruleEngineGetStatsComponent(self, sourceId)
+    local ws = _getWeaponSystem(self)
+
+    if formula.basePercent then
+        local baseDamage = ws and ws:getBaseDamage(self.world, sourceId) or 2
+        damage = damage + baseDamage * formula.basePercent
+    end
+
+    if formula.statScaling and stats then
+        for _, scale in ipairs(formula.statScaling) do
+            local statValue = stats.base[scale.stat] or 0
+            damage = damage + statValue * (scale.multiplier or 1)
+        end
+    end
+
+    if formula.flatBonus then
+        damage = damage + formula.flatBonus
+    end
+
+    if ws then
+        damage = damage + ws:getPhysicalDamageBonus(self.world, sourceId)
+    end
+
+    return math.floor(damage)
+end
+
+-- Evaluate chance formula (probability 0~1)
+-- @param entityId number Source entity for stat lookup
+-- @param formula table { basePercent, statScaling }
+-- @return number Probability in 0~1 range
+function _evaluateChanceFormula(self, entityId, formula)
+    local chance = formula.basePercent or 0
+    if formula.statScaling then
+        local stats = _ruleEngineGetStatsComponent(self, entityId)
+        if stats then
+            for _, scale in ipairs(formula.statScaling) do
+                chance = chance + (stats.base[scale.stat] or 0) * (scale.multiplier or 0)
+            end
+        end
+    end
+    return math.min(chance, 1.0)
+end
+
+-- Get entity armor penetration value (delegates to WeaponSystem)
+-- @param sourceId number
+-- @return number armorPenetration
+function _getArmorPenetration(self, sourceId)
+    local ws = _getWeaponSystem(self)
+    if ws then
+        return ws:getArmorPenetration(self.world, sourceId)
+    end
+    return 0
+end
+
 -- Private: Process damage
 function _processDamage(self, data)
     local stats = _ruleEngineGetStatsComponent(self, data.target)
@@ -347,38 +457,56 @@ function _processDamage(self, data)
 
     -- Check for shield absorption
     local shieldAbsorb = 0
-    if buffs and buffs.activeBuffs then
-        local shieldBuff = buffs.activeBuffs["shield"]
-        if shieldBuff and shieldBuff.stacks > 0 then
-            shieldAbsorb = shieldBuff.stacks * 10  -- Each stack absorbs 10 damage
+    local shieldPerStack = 0
+    if stats.modifiers and stats.modifiers["shield"] then
+        shieldAbsorb = stats.modifiers["shield"].damageAbsorb or 0
+        local shieldDef = self.buffs["shield"]
+        if shieldDef and shieldDef.statModifiers then
+            shieldPerStack = shieldDef.statModifiers.damageAbsorb or 10
         end
     end
 
     -- Calculate final damage
     local damage = data.baseValue
+
+    -- Formula-based damage override (when effect has valueFormula)
+    local effect = self.effects[data.effectId]
+    if effect and effect.valueFormula and data.source then
+        damage = _evaluateFormula(self, data.source, effect.valueFormula)
+    end
+
+    local rawDamage = damage
+
+    -- TODO: Armor penetration (placeholder, will be implemented in dodge/block pipeline)
+    _getArmorPenetration(self, data.source)
     if shieldAbsorb > 0 then
         if shieldAbsorb >= damage then
             -- Shield absorbs all
             shieldAbsorb = shieldAbsorb - damage
             damage = 0
             -- Update shield
-            if buffs and buffs.activeBuffs["shield"] then
-                if shieldAbsorb <= 0 then
-                    buffs.activeBuffs["shield"] = nil
-                    if self.events then
-                        self.events:emit("BuffExpired", {
-                            entity = data.target,
-                            buffId = "shield",
-                        })
-                    end
-                else
-                    buffs.activeBuffs["shield"].stacks = math.ceil(shieldAbsorb / 10)
+            if shieldAbsorb <= 0 then
+                buffs.activeBuffs["shield"] = nil
+                stats.modifiers["shield"] = nil
+                _recalcComputed(stats)
+                if self.events then
+                    self.events:emit("BuffExpired", {
+                        entity = data.target,
+                        buffId = "shield",
+                    })
+                end
+            else
+                stats.modifiers["shield"].damageAbsorb = shieldAbsorb
+                if shieldPerStack > 0 then
+                    buffs.activeBuffs["shield"].stacks = math.ceil(shieldAbsorb / shieldPerStack)
                 end
             end
         else
             -- Partial absorption
             damage = damage - shieldAbsorb
             buffs.activeBuffs["shield"] = nil
+            stats.modifiers["shield"] = nil
+            _recalcComputed(stats)
             if self.events then
                 self.events:emit("BuffExpired", {
                     entity = data.target,
@@ -398,7 +526,7 @@ function _processDamage(self, data)
         self.events:emit("DamageDealt", {
             source = data.source,
             target = data.target,
-            amount = data.baseValue,
+            amount = rawDamage,
             actualDamage = damage,
             damageType = data.damageType,
             blocked = shieldAbsorb,
@@ -433,10 +561,32 @@ function _processHeal(self, data)
     end
 end
 
+function _recalcComputed(stats)
+    if not stats._baseComputed then
+        stats._baseComputed = {}
+        for k, v in pairs(stats.computed) do
+            stats._baseComputed[k] = v
+        end
+    end
+
+    for k, v in pairs(stats._baseComputed) do
+        stats.computed[k] = v
+    end
+
+    for _, mod in pairs(stats.modifiers) do
+        for field, value in pairs(mod) do
+            if stats.computed[field] ~= nil then
+                stats.computed[field] = stats.computed[field] + value
+            end
+        end
+    end
+end
+
 -- Private: Process buff apply
 function _processBuffApply(self, data)
     -- Use buffs component
     local buffs = _ruleEngineGetBuffsComponent(self, data.target)
+    local stats = _ruleEngineGetStatsComponent(self, data.target)
     if not buffs then
         print("[RuleEngine] No Buffs component for entity: " .. data.target)
         return
@@ -464,6 +614,7 @@ function _processBuffApply(self, data)
         elseif buffDef.stackType == BuffDef.StackType.REFRESH then
             existing.duration = data.duration
         end
+        existing.permanent = data.permanent or existing.permanent
     else
         -- New buff
         buffs.activeBuffs[data.buffId] = {
@@ -471,6 +622,7 @@ function _processBuffApply(self, data)
             stacks = 1,
             source = data.source,
             definition = buffDef,
+            permanent = data.permanent or false,
         }
     end
 
@@ -482,6 +634,17 @@ function _processBuffApply(self, data)
             stacks = buffs.activeBuffs[data.buffId].stacks,
             duration = buffs.activeBuffs[data.buffId].duration,
         })
+    end
+
+    if buffDef.statModifiers and next(buffDef.statModifiers) and stats then
+        local active = buffs.activeBuffs[data.buffId]
+        local stacks = active and active.stacks or 1
+        local effective = {}
+        for field, value in pairs(buffDef.statModifiers) do
+            effective[field] = value * stacks
+        end
+        stats.modifiers[data.buffId] = effective
+        _recalcComputed(stats)
     end
 end
 
@@ -552,31 +715,38 @@ function _processBuffTicks(self)
         if not buffs.activeBuffs then goto continue end
 
         for buffId, buffData in pairs(buffs.activeBuffs) do
-            -- First reduce duration and check expiration
-            buffData.duration = buffData.duration - 1
+            if not buffData.permanent then
+                -- First reduce duration and check expiration
+                buffData.duration = buffData.duration - 1
 
-            -- Only emit tick and keep buff if duration is still >= 0 after reduction
-            if buffData.duration >= 0 then
-                -- Emit tick event if buff has tickEffect (tick happens AFTER this turn)
-                if buffData.definition and buffData.definition.tickEffect and self.events then
-                    self.events:emit("BuffTickRequest", {
-                        entity = entityId,
-                        buffId = buffId,
-                        effectId = buffData.definition.tickEffect,
-                        source = buffData.source,
-                        stacks = buffData.stacks,
-                    })
+                -- Only emit tick and keep buff if duration is still >= 0 after reduction
+                if buffData.duration >= 0 then
+                    -- Emit tick event if buff has tickEffect (tick happens AFTER this turn)
+                    if buffData.definition and buffData.definition.tickEffect and self.events then
+                        self.events:emit("BuffTickRequest", {
+                            entity = entityId,
+                            buffId = buffId,
+                            effectId = buffData.definition.tickEffect,
+                            source = buffData.source,
+                            stacks = buffData.stacks,
+                        })
+                    end
                 end
-            end
 
-            -- Remove buff if duration expired
-            if buffData.duration < 0 then
-                buffs.activeBuffs[buffId] = nil
-                if self.events then
-                    self.events:emit("BuffExpired", {
-                        entity = entityId,
-                        buffId = buffId,
-                    })
+                -- Remove buff if duration expired
+                if buffData.duration < 0 then
+                    buffs.activeBuffs[buffId] = nil
+                    local stats = _ruleEngineGetStatsComponent(self, entityId)
+                    if stats and stats.modifiers and stats.modifiers[buffId] then
+                        stats.modifiers[buffId] = nil
+                        _recalcComputed(stats)
+                    end
+                    if self.events then
+                        self.events:emit("BuffExpired", {
+                            entity = entityId,
+                            buffId = buffId,
+                        })
+                    end
                 end
             end
         end
@@ -609,6 +779,60 @@ function _ruleEngineGetAbilityInfo(self, entityId, abilityId)
         canUse = canUse,
         reason = reason,
     }
+end
+
+-- Apply passive abilities for an entity (called when entity spawns)
+-- Scans entity's abilities for PASSIVE mode abilities and applies their permanent buffs
+-- @param entityId number
+function _ruleEngineApplyPassiveAbilities(self, entityId)
+    local comp = _ruleEngineGetAbilityComponent(self, entityId)
+    if not comp then return end
+
+    for abilityId in pairs(comp.abilities) do
+        local ability = self.abilities[abilityId]
+        if ability and ability.mode == AbilityDef.Mode.PASSIVE then
+            local buffId = ability.passiveBuff
+            if buffId and self.buffs[buffId] then
+                if self.events then
+                    self.events:emit("BuffApplyRequest", {
+                        source = entityId,
+                        target = entityId,
+                        buffId = buffId,
+                        duration = -1,
+                        permanent = true,
+                    })
+                end
+            end
+        end
+    end
+end
+
+-- Remove passive abilities buffs for an entity (called before entity death/despawn)
+-- Cleans up modifiers and recalculates computed stats
+-- @param entityId number
+function _ruleEngineRemovePassiveAbilities(self, entityId)
+    local stats = _ruleEngineGetStatsComponent(self, entityId)
+    if not stats then return end
+
+    local buffs = _ruleEngineGetBuffsComponent(self, entityId)
+    if not buffs or not buffs.activeBuffs then return end
+
+    local comp = _ruleEngineGetAbilityComponent(self, entityId)
+    if not comp then return end
+
+    for abilityId in pairs(comp.abilities) do
+        local ability = self.abilities[abilityId]
+        if ability and ability.mode == AbilityDef.Mode.PASSIVE and ability.passiveBuff then
+            local buffId = ability.passiveBuff
+            if buffs.activeBuffs[buffId] and buffs.activeBuffs[buffId].permanent then
+                buffs.activeBuffs[buffId] = nil
+                if stats.modifiers and stats.modifiers[buffId] then
+                    stats.modifiers[buffId] = nil
+                    _recalcComputed(stats)
+                end
+            end
+        end
+    end
 end
 
 return {createRuleEngine = createRuleEngine}

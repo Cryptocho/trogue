@@ -97,7 +97,10 @@ function AISystem:tryUseAbility(entityId)
     -- Get all abilities as array for random selection
     local abilitiesList = {}
     for abilityId, _ in pairs(abilityComp.abilities) do
-        table.insert(abilitiesList, abilityId)
+        local abilityDef = self.ruleEngine:getAbilityDef(abilityId)
+        if abilityDef and abilityDef.mode ~= "passive" then
+            table.insert(abilitiesList, abilityId)
+        end
     end
 
     if #abilitiesList == 0 then

@@ -44,7 +44,7 @@ local function createAbilityDefinition(def)
         minCooldown = def.minCooldown or 0,  -- Min cooldown (talent reduction)
         
         -- Cost
-        cost = def.cost or {},  -- {mp = 10, hp = 0, etc.}
+        cost = def.cost or {},  -- {energy = 10, hp = 0, etc.}
         
         -- Target selection
         targetType = def.targetType or TargetType.SINGLE,
@@ -62,6 +62,9 @@ local function createAbilityDefinition(def)
         
         -- Tags
         tags = def.tags or {},
+
+        -- Passive buff ID (used by applyPassiveAbilities to auto-apply permanent buff)
+        passiveBuff = def.passiveBuff or nil,
     }
 end
 
@@ -97,7 +100,7 @@ return {
             description = "Restore health to self",
             mode = AbilityMode.ACTIVATED,
             cooldown = 3,
-            cost = {mp = 5},
+            cost = {energy = 5},
             targetType = TargetType.SELF,
             range = 0,
             effects = {"heal_minor"},
@@ -110,7 +113,7 @@ return {
             description = "Deal fire damage to an area",
             mode = AbilityMode.ACTIVATED,
             cooldown = 4,
-            cost = {mp = 15},
+            cost = {energy = 15},
             targetType = TargetType.AREA,
             range = 5,
             radius = 2,
@@ -124,10 +127,20 @@ return {
             description = "Apply shield buff to self",
             mode = AbilityMode.ACTIVATED,
             cooldown = 5,
-            cost = {mp = 10},
+            cost = {energy = 10},
             targetType = TargetType.SELF,
             range = 0,
             effects = {"buff_shield"},
+        }),
+
+        -- Passive Strength (permanent buff applied on spawn)
+        passive_strength = createAbilityDefinition({
+            id = "passive_strength",
+            name = "Passive Strength",
+            description = "Increases physical damage by 3",
+            mode = AbilityMode.PASSIVE,
+            tags = {"passive"},
+            passiveBuff = "passive_strength_buff",
         }),
     },
 }

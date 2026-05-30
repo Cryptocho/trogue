@@ -90,7 +90,7 @@ src/
 │   └── coordinates.lua   # 坐标系统 (tile↔world↔screen 转换，距离计算，A* 寻路)
 ├── components/
 │   ├── position.lua      # 位置 {x, y}
-│   ├── stats.lua         # 属性 {base, current, max, computed, modifiers} (hp/mp/strength/...)
+│   ├── stats.lua         # 属性 {base, current, max, computed, modifiers} (hp/energy/strength/...)
 │   ├── actor.lua        # 标记可行动实体 (moveDelay)
 │   ├── player.lua       # 玩家标记
 │   ├── ability.lua      # 能力集 (Set 结构)、冷却、资源
@@ -145,7 +145,7 @@ tools/
 love src
 ```
 
-### 运行测试(对于需要启动love进行的测试需指导用户进行)
+### 运行测试(对于需要启动love进行的测试必需给出详细步骤指导用户进行而不是自己运行love src)
 ```bash
 lua tests/test_ecs.lua
 lua tests/test_events.lua
@@ -153,17 +153,17 @@ lua tests/test_prototype.lua
 ```
 
 ### 开发流程
-1. 给出计划等待批准
+1. 给出计划等待批准 (当前处于unreleased阶段所以可以大胆地进行计划,包括架构上的更改建议等)
 2. 实现计划
-3. Review Changes
-4. 更新 CHANGELOG.md
-5. 写 commit message 等待确认
+3. Review Uncommitted Changes
+4. 在review之后或用户要求时, 更新 CHANGELOG.md
+5. 询问用户是否写 commit message ,如果是则给出 commit message(英文) 等待用户确认
 6. 确认后提交所有变更并推送
 
 ### CHANGELOG 格式规范
 在 `## [Unreleased]` 下按功能模块组织变更，每个模块使用 `### 功能描述` 标题。
 
-必填字段：`- 影响的文件:` 列出所有变更文件路径（用反引号包裹）。
+必填字段：`- 影响的文件:` 列出所有变更文件路径（用反引号包裹）。新的修改写在最前面。
 
 常用子标题：
 - `### Added` — 新增功能/文件
