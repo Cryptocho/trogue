@@ -145,7 +145,7 @@ tools/
 love src
 ```
 
-### 运行测试
+### 运行测试(对于需要启动love进行的测试需指导用户进行)
 ```bash
 lua tests/test_ecs.lua
 lua tests/test_events.lua
@@ -155,7 +155,7 @@ lua tests/test_prototype.lua
 ### 开发流程
 1. 给出计划等待批准
 2. 实现计划
-3. 进行测试
+3. Review Changes
 4. 更新 CHANGELOG.md
 5. 写 commit message 等待确认
 6. 确认后提交所有变更并推送
@@ -180,23 +180,6 @@ lua tests/test_prototype.lua
 - 新建 `Coordinates` 模块，统一坐标计算逻辑
 - 消除距离计算重复代码（曼哈顿距离分散在 4 处）
 ```
-
----
-
-## 内置能力/效果/Buff
-
-| 能力 | 目标 | 冷却 | 消耗 | 效果 |
-|------|------|------|------|------|
-| punch | SINGLE (range 1) | 0 | - | damage_physical (5) |
-| heal | SELF | 3 | mp=5 | heal_minor (10) |
-| shield | SELF | 5 | mp=10 | buff_shield (吸收10点) |
-| fireball | AREA (range 5, radius 2) | 4 | mp=15 | damage_fire (8) + burn (DOT 8, 2tick) |
-
-| Buff | 类型 | 堆叠 | 效果 |
-|------|------|------|------|
-| shield | SHIELD | REPLACE | 吸收 10 伤害 |
-| burning | DOT | REFRESH | 每回合 8 火伤 |
-| strength | BUFF | STACK (max 3) | physicalDamageBonus +3 |
 
 ---
 

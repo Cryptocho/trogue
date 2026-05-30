@@ -1,82 +1,147 @@
--- Entity Prototypes
--- Player and enemy definitions
-
 return {
-    -- Player character (index 2 in tileset)
     player = {
         Renderable = {tileIndex = 2},
-        Player = {},
+        Player = {
+            level = 1,
+            currentXP = 0,
+            nextLevelXP = 50,
+            attributePoints = 0,
+            skillPoints = 0,
+        },
         Stats = {
-            base = {strength = 10, agility = 5, intelligence = 5, vitality = 10},
-            current = {hp = 10, mp = 50},
-            max = {hp = 10, mp = 50},
-            computed = {physicalDamageBonus = 0, critChance = 0.05, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            base = {strength = 10, agility = 5, sensing = 5, spirit = 5, magic = 5},
+            current = {hp = 100, mp = 50},
+            max = {hp = 100, mp = 50},
+            computed = {
+                physicalDamageBonus = 0,
+                blockChance = 0,
+                blockPower = 0,
+                dodge = 0,
+                hitRate = 0,
+                handsPower = 0,
+                critChance = 0.05,
+                critMultiplier = 1.5,
+                fieldOfView = 8,
+                sanPower = 0,
+                naturalResistance = 0,
+                cooling = 0,
+                magicPower = 0,
+                magicDownFloat = 0,
+                magicCooling = 0,
+                magicUpFloat = 0,
+            },
             modifiers = {},
         },
-        Actor = {moveDelay = 0},  -- Player doesn't use AI movement
-        -- abilities use Set structure: {abilityId = true}
+        Actor = {moveDelay = 0},
         Ability = {
             abilities = {punch = true, heal = true, shield = true, fireball = true},
             cooldowns = {},
         },
-        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
+        Buffs = {activeBuffs = {}},
     },
-    
-    -- Goblin enemy (index 3 in tileset)
+
     goblin = {
         Renderable = {tileIndex = 3},
-        Actor = {moveDelay = 0.5},  -- Move every 0.5 seconds
+        Actor = {moveDelay = 0.5},
         Stats = {
-            base = {strength = 8, agility = 6, intelligence = 3, vitality = 8},
+            base = {strength = 8, agility = 6, sensing = 3, spirit = 4, magic = 3},
             current = {hp = 25, mp = 30},
             max = {hp = 25, mp = 30},
-            computed = {physicalDamageBonus = 0, critChance = 0.05, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            computed = {
+                physicalDamageBonus = 0,
+                blockChance = 0,
+                blockPower = 0,
+                dodge = 0,
+                hitRate = 0,
+                handsPower = 0,
+                critChance = 0.05,
+                critMultiplier = 1.5,
+                fieldOfView = 4,
+                sanPower = 0,
+                naturalResistance = 0,
+                cooling = 0,
+                magicPower = 0,
+                magicDownFloat = 0,
+                magicCooling = 0,
+                magicUpFloat = 0,
+            },
             modifiers = {},
         },
         Ability = {
             abilities = {punch = true},
             cooldowns = {},
         },
-        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
+        Buffs = {activeBuffs = {}},
     },
-    
-    -- Rat enemy (index 4 in tileset)
+
     rat = {
         Renderable = {tileIndex = 4},
-        Actor = {moveDelay = 0.3},  -- Faster than goblins
+        Actor = {moveDelay = 0.3},
         Stats = {
-            base = {strength = 4, agility = 8, intelligence = 2, vitality = 3},
+            base = {strength = 4, agility = 8, sensing = 2, spirit = 2, magic = 2},
             current = {hp = 3, mp = 20},
             max = {hp = 3, mp = 20},
-            computed = {physicalDamageBonus = 0, critChance = 0.10, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            computed = {
+                physicalDamageBonus = 0,
+                blockChance = 0,
+                blockPower = 0,
+                dodge = 0,
+                hitRate = 0,
+                handsPower = 0,
+                critChance = 0.10,
+                critMultiplier = 1.5,
+                fieldOfView = 6,
+                sanPower = 0,
+                naturalResistance = 0,
+                cooling = 0,
+                magicPower = 0,
+                magicDownFloat = 0,
+                magicCooling = 0,
+                magicUpFloat = 0,
+            },
             modifiers = {},
         },
         Ability = {
             abilities = {punch = true},
             cooldowns = {},
         },
-        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
+        Buffs = {activeBuffs = {}},
     },
-    
-    -- Orc enemy (index 5 in tileset)
+
     orc = {
         Renderable = {tileIndex = 5},
-        Actor = {moveDelay = 0.8},  -- Slower
+        Actor = {moveDelay = 0.8},
         Stats = {
-            base = {strength = 12, agility = 3, intelligence = 2, vitality = 12},
+            base = {strength = 12, agility = 3, sensing = 2, spirit = 5, magic = 2},
             current = {hp = 10, mp = 40},
             max = {hp = 10, mp = 40},
-            computed = {physicalDamageBonus = 0, critChance = 0.03, critMultiplier = 1.5, poisonDurationMultiplier = 1.0},
+            computed = {
+                physicalDamageBonus = 0,
+                blockChance = 0,
+                blockPower = 0,
+                dodge = 0,
+                hitRate = 0,
+                handsPower = 0,
+                critChance = 0.03,
+                critMultiplier = 1.5,
+                fieldOfView = 4,
+                sanPower = 0,
+                naturalResistance = 0,
+                cooling = 0,
+                magicPower = 0,
+                magicDownFloat = 0,
+                magicCooling = 0,
+                magicUpFloat = 0,
+            },
             modifiers = {},
         },
         Ability = {
             abilities = {punch = true},
             cooldowns = {},
         },
-        Buffs = {activeBuffs = {}},  -- Required for DOT/HOT effects
+        Buffs = {activeBuffs = {}},
     },
-    
-    -- Poison pool (index 6 in tileset) - MVP prototype only, system not implemented
+
     poison_pool = {
         Position = {x = 0, y = 0},
         Renderable = {tileIndex = 6},
@@ -89,8 +154,7 @@ return {
             tickRate = 1
         }
     },
-    
-    -- Fire pool (index 7 in tileset) - MVP prototype only, system not implemented
+
     fire_pool = {
         Position = {x = 0, y = 0},
         Renderable = {tileIndex = 7},

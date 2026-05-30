@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 属性与玩家系统扩展
+
+- 影响的文件: `src/components/stats.lua`, `src/components/player.lua`, `src/data/prototypes/entities.lua`, `doc/Attributes_and_Grouth.md`
+- `StatsComponent.base` 从 2 属性扩展为 5 属性体系（strength/agility/sensing/spirit/magic），移除 intelligence/vitality
+- `StatsComponent.computed` 从 4 字段扩展为 16 字段（新增 blockChance/blockPower/dodge/hitRate/handsPower/fieldOfView/sanPower/naturalResistance/cooling/magicPower/magicDownFloat/magicCooling/magicUpFloat），移除 poisonDurationMultiplier
+- `PlayerComponent` 从空表标记扩展为进度数据（level/currentXP/nextLevelXP/attributePoints/skillPoints）
+- 4 个原型（player/goblin/rat/orc）的 Stats 全部迁移至新属性体系，player HP 10→100 对齐 Lv1 设计值
+- 设计文档 `Attributes_and_Grouth.md` 重命名（空格→下划线）
+
 ### 移动 tween 动画
 
 - 影响的文件: `src/utils/tween.lua` (新建), `src/components/position_tween.lua` (新建), `src/systems/tween_system.lua` (新建), `src/config.lua`, `src/systems/movement.lua`, `src/systems/render.lua`, `src/main.lua`
@@ -15,9 +24,6 @@ ECS-based traditional roguelike with LÖVE2D
 - `RenderSystem` 绘制实体和血条时优先读 `PositionTween.visualX/Y`，否则 fallback 到 `Position.x/y`
 - `main.lua` 摄像头跟随改为优先读 `PositionTween.visualX/Y`，移动过程平滑跟随不再跳跃
 - `config.lua` 新增 `MOVE_DURATION = 0.12`（单格移动完成时间，单位：秒）
-
-
-
 
 ### UI Update
 

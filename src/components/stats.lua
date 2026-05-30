@@ -5,6 +5,9 @@ local StatsComponent = {
     base = {
         strength = 10,
         agility = 5,
+        sensing = 5,
+        spirit = 5,
+        magic = 5,
     },
     current = {
         hp = 10,
@@ -16,9 +19,21 @@ local StatsComponent = {
     },
     computed = {
         physicalDamageBonus = 0,
+        blockChance = 0,
+        blockPower = 0,
+        dodge = 0,
+        hitRate = 0,
+        handsPower = 0,
         critChance = 0.05,
         critMultiplier = 1.5,
-        poisonDurationMultiplier = 1.0,
+        fieldOfView = 8,
+        sanPower = 0,
+        naturalResistance = 0,
+        cooling = 0,
+        magicPower = 0,
+        magicDownFloat = 0,
+        magicCooling = 0,
+        magicUpFloat = 0,
     },
     modifiers = {},
 }

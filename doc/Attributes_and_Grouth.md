@@ -41,7 +41,7 @@
     * `Skill_Point` 增加 1 点
     * `Attribute_Point` 增加 1 点
 ---
-### 2.3 属性与加点(Attribute)  (待商议)
+### 2.3 属性(Attribute)  (待商议)
 初始属性分为5种:
 * **力量 (Strength)**: 每点力量增加1% 的兵器伤害, 1.5% 的格挡几率 和 1 点格挡力量:
     * `Weapon_Damage` 增加 1%
