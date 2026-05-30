@@ -12,6 +12,7 @@ local MapRenderer = require("src.systems.map_renderer")
 local RenderSystem = require("src.systems.render")
 local RuleEngineModule = require("src.core.rule_engine")
 local MapGenerator = require("src.utils.map_generator")
+local TweenSystem = require("src.systems.tween_system")
 
 -- Load configuration
 local Config = require("src.config")
@@ -94,8 +95,16 @@ function love.draw()
         local cameraX, cameraY = nil, nil
         local players = game.world:query({"Player", "Position"})
         if #players > 0 then
-            cameraX = players[1].components.Position.x
-            cameraY = players[1].components.Position.y
+            local pos = players[1].components.Position
+            local tween = players[1].components.PositionTween
+            -- Use tweened visual position if currently moving, else logic position
+            if tween and tween.active then
+                cameraX = tween.visualX
+                cameraY = tween.visualY
+            else
+                cameraX = pos.x
+                cameraY = pos.y
+            end
             -- Save last known player position
             game.lastCameraX = cameraX
             game.lastCameraY = cameraY
@@ -288,6 +297,7 @@ function initGameWorld()
     -- Add systems (by priority)
     game.world:addSystem(MapRenderer)
     game.world:addSystem(TurnSystem)
+    game.world:addSystem(TweenSystem)
     game.world:addSystem(MovementSystem)
     game.world:addSystem(CombatSystem)
     game.world:addSystem(InputSystem)

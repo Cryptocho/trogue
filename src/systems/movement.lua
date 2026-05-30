@@ -15,6 +15,15 @@ function MovementSystem:init(world)
             self:onMoveAttempt(data)
         end, 0)
     end
+
+    -- Cache TweenSystem reference immediately after systems are registered
+    self.tweenSystem = nil
+    for _, sys in ipairs(world.systems) do
+        if sys.name == "TweenSystem" then
+            self.tweenSystem = sys
+            break
+        end
+    end
 end
 
 function MovementSystem:update(world, dt)
@@ -78,9 +87,15 @@ function MovementSystem:onMoveAttempt(data)
         return
     end
 
-    -- Move is clear - update position
+    -- Move is clear - update logic position immediately (for collision/combat)
+    local oldX, oldY = pos.x, pos.y
     pos.x = newX
     pos.y = newY
+
+    -- Start visual tween so entity slides instead of teleporting
+    if self.tweenSystem then
+        self.tweenSystem:startTween(entity, oldX, oldY)
+    end
 
     -- Emit success event
     if self.events then

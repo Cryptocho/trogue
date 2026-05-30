@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 移动 tween 动画
+
+- 影响的文件: `src/utils/tween.lua` (新建), `src/components/position_tween.lua` (新建), `src/systems/tween_system.lua` (新建), `src/config.lua`, `src/systems/movement.lua`, `src/systems/render.lua`, `src/main.lua`
+- 引入 kikito/tween.lua v2.1.1（ outQuad + linear easing），实现实体移动平滑过渡
+- 新增 `TweenSystem`（priority=0）：每帧对 active 实体做 outQuad 插值更新 `visualX/Y`
+- `MovementSystem` 移动逻辑位置立即跳终点，同时调用 `TweenSystem:startTween()` 触发视觉插值
+- `RenderSystem` 绘制实体和血条时优先读 `PositionTween.visualX/Y`，否则 fallback 到 `Position.x/y`
+- `main.lua` 摄像头跟随改为优先读 `PositionTween.visualX/Y`，移动过程平滑跟随不再跳跃
+- `config.lua` 新增 `MOVE_DURATION = 0.12`（单格移动完成时间，单位：秒）
+
+
+
+
 ### UI Update
 
 - 影响的文件: `src/main.lua`, `src/systems/input.lua`
