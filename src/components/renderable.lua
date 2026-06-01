@@ -1,4 +1,6 @@
 -- Renderable Component
--- Provides rendering data for entities
--- Requires: tileIndex (index in tileset)
-return {}
+-- Provides rendering data for entities (tileIndex set via prototype override)
+
+local RenderableComponent = {}
+
+return RenderableComponent

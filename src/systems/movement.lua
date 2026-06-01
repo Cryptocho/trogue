@@ -17,13 +17,7 @@ function MovementSystem:init(world)
     end
 
     -- Cache TweenSystem reference immediately after systems are registered
-    self.tweenSystem = nil
-    for _, sys in ipairs(world.systems) do
-        if sys.name == "TweenSystem" then
-            self.tweenSystem = sys
-            break
-        end
-    end
+    self.tweenSystem = world:getSystem("TweenSystem")
 end
 
 function MovementSystem:update(world, dt)
@@ -58,10 +52,6 @@ function MovementSystem:onMoveAttempt(data)
                 isPlayer = data.isPlayer
             })
 
-            -- Player bump into wall = turn ends
-            if data.isPlayer then
-                self.events:emit("PlayerTurnEnd", {})
-            end
         end
         return
     end
@@ -79,18 +69,13 @@ function MovementSystem:onMoveAttempt(data)
                 isPlayer = data.isPlayer
             })
 
-            -- Player bump into entity = turn ends
-            if data.isPlayer then
-                self.events:emit("PlayerTurnEnd", {})
-            end
         end
         return
     end
 
-    -- Move is clear - update logic position immediately (for collision/combat)
+    -- Move is clear - update logic position via setComponent to sync spatialHash
     local oldX, oldY = pos.x, pos.y
-    pos.x = newX
-    pos.y = newY
+    self.world:setComponent(entity, "Position", {x = newX, y = newY})
 
     -- Start visual tween so entity slides instead of teleporting
     if self.tweenSystem then
@@ -112,13 +97,7 @@ end
 
 function MovementSystem:checkCollision(entity, x, y)
     -- Check collision with map tiles first
-    local mapRenderer = nil
-    for _, sys in ipairs(self.world.systems) do
-        if sys.name == "MapRenderer" then
-            mapRenderer = sys
-            break
-        end
-    end
+    local mapRenderer = self.world:getSystem("MapRenderer")
 
     if mapRenderer and mapRenderer:isSolid(x, y) then
         return -1  -- Use -1 to indicate map tile collision

@@ -1,5 +1,5 @@
 -- EffectDefinition: Effect definitions
--- Mod Layer data structure
+-- Effect definitions (Gameplay Layer)
 
 -- Effect types
 local EffectType = {
@@ -118,7 +118,7 @@ return {
             description = "Takes fire damage each turn",
             type = EffectType.DEBUFF,
             buffId = "burning",
-            duration = 3,  -- +1 so tick starts from NEXT turn, lasts for 2 ticks
+            duration = 3,  -- 3 ticks total (decremented first, ticked if >= 0)
         }),
         
         -- Burn damage (DOT tick)

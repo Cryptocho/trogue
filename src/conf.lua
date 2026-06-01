@@ -10,10 +10,10 @@ function love.conf(t)
     t.window.minwidth = 320
     t.window.minheight = 240
     
-    -- Disable default love2d console on Windows
+    -- No custom window icon
     t.window.icon = nil
     
-    -- FPS display for debugging
+    -- Frame rate cap
     t.fps = 60
     
     -- No audio needed for this demo

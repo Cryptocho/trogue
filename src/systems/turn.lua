@@ -11,7 +11,6 @@ function TurnSystem:init(world)
     self.world = world
     self.events = world.eventBus
     self.currentPhase = "player"  -- player / enemy / processing
-    self.turnInProgress = false
     self.turnCount = 1
     self.inputAllowed = true
 
@@ -19,8 +18,19 @@ function TurnSystem:init(world)
         -- Listen for move attempt to start turn
         self.events:on("MoveAttempt", function(data)
             if data.isPlayer then
-                self.turnInProgress = true
                 self.inputAllowed = false
+            end
+        end, 0)
+
+        self.events:on("MoveSucceeded", function(data)
+            if data.isPlayer then
+                self:endPlayerTurn()
+            end
+        end, 0)
+
+        self.events:on("CollisionDetected", function(data)
+            if data.isPlayer then
+                self.inputAllowed = true
             end
         end, 0)
 
@@ -31,7 +41,6 @@ function TurnSystem:init(world)
 
         -- Listen for turn end
         self.events:on("TurnEnd", function(data)
-            self.turnInProgress = false
             self.inputAllowed = true
             self.currentPhase = "player"
             self.turnCount = self.turnCount + 1
@@ -46,7 +55,6 @@ end
 -- Start player turn
 function TurnSystem:startTurn()
     self.currentPhase = "player"
-    self.turnInProgress = true
     self.inputAllowed = true
 
     if self.events then

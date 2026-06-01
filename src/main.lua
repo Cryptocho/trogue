@@ -283,12 +283,7 @@ end
 
 -- Get system by name
 function game:getSystem(systemName)
-    for _, sys in ipairs(self.world.systems) do
-        if sys.name == systemName then
-            return sys
-        end
-    end
-    return nil
+    return self.world:getSystem(systemName)
 end
 
 function initGameWorld()

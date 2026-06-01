@@ -1,5 +1,6 @@
 -- EffectTileComponent: Dynamic effect entity component (poison, fire, etc.)
 -- Pure data component, used as special terrain entities, supports spread, stacking, etc.
+-- reserved for future implementation
 
 local EffectTileComponent = {
     effectType = "",   -- "poison", "fire", "ice"...

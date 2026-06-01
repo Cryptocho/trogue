@@ -153,8 +153,9 @@ love src
 2. 实现计划
 3. 建议 Review Changes
 4. 在review之后或用户要求时, 更新 CHANGELOG.md
-5. 询问用户是否写 commit message ,如果是则给出 commit message(英文) 预览等待用户确认,禁止直接提交!!!
-6. 确认后提交所有变更并推送
+5. 检查是否需要更新AGENTS.md
+6. 询问用户是否写 commit message ,如果是则给出 commit message(英文) 预览等待用户确认,禁止直接提交
+7. 确认后提交所有变更并推送
 
 ### CHANGELOG 格式规范
 在 `## [Unreleased]` 下按功能模块组织变更，每个模块使用 `### 功能描述` 标题。

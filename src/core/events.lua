@@ -26,9 +26,14 @@ local function createEventBus()
 
         local bus = self
         local event = eventName
-        local listenerIndex = #self.listeners[eventName]
+        local handlerRef = handler
         return function()
-            bus:offByIndex(event, listenerIndex)
+            for i, entry in ipairs(bus.listeners[event]) do
+                if entry.handler == handlerRef then
+                    bus:off(event, i)
+                    break
+                end
+            end
         end
     end
 
@@ -37,10 +42,6 @@ local function createEventBus()
             table.remove(self.listeners[eventName], index)
             self.dirty[eventName] = true
         end
-    end
-
-    instance.offByIndex = function(self, eventName, index)
-        self:off(eventName, index)
     end
 
     instance._rebuild = function(self, eventName)

@@ -1,6 +1,7 @@
--- Auto-generated tileset info
+-- Auto-generated tileset info (reference only, not used by any source)
 -- TILE_SIZE = 16
 -- TILES_PER_ROW = 8
+-- Actual tile mapping is hardcoded in map_renderer.lua
 
 return {
     tile_0 = 0,  -- '.'

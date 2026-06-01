@@ -34,12 +34,12 @@ return {
                 magicResistance = 0,
                 darkResistance = 0,
                 heroicChance = 0,
+                damageAbsorb = 0,
                 armorPenetration = 0,
                 damageReduction = 0,
             },
             modifiers = {},
         },
-        Actor = {moveDelay = 0},
         Ability = {
             abilities = {punch = true, heal = true, shield = true, fireball = true, passive_strength = true},
             cooldowns = {},
@@ -49,7 +49,7 @@ return {
 
     goblin = {
         Renderable = {tileIndex = 3},
-        Actor = {moveDelay = 0.5},
+        Actor = {},
         Weapon = {type = "fists", baseDamage = 2, armorPenetration = 0, physicalDamageBonus = 0},
         Stats = {
             base = {strength = 8, agility = 6, sensing = 3, spirit = 4, magic = 3, tenacity = 0},
@@ -76,6 +76,7 @@ return {
                 magicResistance = 0,
                 darkResistance = 0,
                 heroicChance = 0,
+                damageAbsorb = 0,
                 armorPenetration = 0,
                 damageReduction = 0,
             },
@@ -90,7 +91,7 @@ return {
 
     rat = {
         Renderable = {tileIndex = 4},
-        Actor = {moveDelay = 0.3},
+        Actor = {},
         Weapon = {type = "fists", baseDamage = 2, armorPenetration = 0, physicalDamageBonus = 0},
         Stats = {
             base = {strength = 4, agility = 8, sensing = 2, spirit = 2, magic = 2, tenacity = 0},
@@ -117,6 +118,7 @@ return {
                 magicResistance = 0,
                 darkResistance = 0,
                 heroicChance = 0,
+                damageAbsorb = 0,
                 armorPenetration = 0,
                 damageReduction = 0,
             },
@@ -131,12 +133,12 @@ return {
 
     orc = {
         Renderable = {tileIndex = 5},
-        Actor = {moveDelay = 0.8},
+        Actor = {},
         Weapon = {type = "fists", baseDamage = 2, armorPenetration = 0, physicalDamageBonus = 0},
         Stats = {
             base = {strength = 12, agility = 3, sensing = 2, spirit = 5, magic = 2, tenacity = 0},
-            current = {hp = 10, energy = 40},
-            max = {hp = 10, energy = 40},
+            current = {hp = 35, energy = 40},
+            max = {hp = 35, energy = 40},
             computed = {
                 physicalDamageBonus = 0,
                 blockChance = 0,
@@ -158,6 +160,7 @@ return {
                 magicResistance = 0,
                 darkResistance = 0,
                 heroicChance = 0,
+                damageAbsorb = 0,
                 armorPenetration = 0,
                 damageReduction = 0,
             },
@@ -171,7 +174,6 @@ return {
     },
 
     poison_pool = {
-        Position = {x = 0, y = 0},
         Renderable = {tileIndex = 6},
         Solid = {},
         EffectTile = {
@@ -184,7 +186,6 @@ return {
     },
 
     fire_pool = {
-        Position = {x = 0, y = 0},
         Renderable = {tileIndex = 7},
         Solid = {},
         EffectTile = {

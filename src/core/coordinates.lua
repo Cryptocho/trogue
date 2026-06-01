@@ -2,8 +2,9 @@
 -- Unified coordinate system for tile/pixel conversions and distance calculations
 -- 1-based tile coordinates (consistent with Lua tables)
 
-local TILE_SIZE = 16
-local origin = "top-left"
+local Config = require("src.config")
+local TILE_SIZE = Config.TILE_SIZE
+local MinHeap = require("src.utils.minheap")
 
 local function tileToWorld(tx, ty)
     return (tx - 1) * TILE_SIZE, (ty - 1) * TILE_SIZE
@@ -47,9 +48,7 @@ local function isInRange(tx1, ty1, tx2, ty2, range)
     return manhattanDistance(tx1, ty1, tx2, ty2) <= range
 end
 
-local function isInArea(tx1, ty1, tx2, ty2, radius)
-    return euclideanDistance(tx1, ty1, tx2, ty2) <= radius
-end
+
 
 local function getNeighbors(tx, ty, width, height, diagonal)
     local neighbors = {}
@@ -74,7 +73,8 @@ local function diagonalCost(dx, dy)
 end
 
 local function findPath(startX, startY, goalX, goalY, isPassable, getBlockingEntity)
-    local openSet = {}
+    local openSet = MinHeap.createMinHeap()
+    local openSetKeys = {}
     local closedSet = {}
     local cameFrom = {}
     local gScore = {}
@@ -106,22 +106,18 @@ local function findPath(startX, startY, goalX, goalY, isPassable, getBlockingEnt
     local startKey = nodeKey(startX, startY)
     gScore[startKey] = 0
     fScore[startKey] = heuristic(startX, startY, goalX, goalY)
-    table.insert(openSet, {x = startX, y = startY})
+    openSet:push({x = startX, y = startY}, fScore[startKey])
+    openSetKeys[startKey] = true
 
     local iterations = 0
     local maxIterations = 1000
 
-    while #openSet > 0 and iterations < maxIterations do
+    while not openSet:isEmpty() and iterations < maxIterations do
         iterations = iterations + 1
 
-        table.sort(openSet, function(a, b)
-            local fA = fScore[nodeKey(a.x, a.y)] or math.huge
-            local fB = fScore[nodeKey(b.x, b.y)] or math.huge
-            return fA < fB
-        end)
-
-        local current = table.remove(openSet, 1)
+        local current = openSet:pop()
         local currentKey = nodeKey(current.x, current.y)
+        openSetKeys[currentKey] = nil
 
         if current.x == goalX and current.y == goalY then
             local path = {}
@@ -156,22 +152,17 @@ local function findPath(startX, startY, goalX, goalY, isPassable, getBlockingEnt
             local moveCost = getMoveCost(dir.dx, dir.dy)
             local tentativeG = (gScore[currentKey] or math.huge) + moveCost
 
-            local inOpen = false
-            for _, node in ipairs(openSet) do
-                if node.x == neighborX and node.y == neighborY then
-                    inOpen = true
-                    break
-                end
-            end
+            local inOpen = openSetKeys[neighborKey]
 
             if not inOpen then
-                table.insert(openSet, {x = neighborX, y = neighborY})
+                openSetKeys[neighborKey] = true
             end
 
             if tentativeG < (gScore[neighborKey] or math.huge) then
                 cameFrom[neighborKey] = current
                 gScore[neighborKey] = tentativeG
                 fScore[neighborKey] = tentativeG + heuristic(neighborX, neighborY, goalX, goalY)
+                openSet:push({x = neighborX, y = neighborY}, fScore[neighborKey])
             end
 
             ::continue::
@@ -179,6 +170,36 @@ local function findPath(startX, startY, goalX, goalY, isPassable, getBlockingEnt
     end
 
     return nil
+end
+
+-- Check if there is a clear line of sight between two tiles (Bresenham)
+-- @param x1, y1 number: start tile
+-- @param x2, y2 number: end tile
+-- @param isSolid function(x, y) -> boolean: returns true if tile is solid
+-- @return boolean: true if no solid tiles block the line (excluding start)
+local function hasLineOfSight(x1, y1, x2, y2, isSolid)
+    local dx = math.abs(x2 - x1)
+    local dy = math.abs(y2 - y1)
+    local sx = x1 < x2 and 1 or -1
+    local sy = y1 < y2 and 1 or -1
+    local err = dx - dy
+
+    local x, y = x1, y1
+    while x ~= x2 or y ~= y2 do
+        local e2 = 2 * err
+        if e2 > -dy then
+            err = err - dy
+            x = x + sx
+        end
+        if e2 < dx then
+            err = err + dx
+            y = y + sy
+        end
+        if (x ~= x2 or y ~= y2) and isSolid(x, y) then
+            return false
+        end
+    end
+    return true
 end
 
 return {
@@ -192,7 +213,7 @@ return {
     chebyshevDistance = chebyshevDistance,
     euclideanDistance = euclideanDistance,
     isInRange = isInRange,
-    isInArea = isInArea,
+    hasLineOfSight = hasLineOfSight,
     getNeighbors = getNeighbors,
     findPath = findPath,
     diagonalCost = diagonalCost,

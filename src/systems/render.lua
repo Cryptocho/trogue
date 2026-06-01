@@ -119,13 +119,8 @@ end
 function RenderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
     local inputSystem = self._inputSystem
     if not inputSystem then
-        for _, sys in ipairs(self.world.systems) do
-            if sys.name == "InputSystem" then
-                self._inputSystem = sys
-                inputSystem = sys
-                break
-            end
-        end
+        self._inputSystem = self.world:getSystem("InputSystem")
+        inputSystem = self._inputSystem
     end
     if not inputSystem or not inputSystem:isInAimMode() then return end
 
@@ -144,13 +139,8 @@ function RenderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
 
     local mapRenderer = self._mapRenderer
     if not mapRenderer then
-        for _, sys in ipairs(self.world.systems) do
-            if sys.name == "MapRenderer" then
-                self._mapRenderer = sys
-                mapRenderer = sys
-                break
-            end
-        end
+        self._mapRenderer = self.world:getSystem("MapRenderer")
+        mapRenderer = self._mapRenderer
     end
     if not mapRenderer then return end
 
@@ -161,17 +151,29 @@ function RenderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
 
     local tiles = abilityDef.rangeFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
 
-    love.graphics.setColor(0, 1, 0, 0.3)
+    local function isSolid(x, y) return mapRenderer:isSolid(x, y) end
+
     for _, tile in ipairs(tiles) do
         local wx, wy = Coordinates.tileToWorld(tile.x, tile.y)
+        local blocked = mapRenderer:isSolid(tile.x, tile.y)
+            or not Coordinates.hasLineOfSight(playerPos.x, playerPos.y, tile.x, tile.y, isSolid)
+        if blocked then
+            love.graphics.setColor(1, 0, 0, 0.3)
+        else
+            love.graphics.setColor(0, 1, 0, 0.3)
+        end
         love.graphics.rectangle("fill", wx + offsetX, wy + offsetY, Config.TILE_SIZE, Config.TILE_SIZE)
     end
 
     for _, tile in ipairs(tiles) do
         if tile.x == tileX and tile.y == tileY then
-            local mwx, mwy = Coordinates.tileToWorld(tileX, tileY)
-            love.graphics.setColor(1, 1, 0, 0.6)
-            love.graphics.circle("fill", mwx + offsetX + Config.TILE_SIZE / 2, mwy + offsetY + Config.TILE_SIZE / 2, Config.TILE_SIZE / 3)
+            local blocked = mapRenderer:isSolid(tile.x, tile.y)
+                or not Coordinates.hasLineOfSight(playerPos.x, playerPos.y, tile.x, tile.y, isSolid)
+            if not blocked then
+                local mwx, mwy = Coordinates.tileToWorld(tileX, tileY)
+                love.graphics.setColor(1, 1, 0, 0.6)
+                love.graphics.circle("fill", mwx + offsetX + Config.TILE_SIZE / 2, mwy + offsetY + Config.TILE_SIZE / 2, Config.TILE_SIZE / 3)
+            end
             break
         end
     end

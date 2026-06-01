@@ -1,6 +1,6 @@
 -- StatsComponent: Entity attributes (base, current, max, computed, modifiers)
 -- Pure data component
--- Serve as a megastruct
+-- Pure data component: entity attribute values
 
 local StatsComponent = {
     base = {
@@ -9,7 +9,7 @@ local StatsComponent = {
         sensing = 5,
         spirit = 5,
         magic = 5,
-        tenacity = 0, -- temp
+        tenacity = 0, -- reserved
     },
     current = {
         hp = 10,
@@ -40,6 +40,7 @@ local StatsComponent = {
         magicResistance = 0,
         darkResistance = 0,
         heroicChance = 0,
+        damageAbsorb = 0,
         armorPenetration = 0,
         damageReduction = 0,
     },

@@ -379,16 +379,55 @@ function InputSystem:handleAimClick(x, y)
         return
     end
 
+    local mapRenderer = self:_getMapRenderer()
+    if mapRenderer and mapRenderer:isSolid(tileX, tileY) then
+        return
+    end
+
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return end
+    local playerId = players[1].id
+    local playerPos = players[1].components.Position
+
+    if mapRenderer and not Coordinates.hasLineOfSight(playerPos.x, playerPos.y, tileX, tileY, function(x, y) return mapRenderer:isSolid(x, y) end) then
+        return
+    end
+
+    if self.ruleEngine then
+        local abilityDef = self.ruleEngine:getAbilityDef(self.pendingAbilityId)
+        if abilityDef and abilityDef.rangeFunc then
+            local tiles = abilityDef.rangeFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
+            local hasEnemy = false
+            local hasSelf = false
+            local spatialHash = self.world:getSpatialHash()
+            for _, tile in ipairs(tiles) do
+                if tile.x == playerPos.x and tile.y == playerPos.y then
+                    hasSelf = true
+                end
+                local entities = spatialHash:getAt(tile.x, tile.y)
+                if entities then
+                    for _, eid in ipairs(entities) do
+                        if eid ~= playerId then
+                            hasEnemy = true
+                            break
+                        end
+                    end
+                end
+                if hasEnemy then break end
+            end
+            if not hasEnemy and not hasSelf then
+                self:cancelAim()
+                return
+            end
+        end
+    end
+
     local abilityId = self.pendingAbilityId
     self:cancelAim()
 
     if self.turnSystem then
         self.turnSystem:startTurn()
     end
-
-    local players = self.world:query({"Player", "Position"})
-    if #players == 0 then return end
-    local playerId = players[1].id
 
     if self.events then
         self.events:emit("AbilityUse", {
@@ -445,12 +484,7 @@ end
 -- Get MapRenderer system (lazy cached)
 function InputSystem:_getMapRenderer()
     if not self._mapRenderer then
-        for _, sys in ipairs(self.world.systems) do
-            if sys.name == "MapRenderer" then
-                self._mapRenderer = sys
-                break
-            end
-        end
+        self._mapRenderer = self.world:getSystem("MapRenderer")
     end
     return self._mapRenderer
 end

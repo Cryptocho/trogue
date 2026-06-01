@@ -4,6 +4,10 @@
 local Config = require("src.config")
 local Coordinates = require("src.core.coordinates")
 
+local TILE_FLOOR = 0
+local TILE_WALL = 1
+local TILE_TREE = 8
+
 local MapRenderer = {
     priority = 0,  -- Run before RenderSystem
     name = "MapRenderer",
@@ -55,12 +59,12 @@ function MapRenderer:loadMap(mapData)
         self.tiles[y] = {}
         for x = 1, #row do
             local char = row:sub(x, x)
-            local tileIndex = 0  -- default floor
+            local tileIndex = TILE_FLOOR  -- default floor
 
             if char == "#" then
-                tileIndex = 1  -- wall
+                tileIndex = TILE_WALL  -- wall
             elseif char == "^" then
-                tileIndex = 8
+                tileIndex = TILE_TREE
             end
 
             self.tiles[y][x] = tileIndex
@@ -78,7 +82,7 @@ function MapRenderer:isSolid(x, y)
     if not Coordinates.isInBounds(x, y, self.width, self.height) then
         return false
     end
-    return self.tiles[y][x] == 1 or self.tiles[y][x] == 8
+    return self.tiles[y][x] == TILE_WALL or self.tiles[y][x] == TILE_TREE
 end
 
 function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
@@ -106,7 +110,7 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
 
             local quad = self.quads[tileIndex]
 
-            if tileIndex == 0 then
+            if tileIndex == TILE_FLOOR then
                 -- Floor: draw image.png tiled, centered within the tile cell
                 love.graphics.draw(self.floorImage, screenX + self.floorOffsetX, screenY + self.floorOffsetY,
                                    0, self.floorScale, self.floorScale)

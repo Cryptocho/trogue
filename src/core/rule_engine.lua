@@ -8,6 +8,13 @@ local BuffDef = require("src.data.definitions.buff")
 local BuffsComponent = require("src.components.buffs")
 local Coordinates = require("src.core.coordinates")
 
+local DEBUG = false
+local function debugPrint(...)
+    if DEBUG then print(...) end
+end
+
+local PERMANENT_BUFF_DURATION = -1
+
 local function createRuleEngine(world, eventBus)
     local instance = {
         world = world,
@@ -92,17 +99,17 @@ function _ruleEngineRegisterEvents(self)
 
     -- Listen for damage request (processed internally)
     self.events:on("DamageRequest", function(data)
-        _processDamage(self, data)
+        _ruleEngineProcessDamage(self, data)
     end, 100)
 
     -- Listen for heal request
     self.events:on("HealRequest", function(data)
-        _processHeal(self, data)
+        _ruleEngineProcessHeal(self, data)
     end, 100)
 
     -- Listen for buff apply request
     self.events:on("BuffApplyRequest", function(data)
-        _processBuffApply(self, data)
+        _ruleEngineProcessBuffApply(self, data)
     end, 100)
 
     -- Listen for turn end
@@ -112,7 +119,7 @@ function _ruleEngineRegisterEvents(self)
 
     -- Listen for buff tick (DOT/HOT damage)
     self.events:on("BuffTickRequest", function(data)
-        _processBuffTick(self, data)
+        _ruleEngineProcessBuffTick(self, data)
     end, 100)
 end
 
@@ -255,27 +262,17 @@ end
 function _ruleEngineApplyAbility(self, sourceId, ability, targetX, targetY)
     local pos = self.world.components.Position[sourceId]
     if not pos then
-        print("[RuleEngine] No position for source entity: " .. sourceId)
+        debugPrint("[RuleEngine] No position for source entity: " .. sourceId)
         return
     end
 
-    local mapW, mapH = self._mapW, self._mapH
-    if not mapW then
-        for _, sys in ipairs(self.world.systems or {}) do
-            if sys.name == "MapRenderer" then
-                self._mapW = sys.width or 0
-                self._mapH = sys.height or 0
-                mapW = self._mapW
-                mapH = self._mapH
-                break
-            end
-        end
-    end
-    if not mapW then mapW, mapH = 0, 0 end
+    local mapRenderer = self.world:getSystem("MapRenderer")
+    local mapW = mapRenderer and mapRenderer.width or 0
+    local mapH = mapRenderer and mapRenderer.height or 0
 
     local rangeFunc = ability.rangeFunc
     if not rangeFunc then
-        print("[RuleEngine] Ability has no rangeFunc: " .. ability.id)
+        debugPrint("[RuleEngine] Ability has no rangeFunc: " .. ability.id)
         return false
     end
 
@@ -297,7 +294,7 @@ function _ruleEngineApplyAbility(self, sourceId, ability, targetX, targetY)
     end
 
     if #targetList == 0 then
-        print("[RuleEngine] No valid targets for ability: " .. ability.id)
+        debugPrint("[RuleEngine] No valid targets for ability: " .. ability.id)
         return false
     end
 
@@ -317,14 +314,14 @@ end
 function _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
     local effect = self.effects[effectId]
     if not effect then
-        print("[RuleEngine] Effect not found: " .. effectId)
+        debugPrint("[RuleEngine] Effect not found: " .. effectId)
         return
     end
 
     -- 概率判定
     local triggerChance = nil
     if effect.chanceFormula then
-        triggerChance = _evaluateChanceFormula(self, sourceId, effect.chanceFormula)
+        triggerChance = _ruleEngineEvaluateChanceFormula(self, sourceId, effect.chanceFormula)
     elseif effect.chance then
         triggerChance = effect.chance
     end
@@ -368,14 +365,9 @@ end
 -- Get WeaponSystem reference from world (lazy cache)
 -- @param self RuleEngine instance
 -- @return WeaponSystem table or nil
-function _getWeaponSystem(self)
+function _ruleEngineGetWeaponSystem(self)
     if not self._weaponSystem then
-        for _, sys in ipairs(self.world.systems or {}) do
-            if sys.name == "WeaponSystem" then
-                self._weaponSystem = sys
-                break
-            end
-        end
+        self._weaponSystem = self.world:getSystem("WeaponSystem")
     end
     return self._weaponSystem
 end
@@ -385,10 +377,10 @@ end
 -- @param sourceId number Attack source entity
 -- @param formula table { basePercent, statScaling, flatBonus }
 -- @return number Final damage value
-function _evaluateFormula(self, sourceId, formula)
+function _ruleEngineEvaluateFormula(self, sourceId, formula)
     local damage = 0
     local stats = _ruleEngineGetStatsComponent(self, sourceId)
-    local ws = _getWeaponSystem(self)
+    local ws = _ruleEngineGetWeaponSystem(self)
 
     if formula.basePercent then
         local baseDamage = ws and ws:getBaseDamage(self.world, sourceId) or 2
@@ -417,7 +409,7 @@ end
 -- @param entityId number Source entity for stat lookup
 -- @param formula table { basePercent, statScaling }
 -- @return number Probability in 0~1 range
-function _evaluateChanceFormula(self, entityId, formula)
+function _ruleEngineEvaluateChanceFormula(self, entityId, formula)
     local chance = formula.basePercent or 0
     if formula.statScaling then
         local stats = _ruleEngineGetStatsComponent(self, entityId)
@@ -430,22 +422,11 @@ function _evaluateChanceFormula(self, entityId, formula)
     return math.min(chance, 1.0)
 end
 
--- Get entity armor penetration value (delegates to WeaponSystem)
--- @param sourceId number
--- @return number armorPenetration
-function _getArmorPenetration(self, sourceId)
-    local ws = _getWeaponSystem(self)
-    if ws then
-        return ws:getArmorPenetration(self.world, sourceId)
-    end
-    return 0
-end
-
--- Private: Process damage
-function _processDamage(self, data)
+-- Evaluate damage formula
+function _ruleEngineProcessDamage(self, data)
     local stats = _ruleEngineGetStatsComponent(self, data.target)
     if not stats then
-        print("[RuleEngine] No Stats component for target: " .. data.target)
+        debugPrint("[RuleEngine] No Stats component for target: " .. data.target)
         return
     end
 
@@ -469,13 +450,11 @@ function _processDamage(self, data)
     -- Formula-based damage override (when effect has valueFormula)
     local effect = self.effects[data.effectId]
     if effect and effect.valueFormula and data.source then
-        damage = _evaluateFormula(self, data.source, effect.valueFormula)
+        damage = _ruleEngineEvaluateFormula(self, data.source, effect.valueFormula)
     end
 
     local rawDamage = damage
 
-    -- TODO: Armor penetration (placeholder, will be implemented in dodge/block pipeline)
-    _getArmorPenetration(self, data.source)
     if shieldAbsorb > 0 then
         if shieldAbsorb >= damage then
             -- Shield absorbs all
@@ -485,7 +464,7 @@ function _processDamage(self, data)
             if shieldAbsorb <= 0 then
                 buffs.activeBuffs["shield"] = nil
                 stats.modifiers["shield"] = nil
-                _recalcComputed(stats)
+                _ruleEngineRecalcComputed(stats)
                 if self.events then
                     self.events:emit("BuffExpired", {
                         entity = data.target,
@@ -503,7 +482,7 @@ function _processDamage(self, data)
             damage = damage - shieldAbsorb
             buffs.activeBuffs["shield"] = nil
             stats.modifiers["shield"] = nil
-            _recalcComputed(stats)
+            _ruleEngineRecalcComputed(stats)
             if self.events then
                 self.events:emit("BuffExpired", {
                     entity = data.target,
@@ -536,10 +515,10 @@ function _processDamage(self, data)
 end
 
 -- Private: Process heal
-function _processHeal(self, data)
+function _ruleEngineProcessHeal(self, data)
     local stats = _ruleEngineGetStatsComponent(self, data.target)
     if not stats then
-        print("[RuleEngine] No Stats component for target: " .. data.target)
+        debugPrint("[RuleEngine] No Stats component for target: " .. data.target)
         return
     end
 
@@ -558,7 +537,7 @@ function _processHeal(self, data)
     end
 end
 
-function _recalcComputed(stats)
+function _ruleEngineRecalcComputed(stats)
     if not stats._baseComputed then
         stats._baseComputed = {}
         for k, v in pairs(stats.computed) do
@@ -580,19 +559,19 @@ function _recalcComputed(stats)
 end
 
 -- Private: Process buff apply
-function _processBuffApply(self, data)
+function _ruleEngineProcessBuffApply(self, data)
     -- Use buffs component
     local buffs = _ruleEngineGetBuffsComponent(self, data.target)
     local stats = _ruleEngineGetStatsComponent(self, data.target)
     if not buffs then
-        print("[RuleEngine] No Buffs component for entity: " .. data.target)
+        debugPrint("[RuleEngine] No Buffs component for entity: " .. data.target)
         return
     end
 
     local buffDef = self.buffs[data.buffId]
 
     if not buffDef then
-        print("[RuleEngine] Buff definition not found: " .. data.buffId)
+        debugPrint("[RuleEngine] Buff definition not found: " .. data.buffId)
         return
     end
 
@@ -641,7 +620,7 @@ function _processBuffApply(self, data)
             effective[field] = value * stacks
         end
         stats.modifiers[data.buffId] = effective
-        _recalcComputed(stats)
+        _ruleEngineRecalcComputed(stats)
     end
 end
 
@@ -661,9 +640,9 @@ function _ruleEngineCheckDeath(self, entityId, killerId)
 end
 
 -- Private: Process buff tick (DOT/HOT damage)
-function _processBuffTick(self, data)
+function _ruleEngineProcessBuffTick(self, data)
     if not data.entity or not data.effectId then
-        print("[RuleEngine] BuffTickRequest missing entity or effectId")
+        debugPrint("[RuleEngine] BuffTickRequest missing entity or effectId")
         return
     end
 
@@ -673,8 +652,8 @@ end
 
 -- Turn end processing (Orchestrator, emit events only)
 function _ruleEngineOnTurnEnd(self)
-    _reduceCooldowns(self)
-    _processBuffTicks(self)
+    _ruleEngineReduceCooldowns(self)
+    _ruleEngineProcessBuffTicks(self)
 
     if self.events then
         self.events:emit("CooldownsUpdated", {})
@@ -682,7 +661,7 @@ function _ruleEngineOnTurnEnd(self)
 end
 
 -- Private: Reduce cooldowns for all entities
-function _reduceCooldowns(self)
+function _ruleEngineReduceCooldowns(self)
     if not self.world.components.Ability then return end
 
     for entityId, comp in pairs(self.world.components.Ability) do
@@ -702,9 +681,9 @@ function _reduceCooldowns(self)
 end
 
 -- Private: Process buff ticks and expiration
-function _processBuffTicks(self)
+function _ruleEngineProcessBuffTicks(self)
     if not self.world.components.Buffs then
-        print("[RuleEngine] No Buffs component found")
+        debugPrint("[RuleEngine] No Buffs component found")
         return
     end
 
@@ -736,7 +715,7 @@ function _processBuffTicks(self)
                     local stats = _ruleEngineGetStatsComponent(self, entityId)
                     if stats and stats.modifiers and stats.modifiers[buffId] then
                         stats.modifiers[buffId] = nil
-                        _recalcComputed(stats)
+                        _ruleEngineRecalcComputed(stats)
                     end
                     if self.events then
                         self.events:emit("BuffExpired", {
@@ -795,7 +774,7 @@ function _ruleEngineApplyPassiveAbilities(self, entityId)
                         source = entityId,
                         target = entityId,
                         buffId = buffId,
-                        duration = -1,
+                        duration = PERMANENT_BUFF_DURATION,
                         permanent = true,
                     })
                 end
@@ -825,7 +804,7 @@ function _ruleEngineRemovePassiveAbilities(self, entityId)
                 buffs.activeBuffs[buffId] = nil
                 if stats.modifiers and stats.modifiers[buffId] then
                     stats.modifiers[buffId] = nil
-                    _recalcComputed(stats)
+                    _ruleEngineRecalcComputed(stats)
                 end
             end
         end

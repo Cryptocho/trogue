@@ -6,17 +6,80 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### ECS 架构清理与 getSystem 优化
+
+- 影响的文件: `src/core/ecs.lua`, `src/core/events.lua`, `src/systems/input.lua`, `src/systems/render.lua`, `src/systems/movement.lua`, `src/systems/ai.lua`, `src/main.lua`
+- `World` 移除 `componentInstances` 内部存储（OOP 组件生命周期残留），所有组件统一为纯数据存取
+- 新增 `World:getSystem(name)` 方法，内置缓存实现 O(1) 查询，附带 `_systemCache` 懒初始化
+- 所有系统（InputSystem、RenderSystem、MovementSystem、AISystem、main.game）统一使用 `world:getSystem()` 替代手动 `for` 循环遍历
+- `main.lua` 中 `game:getSystem()` 委托给 `world:getSystem()`
+- `EventBus:once()` 改为 handler 引用匹配替代 index 匹配，移除 `offByIndex` 方法
+
+### A* 寻路性能优化 (MinHeap)
+
+- 影响的文件: `src/utils/minheap.lua` (新建), `src/core/coordinates.lua`
+- 新增 `MinHeap` 最小堆数据结构（push/pop/isEmpty/clear），用于优先级队列
+- `Coordinates.findPath()` 中 `openSet` 从普通数组 + `table.sort()` O(n log n) 替代为 MinHeap O(log n)
+- 新增 `openSetKeys` 哈希表，O(1) 判断节点是否已在 openSet（替代原来的遍历查找）
+- `findPath` 最大迭代次数 1000 不变，`heuristic` 从曼哈顿改为切比雪夫距离（适应八向移动代价）
+
+### 回合系统重构
+
+- 影响的文件: `src/systems/turn.lua`, `src/systems/movement.lua`, `src/systems/combat.lua`
+- 玩家回合结束逻辑从分布式（MovementSystem 碰撞时直接 emit PlayerTurnEnd）统一收束到 TurnSystem
+- `TurnSystem` 新增 `MoveSucceeded` / `CollisionDetected` 事件监听，由 TurnSystem 统一驱动回合生命周期
+- 移除 `turnInProgress` 状态字段，改为 `inputAllowed` + `currentPhase` 两状态模型
+- `MovementSystem` 不再 emit `PlayerTurnEnd`（碰撞/墙体的回合逻辑由 TurnSystem 统一处理）
+- 玩家撞墙/撞实体时 `inputAllowed = true`（保持原地等待新输入，不结束回合）
+
+### RuleEngine 代码规范化
+
+- 影响的文件: `src/core/rule_engine.lua`
+- 内部函数统一添加 `_ruleEngine` 前缀：`_ruleEngineProcessDamage` / `_ruleEngineProcessHeal` / `_ruleEngineProcessBuffApply` / `_ruleEngineProcessBuffTick` 等
+- `print()` 替换为 `debugPrint()` 宏（`DEBUG = false` 时静默，生产环境无日志噪音）
+- 新增 `PERMANENT_BUFF_DURATION = -1` 常量，替代硬编码 `-1`
+- `_getWeaponSystem()` → `_ruleEngineGetWeaponSystem()`，使用 `world:getSystem("WeaponSystem")` 优化
+- `_evaluateFormula` / `_evaluateChanceFormula` / `_recalcComputed` 添加 `_ruleEngine` 前缀
+- 移除未使用的 `_getArmorPenetration` 占位函数
+- `_ruleEngineApplyAbility` 中 MapRenderer 查询从手动遍历改用 `world:getSystem("MapRenderer")`
+- buff tick 中 `duration` 递减逻辑注释从 "+1 so tick starts from NEXT turn" 更正为 "3 ticks total (decremented first, ticked if >= 0)"
+
+### CombatSystem 退化为战斗占位
+
+- 影响的文件: `src/systems/combat.lua`
+- CombatSystem（碰撞碰撞伤害）完全移除内部逻辑（曾负责 bump combat 和 PlayerTurnEnd 发射）
+- 系统架构保留为占位框架（priority=2，name="CombatSystem"），为未来战斗机制预留
+- 战斗现在完全由 RuleEngine 能力系统驱动（punch/fireball 等），碰撞伤害功能已淘汰
+
+### 组件清理与平衡调整
+
+- 影响的文件: `src/components/actor.lua`, `src/components/stats.lua`, `src/components/renderable.lua`, `src/components/solid.lua`, `src/components/player.lua`, `src/components/effect_tile.lua`, `src/data/prototypes/entities.lua`, `src/systems/map_renderer.lua`, `src/systems/movement.lua`, `src/conf.lua`, `src/assets/tileset_info.lua`
+- `ActorComponent` 移除 `moveDelay` 字段，退化为纯标记组件（所有原型 `Actor = {}` 统一）
+- `StatsComponent.computed` 新增 `damageAbsorb` 字段（为 shield 的 modifier 管道预留计算槽位）
+- `StatsComponent` 注释从 "megastruct" 更正为 "entity attribute values"
+- Orc 原型 HP 从 10 提升至 35（对齐中后期敌人强度），所有原型 Stats computed 补充 `damageAbsorb = 0`
+- `poison_pool` / `fire_pool` 原型移除冗余 `Position` 字段（生成时动态设置）
+- `RenderableComponent` / `SolidComponent` / `PlayerComponent` / `EffectTileComponent` 统一采用 `local X = {}; return X` 模板格式
+- `MapRenderer:isSolid` 使用 `TILE_WALL` / `TILE_TREE` 常量替代硬编码 `1` / `8`，新增 `TILE_FLOOR` 常量
+- `MovementSystem:onMoveAttempt` 位置更新从直接赋值改为 `world:setComponent(entity, "Position", {x = newX, y = newY})`，确保 SpatialHash 同步
+- `conf.lua` 注释清理（移除 Windows console / FPS debug 等过时注释）
+- `tileset_info.lua` 标注为参考文件（注明实际 tile 映射在 map_renderer.lua）
+- `Coordinates` 模块移除未使用的 `isInArea` 函数
+- `Coordinates.TILE_SIZE` 从硬编码 16 改为 `require("src.config")` 引用 `Config.TILE_SIZE`
+
 ### 技能鼠标瞄准系统
 
-- 影响的文件: `src/data/definitions/ability.lua`, `src/core/rule_engine.lua`, `src/systems/input.lua`, `src/systems/render.lua`, `src/main.lua`, `src/systems/ai.lua`
+- 影响的文件: `src/data/definitions/ability.lua`, `src/core/rule_engine.lua`, `src/systems/input.lua`, `src/systems/render.lua`, `src/main.lua`, `src/systems/ai.lua`, `src/core/coordinates.lua`
 - 每个能力持有 `rangeFunc(sourceX, sourceY, targetX, targetY, mapW, mapH) → {{x,y},...}` 内联函数，定义于 `ability.lua`
-- 4 个内置技能添加 rangeFunc：punch 自身周围 8 格、heal/shield 自身单格、fireball 自身周围曼哈顿距离 ≤2 菱形
-- 按下数字键进入瞄准模式：受影响的图格绘制半透明绿色方形，鼠标在范围内时绘制黄色圆形
-- 点击左键释放技能，右键/ESC/同数字键取消瞄准，瞄准模式下 WASD 忽略、其他数字键切换技能
+- 4 个内置技能添加 rangeFunc：punch 自身周围 8 格、heal/shield 自身单格、fireball 自身周围 Chebyshev 距离 ≤2 方形（24 格，不含自身）
+- 按下数字键进入瞄准模式：受影响的图格绘制半透明绿色方形，障碍物或视线被遮挡的图格绘制红色方形，鼠标在可通行且无遮挡的图格时绘制黄色圆形
+- 点击左键释放技能：先检测 solid 图格和 Bresenham 视线遮挡（均阻止释放），再检测 rangeFunc 覆盖范围内是否有实体存在，无实体时自动取消瞄准避免空放
+- 右键/ESC/同数字键取消瞄准，瞄准模式下 WASD 忽略、其他数字键切换技能
+- `hasLineOfSight` Bresenham 视线检测，新增于 `coordinates.lua`，用于判定目标图格是否被障碍物遮挡（起点图格不计入检测）
 - `_ruleEngineApplyAbility` 重写：用 `rangeFunc` + `SpatialHash` 查找目标实体，移除旧的 SELF/SINGLE/AREA 分支
 - `tryUseAbility`/`applyAbility` 签名从 `targetId` 改为 `targetX, targetY`，`AbilityUse` 事件数据同步更新
 - AI 系统 `AbilityUse` 事件改为发射 `targetX, targetY`（目标实体坐标）
-- `drawAimPreview` 新增瞄准预览渲染，摄像机位置与主渲染同步（tween-aware）
+- `drawAimPreview` 新增瞄准预览渲染，摄像机位置与主渲染同步（tween-aware），障碍物/视线遮挡判定与 `handleAimClick` 保持一致
 - `_screenToWorldTile` 提取公共 screen-to-tile 方法，消除 `handleClick`/`handleAimClick` 重复代码
 - `_getMapRenderer` 惰性缓存 MapRenderer 引用，`_ruleEngineApplyAbility` 缓存地图尺寸
 - 移除 `rangeFunc` fallback，所有技能必须定义 rangeFunc

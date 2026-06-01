@@ -91,7 +91,6 @@ local function createWorld()
         entities = {},
         components = {},
         systems = {},
-        componentInstances = {},
         eventBus = nil,
         spatialHash = createSpatialHash(1),
     }
@@ -104,7 +103,6 @@ local function createWorld()
         self.nextEntityId = self.nextEntityId + 1
 
         self.entities[id] = {}
-        self.componentInstances[id] = {}
 
         for name, data in pairs(components) do
             self:addComponent(id, name, data)
@@ -118,22 +116,11 @@ local function createWorld()
     -- @param componentName string
     -- @param componentData table or Component instance
     instance.addComponent = function(self, entityId, componentName, componentData)
-        local isInstance = componentData and componentData._isComponent
-
         if not self.components[componentName] then
             self.components[componentName] = {}
         end
 
-        if isInstance then
-            self.components[componentName][entityId] = componentData.data
-            if not self.componentInstances[entityId] then
-                self.componentInstances[entityId] = {}
-            end
-            self.componentInstances[entityId][componentName] = componentData
-            componentData:_attach(entityId, self)
-        else
-            self.components[componentName][entityId] = componentData
-        end
+        self.components[componentName][entityId] = componentData
 
         if not self.entities[entityId] then
             self.entities[entityId] = {}
@@ -142,7 +129,7 @@ local function createWorld()
 
         -- Update spatial hash if this is a Position component
         if componentName == "Position" and componentData then
-            local pos = isInstance and componentData.data or componentData
+            local pos = componentData
             self.spatialHash:insert(entityId, pos.x or 0, pos.y or 0)
         end
     end
@@ -157,12 +144,6 @@ local function createWorld()
             if oldPos then
                 self.spatialHash:remove(entityId, oldPos.x or 0, oldPos.y or 0)
             end
-        end
-
-        if self.componentInstances[entityId] and self.componentInstances[entityId][componentName] then
-            local comp = self.componentInstances[entityId][componentName]
-            comp:_detach()
-            self.componentInstances[entityId][componentName] = nil
         end
 
         if self.components[componentName] then
@@ -219,10 +200,6 @@ local function createWorld()
             for _, componentName in ipairs(componentNames) do
                 self:removeComponent(entityId, componentName)
             end
-        end
-
-        if self.componentInstances[entityId] then
-            self.componentInstances[entityId] = nil
         end
 
         self.entities[entityId] = nil
@@ -394,15 +371,18 @@ local function createWorld()
         return self.components[componentName]
     end
 
-    -- Get component instance (if it's a Component instance)
-    -- @param entityId number
-    -- @param componentName string
-    -- @return Component instance or nil
-    instance.getComponentInstance = function(self, entityId, componentName)
-        if self.componentInstances[entityId] then
-            return self.componentInstances[entityId][componentName]
+    -- Get system by name (cached O(1) lookup)
+    instance.getSystem = function(self, name)
+        if not self._systemCache then self._systemCache = {} end
+        if self._systemCache[name] == nil then
+            for _, sys in ipairs(self.systems) do
+                if sys.name == name then
+                    self._systemCache[name] = sys
+                    break
+                end
+            end
         end
-        return nil
+        return self._systemCache[name]
     end
 
     -- Get spatial hash for O(1) spatial queries

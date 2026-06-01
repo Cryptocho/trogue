@@ -1,5 +1,5 @@
 -- AbilityDefinition: Ability definitions
--- Mod Layer data structure
+-- Ability definitions (Gameplay Layer)
 
 -- Ability modes
 local AbilityMode = {
@@ -15,15 +15,6 @@ local TargetType = {
     AREA = "area",               -- AOE area
     LINE = "line",               -- Linear
     CONE = "cone",               -- Cone
-}
-
--- Effect types
-local EffectType = {
-    DAMAGE = "damage",
-    HEAL = "heal",
-    BUFF = "buff",
-    DEBUFF = "debuff",
-    TELEPORT = "teleport",
 }
 
 -- Create ability definition
@@ -76,7 +67,6 @@ return {
     -- Constants
     Mode = AbilityMode,
     TargetType = TargetType,
-    EffectType = EffectType,
     
     -- Factory function
     create = createAbilityDefinition,
@@ -142,7 +132,7 @@ return {
                 local tiles = {}
                 for dy = -2, 2 do
                     for dx = -2, 2 do
-                        if math.abs(dx) + math.abs(dy) <= 2 then
+                        if math.max(math.abs(dx), math.abs(dy)) <= 2 and not (dx == 0 and dy == 0) then
                             local nx, ny = sx + dx, sy + dy
                             if nx >= 1 and nx <= mapW and ny >= 1 and ny <= mapH then
                                 table.insert(tiles, {x = nx, y = ny})
