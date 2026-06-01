@@ -65,6 +65,9 @@ local function createAbilityDefinition(def)
 
         -- Passive buff ID (used by applyPassiveAbilities to auto-apply permanent buff)
         passiveBuff = def.passiveBuff or nil,
+
+        -- Range function for mouse aiming: (sourceX, sourceY, targetX, targetY, mapW, mapH) -> {{x,y},...}
+        rangeFunc = def.rangeFunc or nil,
     }
 end
 
@@ -91,6 +94,20 @@ return {
             targetType = TargetType.SINGLE,
             range = 1,
             effects = {"damage_physical"},
+            rangeFunc = function(sx, sy, tx, ty, mapW, mapH)
+                local tiles = {}
+                for dy = -1, 1 do
+                    for dx = -1, 1 do
+                        if dx ~= 0 or dy ~= 0 then
+                            local nx, ny = sx + dx, sy + dy
+                            if nx >= 1 and nx <= mapW and ny >= 1 and ny <= mapH then
+                                table.insert(tiles, {x = nx, y = ny})
+                            end
+                        end
+                    end
+                end
+                return tiles
+            end,
         }),
         
         -- Heal
@@ -104,6 +121,9 @@ return {
             targetType = TargetType.SELF,
             range = 0,
             effects = {"heal_minor"},
+            rangeFunc = function(sx, sy, tx, ty, mapW, mapH)
+                return {{x = sx, y = sy}}
+            end,
         }),
         
         -- Fireball
@@ -118,6 +138,20 @@ return {
             range = 5,
             radius = 2,
             effects = {"damage_fire", "burn"},
+            rangeFunc = function(sx, sy, tx, ty, mapW, mapH)
+                local tiles = {}
+                for dy = -2, 2 do
+                    for dx = -2, 2 do
+                        if math.abs(dx) + math.abs(dy) <= 2 then
+                            local nx, ny = sx + dx, sy + dy
+                            if nx >= 1 and nx <= mapW and ny >= 1 and ny <= mapH then
+                                table.insert(tiles, {x = nx, y = ny})
+                            end
+                        end
+                    end
+                end
+                return tiles
+            end,
         }),
         
         -- Shield
@@ -131,6 +165,9 @@ return {
             targetType = TargetType.SELF,
             range = 0,
             effects = {"buff_shield"},
+            rangeFunc = function(sx, sy, tx, ty, mapW, mapH)
+                return {{x = sx, y = sy}}
+            end,
         }),
 
         -- Passive Strength (permanent buff applied on spawn)

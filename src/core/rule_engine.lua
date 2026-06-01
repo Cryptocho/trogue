@@ -38,12 +38,12 @@ local function createRuleEngine(world, eventBus)
         return _ruleEngineCanUse(self, entityId, abilityId)
     end
 
-    instance.tryUseAbility = function(self, entityId, abilityId, targetId)
-        return _ruleEngineTryUseAbility(self, entityId, abilityId, targetId)
+    instance.tryUseAbility = function(self, entityId, abilityId, targetX, targetY)
+        return _ruleEngineTryUseAbility(self, entityId, abilityId, targetX, targetY)
     end
 
-    instance.applyAbility = function(self, sourceId, ability, targetId)
-        return _ruleEngineApplyAbility(self, sourceId, ability, targetId)
+    instance.applyAbility = function(self, sourceId, ability, targetX, targetY)
+        return _ruleEngineApplyAbility(self, sourceId, ability, targetX, targetY)
     end
 
     instance.applyEffect = function(self, effectId, sourceId, targetId)
@@ -87,7 +87,7 @@ function _ruleEngineRegisterEvents(self)
 
     -- Listen for ability use request
     self.events:on("AbilityUse", function(data)
-        _ruleEngineTryUseAbility(self, data.entity, data.abilityId, data.targetId)
+        _ruleEngineTryUseAbility(self, data.entity, data.abilityId, data.targetX, data.targetY)
     end, 0)
 
     -- Listen for damage request (processed internally)
@@ -198,9 +198,10 @@ end
 -- Try to use ability
 -- @param entityId number
 -- @param abilityId string
--- @param targetId number (optional)
+-- @param targetX number
+-- @param targetY number
 -- @return boolean, string
-function _ruleEngineTryUseAbility(self, entityId, abilityId, targetId)
+function _ruleEngineTryUseAbility(self, entityId, abilityId, targetX, targetY)
     -- Check if can use
     local canUse, reason = _ruleEngineCanUse(self, entityId, abilityId)
     if not canUse then
@@ -231,14 +232,15 @@ function _ruleEngineTryUseAbility(self, entityId, abilityId, targetId)
     end
 
     -- Execute effects via events
-    local success = _ruleEngineApplyAbility(self, entityId, ability, targetId)
+    local success = _ruleEngineApplyAbility(self, entityId, ability, targetX, targetY)
 
     -- Only emit success if ability had valid targets
     if success and self.events then
         self.events:emit("AbilityUsed", {
             entity = entityId,
             abilityId = abilityId,
-            target = targetId,
+            targetX = targetX,
+            targetY = targetY,
         })
     end
 
@@ -248,63 +250,58 @@ end
 -- Apply ability effects
 -- @param sourceId number
 -- @param ability AbilityDefinition
--- @param targetId number (optional)
-function _ruleEngineApplyAbility(self, sourceId, ability, targetId)
+-- @param targetX number
+-- @param targetY number
+function _ruleEngineApplyAbility(self, sourceId, ability, targetX, targetY)
     local pos = self.world.components.Position[sourceId]
     if not pos then
         print("[RuleEngine] No position for source entity: " .. sourceId)
         return
     end
 
-    local targets = {}
-
-    -- Determine targets
-    if ability.targetType == AbilityDef.TargetType.SELF then
-        table.insert(targets, sourceId)
-
-    elseif ability.targetType == AbilityDef.TargetType.SINGLE then
-        -- Auto-select nearest valid target if none specified
-        if not targetId then
-            local range = ability.range
-            local actors = self.world:query({"Position", "Stats", "Actor"})
-            local nearest = nil
-            local nearestDist = math.huge
-            for _, result in ipairs(actors) do
-                if result.id ~= sourceId then
-                    local actorPos = result.components.Position
-                    local dist = Coordinates.manhattanDistance(actorPos.x, actorPos.y, pos.x, pos.y)
-                    if dist <= range and dist < nearestDist then
-                        nearestDist = dist
-                        nearest = result.id
-                    end
-                end
+    local mapW, mapH = self._mapW, self._mapH
+    if not mapW then
+        for _, sys in ipairs(self.world.systems or {}) do
+            if sys.name == "MapRenderer" then
+                self._mapW = sys.width or 0
+                self._mapH = sys.height or 0
+                mapW = self._mapW
+                mapH = self._mapH
+                break
             end
-            targetId = nearest
         end
-        if targetId then
-            table.insert(targets, targetId)
-        end
+    end
+    if not mapW then mapW, mapH = 0, 0 end
 
-    elseif ability.targetType == AbilityDef.TargetType.AREA then
-        local range = ability.range
-        local entities = self.world:query({"Position"})
-        for _, result in ipairs(entities) do
-            local entityPos = result.components.Position
-            local dist = Coordinates.manhattanDistance(entityPos.x, entityPos.y, pos.x, pos.y)
-            if dist <= range and result.id ~= sourceId then
-                table.insert(targets, result.id)
+    local rangeFunc = ability.rangeFunc
+    if not rangeFunc then
+        print("[RuleEngine] Ability has no rangeFunc: " .. ability.id)
+        return false
+    end
+
+    local tiles = rangeFunc(pos.x, pos.y, targetX, targetY, mapW, mapH)
+    local targets = {}
+    local spatialHash = self.world:getSpatialHash()
+    for _, tile in ipairs(tiles) do
+        local entities = spatialHash:getAt(tile.x, tile.y)
+        if entities then
+            for _, eid in ipairs(entities) do
+                targets[eid] = true
             end
         end
     end
 
-    -- If no targets, don't emit success (ability fizzled)
-    if #targets == 0 then
+    local targetList = {}
+    for eid in pairs(targets) do
+        table.insert(targetList, eid)
+    end
+
+    if #targetList == 0 then
         print("[RuleEngine] No valid targets for ability: " .. ability.id)
         return false
     end
 
-    -- Emit effect requests for each target
-    for _, targetId in ipairs(targets) do
+    for _, targetId in ipairs(targetList) do
         for _, effectId in ipairs(ability.effects) do
             _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
         end

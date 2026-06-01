@@ -116,4 +116,65 @@ function RenderSystem:drawHealthBars(world, offsetX, offsetY)
     end
 end
 
+function RenderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
+    local inputSystem = self._inputSystem
+    if not inputSystem then
+        for _, sys in ipairs(self.world.systems) do
+            if sys.name == "InputSystem" then
+                self._inputSystem = sys
+                inputSystem = sys
+                break
+            end
+        end
+    end
+    if not inputSystem or not inputSystem:isInAimMode() then return end
+
+    local ruleEngine = inputSystem.ruleEngine
+    if not ruleEngine then return end
+
+    local abilityId = inputSystem:getPendingAbility()
+    if not abilityId then return end
+
+    local abilityDef = ruleEngine:getAbilityDef(abilityId)
+    if not abilityDef or not abilityDef.rangeFunc then return end
+
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return end
+    local playerPos = players[1].components.Position
+
+    local mapRenderer = self._mapRenderer
+    if not mapRenderer then
+        for _, sys in ipairs(self.world.systems) do
+            if sys.name == "MapRenderer" then
+                self._mapRenderer = sys
+                mapRenderer = sys
+                break
+            end
+        end
+    end
+    if not mapRenderer then return end
+
+    local mx, my = love.mouse.getPosition()
+    local screenW = love.graphics.getWidth()
+    local screenH = love.graphics.getHeight()
+    local tileX, tileY = Coordinates.screenToTile(mx, my, cameraX, cameraY, screenW, screenH, Config.SCALE)
+
+    local tiles = abilityDef.rangeFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
+
+    love.graphics.setColor(0, 1, 0, 0.3)
+    for _, tile in ipairs(tiles) do
+        local wx, wy = Coordinates.tileToWorld(tile.x, tile.y)
+        love.graphics.rectangle("fill", wx + offsetX, wy + offsetY, Config.TILE_SIZE, Config.TILE_SIZE)
+    end
+
+    for _, tile in ipairs(tiles) do
+        if tile.x == tileX and tile.y == tileY then
+            local mwx, mwy = Coordinates.tileToWorld(tileX, tileY)
+            love.graphics.setColor(1, 1, 0, 0.6)
+            love.graphics.circle("fill", mwx + offsetX + Config.TILE_SIZE / 2, mwy + offsetY + Config.TILE_SIZE / 2, Config.TILE_SIZE / 3)
+            break
+        end
+    end
+end
+
 return RenderSystem

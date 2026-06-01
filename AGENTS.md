@@ -145,19 +145,15 @@ tools/
 love src
 ```
 
-### 运行测试(对于需要启动love进行的测试必需给出详细步骤指导用户进行而不是自己运行love src)
-```bash
-lua tests/test_ecs.lua
-lua tests/test_events.lua
-lua tests/test_prototype.lua
-```
+### 运行测试
+对于需要启动love进行的测试必需给出详细步骤指导用户进行而不是自己运行love src
 
 ### 开发流程
 1. 给出计划等待批准 (当前处于unreleased阶段所以可以大胆地进行计划,包括架构上的更改建议等)
 2. 实现计划
-3. Review Uncommitted Changes
+3. 建议 Review Changes
 4. 在review之后或用户要求时, 更新 CHANGELOG.md
-5. 询问用户是否写 commit message ,如果是则给出 commit message(英文) 等待用户确认
+5. 询问用户是否写 commit message ,如果是则给出 commit message(英文) 预览等待用户确认,禁止直接提交!!!
 6. 确认后提交所有变更并推送
 
 ### CHANGELOG 格式规范

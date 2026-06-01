@@ -35,6 +35,8 @@ local InputSystem = {
     keyBuffer = {},
     keyBufferWindow = 0.18,
     keyBufferTimer = 0,
+    aimMode = false,
+    pendingAbilityId = nil,
 }
 
 function InputSystem:init(world, config)
@@ -99,6 +101,21 @@ function InputSystem:handleKey(key, scancode, isrepeat)
     end
 
     if self.turnSystem and not self.turnSystem:isInputAllowed() then
+        return
+    end
+
+    if self.aimMode then
+        local abilityId = self.KEY_ABILITIES[key]
+        if abilityId then
+            if abilityId == self.pendingAbilityId then
+                self:cancelAim()
+            else
+                self.pendingAbilityId = abilityId
+                if game then
+                    game.selectedAbility = abilityId
+                end
+            end
+        end
         return
     end
 
@@ -202,7 +219,7 @@ function InputSystem:handleMove(movement)
     end
 end
 
--- Handle ability usage
+-- Handle ability usage (enter aim mode)
 -- @param abilityId string
 function InputSystem:handleAbility(abilityId)
     local players = self.world:query({"Player", "Position"})
@@ -212,7 +229,6 @@ function InputSystem:handleAbility(abilityId)
 
     local playerId = players[1].id
 
-    -- Check if ability is usable
     if self.ruleEngine then
         local canUse, reason = self.ruleEngine:canUse(playerId, abilityId)
         if not canUse then
@@ -221,20 +237,8 @@ function InputSystem:handleAbility(abilityId)
         end
     end
 
-    -- Notify turn system to start turn
-    if self.turnSystem then
-        self.turnSystem:startTurn()
-    end
-
-    -- Emit ability use event (auto-select target)
-    -- PlayerTurnEnd will be emitted in AbilityUsed event handler
-    if self.events then
-        self.events:emit("AbilityUse", {
-            entity = playerId,
-            abilityId = abilityId,
-            targetId = nil  -- RuleEngine will auto-select target
-        })
-    end
+    self.aimMode = true
+    self.pendingAbilityId = abilityId
 end
 
 -- Handle wait (skip turn)
@@ -257,6 +261,11 @@ function InputSystem:handleClick(x, y)
         return
     end
 
+    local worldX, worldY = self:_screenToWorldTile(x, y)
+    if not worldX then
+        return
+    end
+
     local players = self.world:query({"Player", "Position"})
     if #players == 0 then
         return
@@ -265,28 +274,8 @@ function InputSystem:handleClick(x, y)
     local playerId = players[1].id
     local playerPos = players[1].components.Position
 
-    local mapRenderer = nil
-    for _, sys in ipairs(self.world.systems) do
-        if sys.name == "MapRenderer" then
-            mapRenderer = sys
-            break
-        end
-    end
-
+    local mapRenderer = self:_getMapRenderer()
     if not mapRenderer then
-        return
-    end
-
-    local Config = require("src.config")
-    local cameraX = playerPos.x
-    local cameraY = playerPos.y
-    local screenWidth = love.graphics.getWidth()
-    local screenHeight = love.graphics.getHeight()
-
-    local worldX, worldY = Coordinates.screenToTile(x, y, cameraX, cameraY,
-        screenWidth, screenHeight, Config.SCALE)
-
-    if not Coordinates.isInBounds(worldX, worldY, mapRenderer.width, mapRenderer.height) then
         return
     end
 
@@ -371,6 +360,99 @@ function InputSystem:findPath(startX, startY, goalX, goalY, excludeEntity, mapRe
     end
 
     return Coordinates.findPath(startX, startY, goalX, goalY, isPassable, getBlockingEntity)
+end
+
+-- Handle aim click (release ability at target tile)
+-- @param x number: screen x position
+-- @param y number: screen y position
+function InputSystem:handleAimClick(x, y)
+    if not self.aimMode or not self.pendingAbilityId then
+        return
+    end
+
+    if not self.enabled then return end
+    if self.turnSystem and not self.turnSystem:isInputAllowed() then return end
+
+    local tileX, tileY = self:_screenToWorldTile(x, y)
+    if not tileX then
+        self:cancelAim()
+        return
+    end
+
+    local abilityId = self.pendingAbilityId
+    self:cancelAim()
+
+    if self.turnSystem then
+        self.turnSystem:startTurn()
+    end
+
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return end
+    local playerId = players[1].id
+
+    if self.events then
+        self.events:emit("AbilityUse", {
+            entity = playerId,
+            abilityId = abilityId,
+            targetX = tileX,
+            targetY = tileY,
+        })
+    end
+end
+
+-- Cancel aim mode
+function InputSystem:cancelAim()
+    self.aimMode = false
+    self.pendingAbilityId = nil
+end
+
+-- Check if currently in aim mode
+function InputSystem:isInAimMode()
+    return self.aimMode
+end
+
+-- Get pending ability in aim mode
+function InputSystem:getPendingAbility()
+    return self.pendingAbilityId
+end
+
+-- Convert screen coordinates to world tile coordinates
+-- Returns tileX, tileY or nil, nil (if out of bounds or no player/map)
+function InputSystem:_screenToWorldTile(screenX, screenY)
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return nil, nil end
+    local playerPos = players[1].components.Position
+
+    local mapRenderer = self:_getMapRenderer()
+    if not mapRenderer then return nil, nil end
+
+    local Config = require("src.config")
+    local cameraX = playerPos.x
+    local cameraY = playerPos.y
+    local screenW = love.graphics.getWidth()
+    local screenH = love.graphics.getHeight()
+
+    local tileX, tileY = Coordinates.screenToTile(screenX, screenY, cameraX, cameraY,
+        screenW, screenH, Config.SCALE)
+
+    if not Coordinates.isInBounds(tileX, tileY, mapRenderer.width, mapRenderer.height) then
+        return nil, nil
+    end
+
+    return tileX, tileY
+end
+
+-- Get MapRenderer system (lazy cached)
+function InputSystem:_getMapRenderer()
+    if not self._mapRenderer then
+        for _, sys in ipairs(self.world.systems) do
+            if sys.name == "MapRenderer" then
+                self._mapRenderer = sys
+                break
+            end
+        end
+    end
+    return self._mapRenderer
 end
 
 return InputSystem

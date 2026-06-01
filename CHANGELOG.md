@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### 技能鼠标瞄准系统
+
+- 影响的文件: `src/data/definitions/ability.lua`, `src/core/rule_engine.lua`, `src/systems/input.lua`, `src/systems/render.lua`, `src/main.lua`, `src/systems/ai.lua`
+- 每个能力持有 `rangeFunc(sourceX, sourceY, targetX, targetY, mapW, mapH) → {{x,y},...}` 内联函数，定义于 `ability.lua`
+- 4 个内置技能添加 rangeFunc：punch 自身周围 8 格、heal/shield 自身单格、fireball 自身周围曼哈顿距离 ≤2 菱形
+- 按下数字键进入瞄准模式：受影响的图格绘制半透明绿色方形，鼠标在范围内时绘制黄色圆形
+- 点击左键释放技能，右键/ESC/同数字键取消瞄准，瞄准模式下 WASD 忽略、其他数字键切换技能
+- `_ruleEngineApplyAbility` 重写：用 `rangeFunc` + `SpatialHash` 查找目标实体，移除旧的 SELF/SINGLE/AREA 分支
+- `tryUseAbility`/`applyAbility` 签名从 `targetId` 改为 `targetX, targetY`，`AbilityUse` 事件数据同步更新
+- AI 系统 `AbilityUse` 事件改为发射 `targetX, targetY`（目标实体坐标）
+- `drawAimPreview` 新增瞄准预览渲染，摄像机位置与主渲染同步（tween-aware）
+- `_screenToWorldTile` 提取公共 screen-to-tile 方法，消除 `handleClick`/`handleAimClick` 重复代码
+- `_getMapRenderer` 惰性缓存 MapRenderer 引用，`_ruleEngineApplyAbility` 缓存地图尺寸
+- 移除 `rangeFunc` fallback，所有技能必须定义 rangeFunc
+
 ### 概率判定系统
 
 - 影响的文件: `src/data/definitions/effect.lua`, `src/core/rule_engine.lua`, `src/systems/ai.lua`

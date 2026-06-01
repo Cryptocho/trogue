@@ -16,6 +16,7 @@ local TweenSystem = require("src.systems.tween_system")
 
 -- Load configuration
 local Config = require("src.config")
+local Coordinates = require("src.core.coordinates")
 local game = {
     world = nil,
     events = nil,
@@ -140,6 +141,7 @@ function love.draw()
         if renderSystem then
             renderSystem:drawEntities(game.world, offsetX, offsetY)
             renderSystem:drawHealthBars(game.world, offsetX, offsetY)
+            renderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
         end
         
         -- Pop transform
@@ -149,9 +151,19 @@ function love.draw()
         game:drawUI()
     end
     
-    -- Draw FPS
+    -- Draw turn count
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("FPS: " .. love.timer.getFPS(), 10, love.graphics.getHeight() - 20)
+    local screenH = love.graphics.getHeight()
+    local turnCount = game.turnSystem and game.turnSystem:getTurnCount() or 0
+    love.graphics.print("Turn: " .. turnCount, 10, screenH - 20)
+
+    -- Draw mouse tile coordinates
+    if game.lastCameraX then
+        local mx, my = love.mouse.getPosition()
+        local screenW = love.graphics.getWidth()
+        local tileX, tileY = Coordinates.screenToTile(mx, my, game.lastCameraX, game.lastCameraY, screenW, screenH, Config.SCALE)
+        love.graphics.print(string.format("Mouse: %d,%d", tileX, tileY), 10, screenH - 40)
+    end
 end
 
 -- Draw UI (ability bar, health bar, energy bar)
@@ -241,8 +253,12 @@ function game:getPlayerId()
     return players[1].id
 end
 
--- Delegate all keyboard input to InputSystem
+-- Delegate keyboard input to InputSystem
 function love.keypressed(key, scancode, isrepeat)
+    if key == "escape" and game.inputSystem and game.inputSystem:isInAimMode() then
+        game.inputSystem:cancelAim()
+        return
+    end
     if game.inputSystem then
         game.inputSystem:handleKey(key, scancode, isrepeat)
     end
@@ -250,8 +266,18 @@ end
 
 -- Delegate mouse input to InputSystem
 function love.mousepressed(x, y, button)
-    if game.inputSystem and button == 1 then
-        game.inputSystem:handleClick(x, y)
+    if game.inputSystem then
+        if button == 1 then
+            if game.inputSystem:isInAimMode() then
+                game.inputSystem:handleAimClick(x, y)
+            else
+                game.inputSystem:handleClick(x, y)
+            end
+        elseif button == 2 then
+            if game.inputSystem:isInAimMode() then
+                game.inputSystem:cancelAim()
+            end
+        end
     end
 end
 

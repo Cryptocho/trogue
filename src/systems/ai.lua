@@ -127,7 +127,8 @@ function AISystem:tryUseAbility(entityId)
                     self.events:emit("AbilityUse", {
                         entity = entityId,
                         abilityId = abilityId,
-                        targetId = playerResult.id,
+                        targetX = playerPos.x,
+                        targetY = playerPos.y,
                     })
                     return
                 end
