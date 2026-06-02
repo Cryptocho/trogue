@@ -59,6 +59,10 @@ local function createAbilityDefinition(def)
 
         -- Range function for mouse aiming: (sourceX, sourceY, targetX, targetY, mapW, mapH) -> {{x,y},...}
         rangeFunc = def.rangeFunc or nil,
+
+        -- Effect area function: (sourceX, sourceY, targetX, targetY, mapW, mapH) -> {{x,y},...}
+        -- Determines which tiles are affected by the ability (supersedes targetType)
+        effectAreaFunc = def.effectAreaFunc or nil,
     }
 end
 
@@ -98,6 +102,9 @@ return {
                 end
                 return tiles
             end,
+            effectAreaFunc = function(sx, sy, tx, ty, mapW, mapH)
+                return {{x = tx, y = ty}}
+            end,
         }),
         
         -- Heal
@@ -112,6 +119,9 @@ return {
             range = 0,
             effects = {"heal_minor"},
             rangeFunc = function(sx, sy, tx, ty, mapW, mapH)
+                return {{x = sx, y = sy}}
+            end,
+            effectAreaFunc = function(sx, sy, tx, ty, mapW, mapH)
                 return {{x = sx, y = sy}}
             end,
         }),
@@ -130,10 +140,24 @@ return {
             effects = {"damage_fire", "burn"},
             rangeFunc = function(sx, sy, tx, ty, mapW, mapH)
                 local tiles = {}
+                for dy = -5, 5 do
+                    for dx = -5, 5 do
+                        if math.max(math.abs(dx), math.abs(dy)) <= 5 then
+                            local nx, ny = sx + dx, sy + dy
+                            if nx >= 1 and nx <= mapW and ny >= 1 and ny <= mapH then
+                                table.insert(tiles, {x = nx, y = ny})
+                            end
+                        end
+                    end
+                end
+                return tiles
+            end,
+            effectAreaFunc = function(sx, sy, tx, ty, mapW, mapH)
+                local tiles = {}
                 for dy = -2, 2 do
                     for dx = -2, 2 do
-                        if math.max(math.abs(dx), math.abs(dy)) <= 2 and not (dx == 0 and dy == 0) then
-                            local nx, ny = sx + dx, sy + dy
+                        if math.max(math.abs(dx), math.abs(dy)) <= 2 then
+                            local nx, ny = tx + dx, ty + dy
                             if nx >= 1 and nx <= mapW and ny >= 1 and ny <= mapH then
                                 table.insert(tiles, {x = nx, y = ny})
                             end
@@ -156,6 +180,9 @@ return {
             range = 0,
             effects = {"buff_shield"},
             rangeFunc = function(sx, sy, tx, ty, mapW, mapH)
+                return {{x = sx, y = sy}}
+            end,
+            effectAreaFunc = function(sx, sy, tx, ty, mapW, mapH)
                 return {{x = sx, y = sy}}
             end,
         }),

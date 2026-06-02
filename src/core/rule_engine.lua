@@ -121,6 +121,11 @@ function _ruleEngineRegisterEvents(self)
     self.events:on("BuffTickRequest", function(data)
         _ruleEngineProcessBuffTick(self, data)
     end, 100)
+
+    -- Listen for knockback request
+    self.events:on("KnockbackRequest", function(data)
+        _ruleEngineProcessKnockback(self, data)
+    end, 100)
 end
 
 -- Get ability definition by ID
@@ -270,22 +275,32 @@ function _ruleEngineApplyAbility(self, sourceId, ability, targetX, targetY)
     local mapW = mapRenderer and mapRenderer.width or 0
     local mapH = mapRenderer and mapRenderer.height or 0
 
-    local rangeFunc = ability.rangeFunc
-    if not rangeFunc then
-        debugPrint("[RuleEngine] Ability has no rangeFunc: " .. ability.id)
+    local effectAreaFunc = ability.effectAreaFunc
+    if not effectAreaFunc then
+        debugPrint("[RuleEngine] Ability has no effectAreaFunc: " .. ability.id)
         return false
     end
 
-    local tiles = rangeFunc(pos.x, pos.y, targetX, targetY, mapW, mapH)
+    local tiles = effectAreaFunc(pos.x, pos.y, targetX, targetY, mapW, mapH)
     local targets = {}
     local spatialHash = self.world:getSpatialHash()
+
+    local function isSolid(x, y)
+        if mapRenderer then return mapRenderer:isSolid(x, y) end
+        return false
+    end
+
     for _, tile in ipairs(tiles) do
+        if not Coordinates.hasLineOfSight(targetX, targetY, tile.x, tile.y, isSolid) then
+            goto continue
+        end
         local entities = spatialHash:getAt(tile.x, tile.y)
         if entities then
             for _, eid in ipairs(entities) do
                 targets[eid] = true
             end
         end
+        ::continue::
     end
 
     local targetList = {}
@@ -359,6 +374,13 @@ function _ruleEngineApplyEffect(self, effectId, sourceId, targetId)
                 duration = effect.duration or 0,
             })
         end
+
+    elseif effect.type == EffectDef.Type.KNOCKBACK then
+        self.events:emit("KnockbackRequest", {
+            source = sourceId,
+            target = targetId,
+            distance = effect.value or 1,
+        })
     end
 end
 
@@ -370,6 +392,14 @@ function _ruleEngineGetWeaponSystem(self)
         self._weaponSystem = self.world:getSystem("WeaponSystem")
     end
     return self._weaponSystem
+end
+
+-- Get TweenSystem reference from world (lazy cache)
+function _ruleEngineGetTweenSystem(self)
+    if not self._tweenSystem then
+        self._tweenSystem = self.world:getSystem("TweenSystem")
+    end
+    return self._tweenSystem
 end
 
 -- Evaluate damage formula
@@ -648,6 +678,80 @@ function _ruleEngineProcessBuffTick(self, data)
 
     -- Apply the tick effect (damage or heal)
     _ruleEngineApplyEffect(self, data.effectId, data.source, data.entity)
+end
+
+-- Private: Process knockback
+function _ruleEngineProcessKnockback(self, data)
+    local targetId = data.target
+    if not targetId then return end
+
+    local stats = _ruleEngineGetStatsComponent(self, targetId)
+    if stats and stats.current.hp <= 0 then return end
+
+    local targetPos = self.world.components.Position and self.world.components.Position[targetId]
+    if not targetPos then return end
+
+    local sourcePos = self.world.components.Position and self.world.components.Position[data.source]
+    if not sourcePos then return end
+
+    local dx = 0
+    local dy = 0
+    if targetPos.x > sourcePos.x then dx = 1
+    elseif targetPos.x < sourcePos.x then dx = -1 end
+    if targetPos.y > sourcePos.y then dy = 1
+    elseif targetPos.y < sourcePos.y then dy = -1 end
+
+    if dx == 0 and dy == 0 then return end
+
+    local mapRenderer = self.world:getSystem("MapRenderer")
+    local mapW = mapRenderer and mapRenderer.width or 0
+    local mapH = mapRenderer and mapRenderer.height or 0
+    local spatialHash = self.world:getSpatialHash()
+
+    local currentX = targetPos.x
+    local currentY = targetPos.y
+    local distance = data.distance or 1
+
+    for step = 1, distance do
+        local nextX = currentX + dx
+        local nextY = currentY + dy
+
+        if nextX < 1 or nextX > mapW or nextY < 1 or nextY > mapH then
+            break
+        end
+        if mapRenderer and mapRenderer:isSolid(nextX, nextY) then
+            break
+        end
+        local entities = spatialHash:getAt(nextX, nextY)
+        if entities and #entities > 0 then
+            break
+        end
+
+        currentX = nextX
+        currentY = nextY
+    end
+
+    if currentX == targetPos.x and currentY == targetPos.y then return end
+
+    local oldX = targetPos.x
+    local oldY = targetPos.y
+    self.world:setComponent(targetId, "Position", {x = currentX, y = currentY})
+
+    local tweenSystem = _ruleEngineGetTweenSystem(self)
+    if tweenSystem then
+        tweenSystem:startTween(targetId, oldX, oldY)
+    end
+
+    if self.events then
+        self.events:emit("KnockbackApplied", {
+            source = data.source,
+            target = targetId,
+            fromX = oldX,
+            fromY = oldY,
+            toX = currentX,
+            toY = currentY,
+        })
+    end
 end
 
 -- Turn end processing (Orchestrator, emit events only)

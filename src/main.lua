@@ -287,7 +287,7 @@ function game:getSystem(systemName)
 end
 
 function initGameWorld()
-    local mapData = MapGenerator.generateMap("forest", 60, 60, {
+    local mapData, enemySpawns = MapGenerator.generateMap("forest", 60, 60, {
         treeMinDist = 2.0,
         densityThreshold = 0.5,
         fbmOctaves = 6,
@@ -318,6 +318,12 @@ function initGameWorld()
     local playerId = game:getPlayerId()
     if playerId then
         game.ruleEngine:applyPassiveAbilities(playerId)
+    end
+    
+    if enemySpawns then
+        for _, spawn in ipairs(enemySpawns) do
+            game.prototypes:spawn(spawn.type, {Position = {x = spawn.x, y = spawn.y}})
+        end
     end
     
     -- Add systems (by priority)

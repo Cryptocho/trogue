@@ -7,6 +7,7 @@ local EffectType = {
     HEAL = "heal",
     BUFF = "buff",
     DEBUFF = "debuff",
+    KNOCKBACK = "knockback",
 }
 
 -- Damage types
@@ -129,6 +130,15 @@ return {
             type = EffectType.DAMAGE,
             value = 8,
             damageType = DamageType.FIRE,
+        }),
+
+        -- Knockback
+        knockback_1 = createEffectDefinition({
+            id = "knockback_1",
+            name = "Knockback",
+            description = "Knocks target back 3 tiles",
+            type = EffectType.KNOCKBACK,
+            value = 3,
         }),
     },
 }

@@ -1,6 +1,8 @@
 -- Movement System
 -- Handles entity movement and collision detection
 
+local Coordinates = require("src.core.coordinates")
+
 local MovementSystem = {
     priority = 1,
     name = "MovementSystem",
@@ -37,6 +39,26 @@ function MovementSystem:onMoveAttempt(data)
 
     local newX = pos.x + dx
     local newY = pos.y + dy
+
+    -- 对角线移动时检查切角
+    if dx ~= 0 and dy ~= 0 then
+        local canMove = Coordinates.canDiagonalMove(pos.x, pos.y, dx, dy, function(tx, ty)
+            local blocked = self:isBlocked(tx, ty)
+            return blocked
+        end)
+        if not canMove then
+            if self.events then
+                self.events:emit("CollisionDetected", {
+                    entity = entity,
+                    target = -1,
+                    x = newX,
+                    y = newY,
+                    isPlayer = data.isPlayer
+                })
+            end
+            return
+        end
+    end
 
     -- Check for collision with Solid entities at target position
     local collision = self:checkCollision(entity, newX, newY)
@@ -135,6 +157,25 @@ function MovementSystem:getEntityAt(x, y)
     end
 
     return nil
+end
+
+function MovementSystem:isBlocked(x, y)
+    local mapRenderer = self.world:getSystem("MapRenderer")
+    if mapRenderer and not Coordinates.isInBounds(x, y, mapRenderer.width, mapRenderer.height) then
+        return true
+    end
+    if mapRenderer and mapRenderer:isSolid(x, y) then
+        return true
+    end
+    local entities = self.world:getSpatialHash():getAt(x, y)
+    if entities then
+        for _, eid in ipairs(entities) do
+            if self.world:hasComponent(eid, "Solid") then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 return MovementSystem

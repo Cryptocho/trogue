@@ -312,8 +312,15 @@ function InputSystem:handleClick(x, y)
         local targetX = playerPos.x + dx
         local targetY = playerPos.y + dy
         if not mapRenderer:isSolid(targetX, targetY) and not self:getEntityAt(targetX, targetY, playerId) then
-            moveDx = dx
-            moveDy = dy
+            if Coordinates.canDiagonalMove(playerPos.x, playerPos.y, dx, dy, function(tx, ty)
+                local movementSystem = self.world:getSystem("MovementSystem")
+                return movementSystem and movementSystem:isBlocked(tx, ty)
+            end) then
+                moveDx = dx
+                moveDy = dy
+            else
+                return
+            end
         else
             return
         end
@@ -395,27 +402,39 @@ function InputSystem:handleAimClick(x, y)
 
     if self.ruleEngine then
         local abilityDef = self.ruleEngine:getAbilityDef(self.pendingAbilityId)
-        if abilityDef and abilityDef.rangeFunc then
-            local tiles = abilityDef.rangeFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
-            local hasEnemy = false
-            local hasSelf = false
+        if abilityDef then
             local spatialHash = self.world:getSpatialHash()
-            for _, tile in ipairs(tiles) do
-                if tile.x == playerPos.x and tile.y == playerPos.y then
-                    hasSelf = true
-                end
-                local entities = spatialHash:getAt(tile.x, tile.y)
-                if entities then
-                    for _, eid in ipairs(entities) do
-                        if eid ~= playerId then
-                            hasEnemy = true
-                            break
-                        end
+
+            -- Check range: is the clicked tile within casting range?
+            if abilityDef.rangeFunc then
+                local rangeTiles = abilityDef.rangeFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
+                local inRange = false
+                for _, rt in ipairs(rangeTiles) do
+                    if rt.x == tileX and rt.y == tileY then
+                        inRange = true
+                        break
                     end
                 end
-                if hasEnemy then break end
+                if not inRange then
+                    self:cancelAim()
+                    return
+                end
             end
-            if not hasEnemy and not hasSelf then
+
+            -- Check effect area for valid targets
+            local hasTarget = false
+            if abilityDef.effectAreaFunc then
+                local effectTiles = abilityDef.effectAreaFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
+                for _, tile in ipairs(effectTiles) do
+                    local entities = spatialHash:getAt(tile.x, tile.y)
+                    if entities and #entities > 0 then
+                        hasTarget = true
+                        break
+                    end
+                end
+            end
+
+            if not hasTarget then
                 self:cancelAim()
                 return
             end

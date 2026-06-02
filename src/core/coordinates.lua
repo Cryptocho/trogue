@@ -67,6 +67,12 @@ local function getNeighbors(tx, ty, width, height, diagonal)
     return neighbors
 end
 
+local function canDiagonalMove(x, y, dx, dy, isObstacle)
+    local adj1 = isObstacle(x + dx, y)
+    local adj2 = isObstacle(x, y + dy)
+    return not (adj1 and adj2)
+end
+
 local function diagonalCost(dx, dy)
     if dx ~= 0 and dy ~= 0 then return 1.414 end
     return 1
@@ -144,6 +150,14 @@ local function findPath(startX, startY, goalX, goalY, isPassable, getBlockingEnt
                 goto continue
             end
 
+            if dir.dx ~= 0 and dir.dy ~= 0 then
+                if not canDiagonalMove(current.x, current.y, dir.dx, dir.dy, function(tx, ty)
+                    return not isPassable(tx, ty)
+                end) then
+                    goto continue
+                end
+            end
+
             local blockingEntity = getBlockingEntity and getBlockingEntity(neighborX, neighborY)
             if blockingEntity then
                 goto continue
@@ -215,6 +229,7 @@ return {
     isInRange = isInRange,
     hasLineOfSight = hasLineOfSight,
     getNeighbors = getNeighbors,
+    canDiagonalMove = canDiagonalMove,
     findPath = findPath,
     diagonalCost = diagonalCost,
 }

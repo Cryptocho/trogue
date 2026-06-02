@@ -131,7 +131,7 @@ function RenderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
     if not abilityId then return end
 
     local abilityDef = ruleEngine:getAbilityDef(abilityId)
-    if not abilityDef or not abilityDef.rangeFunc then return end
+    if not abilityDef or not abilityDef.rangeFunc or not abilityDef.effectAreaFunc then return end
 
     local players = self.world:query({"Player", "Position"})
     if #players == 0 then return end
@@ -149,32 +149,44 @@ function RenderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
     local screenH = love.graphics.getHeight()
     local tileX, tileY = Coordinates.screenToTile(mx, my, cameraX, cameraY, screenW, screenH, Config.SCALE)
 
-    local tiles = abilityDef.rangeFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
+    local rangeTiles = abilityDef.rangeFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
+    local mouseInRange = false
+    local mouseBlocked = false
 
     local function isSolid(x, y) return mapRenderer:isSolid(x, y) end
 
-    for _, tile in ipairs(tiles) do
-        local wx, wy = Coordinates.tileToWorld(tile.x, tile.y)
+    for _, tile in ipairs(rangeTiles) do
         local blocked = mapRenderer:isSolid(tile.x, tile.y)
             or not Coordinates.hasLineOfSight(playerPos.x, playerPos.y, tile.x, tile.y, isSolid)
+        if tile.x == tileX and tile.y == tileY then
+            mouseInRange = true
+            mouseBlocked = blocked
+        end
+        local wx, wy = Coordinates.tileToWorld(tile.x, tile.y)
         if blocked then
-            love.graphics.setColor(1, 0, 0, 0.3)
+            love.graphics.setColor(1, 0, 0, 0.5)
         else
-            love.graphics.setColor(0, 1, 0, 0.3)
+            love.graphics.setColor(0.3, 0.5, 1, 0.5)
         end
         love.graphics.rectangle("fill", wx + offsetX, wy + offsetY, Config.TILE_SIZE, Config.TILE_SIZE)
     end
 
-    for _, tile in ipairs(tiles) do
-        if tile.x == tileX and tile.y == tileY then
-            local blocked = mapRenderer:isSolid(tile.x, tile.y)
-                or not Coordinates.hasLineOfSight(playerPos.x, playerPos.y, tile.x, tile.y, isSolid)
-            if not blocked then
-                local mwx, mwy = Coordinates.tileToWorld(tileX, tileY)
-                love.graphics.setColor(1, 1, 0, 0.6)
-                love.graphics.circle("fill", mwx + offsetX + Config.TILE_SIZE / 2, mwy + offsetY + Config.TILE_SIZE / 2, Config.TILE_SIZE / 3)
-            end
-            break
+    if not mouseInRange or mouseBlocked then return end
+
+    local mwx, mwy = Coordinates.tileToWorld(tileX, tileY)
+    love.graphics.setColor(1, 1, 0, 0.5)
+    love.graphics.rectangle("fill", mwx + offsetX, mwy + offsetY, Config.TILE_SIZE, Config.TILE_SIZE)
+
+    local effectTiles = abilityDef.effectAreaFunc(playerPos.x, playerPos.y, tileX, tileY, mapRenderer.width, mapRenderer.height)
+    local halfTile = Config.TILE_SIZE / 2
+    local quarterTile = Config.TILE_SIZE / 4
+    for _, tile in ipairs(effectTiles) do
+        local blocked = mapRenderer:isSolid(tile.x, tile.y)
+            or not Coordinates.hasLineOfSight(tileX, tileY, tile.x, tile.y, isSolid)
+        if not blocked then
+            local ewx, ewy = Coordinates.tileToWorld(tile.x, tile.y)
+            love.graphics.setColor(1, 1, 0, 0.5)
+            love.graphics.rectangle("fill", ewx + offsetX + quarterTile, ewy + offsetY + quarterTile, halfTile, halfTile)
         end
     end
 end

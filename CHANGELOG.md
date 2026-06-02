@@ -6,6 +6,51 @@ All notable changes to this project will be documented in this file.
 
 ECS-based traditional roguelike with LÖVE2D
 
+### isBlocked 方法优化
+
+- 影响的文件: `src/systems/movement.lua`, `src/systems/input.lua`
+- `MovementSystem:isBlocked()` 新增 `Coordinates.isInBounds` 越界检查，越界坐标视为阻挡
+- 实体障碍物检测从 `world:query({"Solid", "Position"})` 全表遍历改为 `SpatialHash:getAt()` + `hasComponent()` O(1) 查找
+- `InputSystem:handleClick()` 切角检测中移除冗余的 `mapRenderer:isSolid()` 调用（`isBlocked` 内部已包含）
+
+### 击退系统（Knockback）
+
+- 影响的文件: `src/core/rule_engine.lua`, `src/data/definitions/effect.lua`
+- 新增 `EffectType.KNOCKBACK` 效果类型，`knockback_1` 效果定义（击退 3 格）
+- `_ruleEngineApplyEffect()` 中新增 KNOCKBACK 分支，发射 `KnockbackRequest` 事件
+- 新增 `_ruleEngineProcessKnockback()` 处理器：沿远离 source 方向逐格推进，遇墙壁/实体/边界停止
+- 击退后同步更新 Position + SpatialHash + Tween 动画，发射 `KnockbackApplied` 事件
+- 新增 `_ruleEngineGetTweenSystem()` 懒缓存引用
+
+### 能力范围/效果区域拆分（rangeFunc / effectAreaFunc）
+
+- 影响的文件: `src/data/definitions/ability.lua`, `src/core/rule_engine.lua`, `src/systems/input.lua`, `src/systems/render.lua`
+- `AbilityDefinition` 新增 `effectAreaFunc` 字段，与 `rangeFunc` 分离
+  - `rangeFunc`：瞄准 UI 中显示的可选范围（鼠标悬停预览）
+  - `effectAreaFunc`：技能实际释放时影响的目标 tile 集合
+- `fireball`：`rangeFunc` 扩展为 5 格半径（瞄准范围），`effectAreaFunc` 保持 2 格半径（爆炸范围），爆炸中心改为目标点（原为施法者中心）
+- `punch`：`rangeFunc` 为 3×3（瞄准），`effectAreaFunc` 为单格（只打击目标）
+- `heal` / `shield`：两者均返回自身 tile
+- `_ruleEngineApplyAbility()` 使用 `effectAreaFunc` 而非 `rangeFunc` 确定实际目标
+- `RenderSystem:drawAimPreview()` 使用 `effectAreaFunc` 渲染伤害预览区域
+- `InputSystem:handleAimClick()` 分离范围校验（`rangeFunc`）和目标校验（`effectAreaFunc`）
+
+### 禁止切角移动（Corner Cutting）
+
+- 影响的文件: `src/core/coordinates.lua`, `src/systems/movement.lua`, `src/systems/input.lua`
+- 新增 `Coordinates.canDiagonalMove()` 工具函数，判断对角线移动是否合法（不切角穿过障碍物）
+- `Coordinates.findPath()` A* 寻路中增加对角线方向切角检查，`isPassable` 视为障碍物函数
+- `MovementSystem` 新增 `isBlocked()` 方法（组合地图+实体障碍物），`onMoveAttempt()` 中对角线移动追加切角检测
+- `InputSystem.handleClick()` 中单步对角线移动追加切角检测，使用 `MovementSystem:isBlocked()` 统一校验（地图+实体障碍物）
+
+### 程序化地图敌人生成
+
+- 影响的文件: `src/utils/map_generator.lua`, `src/main.lua`
+- `generateMap()` 新增第二个返回值 `enemySpawns`（`{x, y, type}` 数组），向后兼容
+- 树木放置后从距离地图中心 `enemySpawnMinDist`（默认 8）外的地板 tile 中按 `enemyDensity`（默认 0.008）随机选取位置
+- 敌人类型按权重分布：goblin(5/14), rat(6/14), orc(3/14)
+- `initGameWorld()` 遍历 `enemySpawns` 通过 `prototypes:spawn()` 生成敌人实体
+
 ### ECS 架构清理与 getSystem 优化
 
 - 影响的文件: `src/core/ecs.lua`, `src/core/events.lua`, `src/systems/input.lua`, `src/systems/render.lua`, `src/systems/movement.lua`, `src/systems/ai.lua`, `src/main.lua`
