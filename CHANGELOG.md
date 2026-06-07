@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### 武器库定义层与 WeaponSystem 重构
+
+- 影响的文件: `src/data/definitions/weapon.lua` (新建), `src/systems/weapon_system.lua` (重写), `src/components/weapon.lua` (重写), `src/data/prototypes/entities.lua`
+- 新建 `src/data/definitions/weapon.lua`：武器定义注册表，22 种预置武器（ fists / greatsword / longsword / iron_sword / flame_blade / ice_blade / storm_edge / battle_axe / hand_axe / dagger / poison_dagger / spear / mace / quarterstaff / fire_staff / ice_staff / lightning_staff / arcane_staff / shortbow / longbow / fire_bow / crossbow / throwing_knife / javelin / fire_wand / ice_wand ）
+- 武器定义结构对齐 Ability/Effect/Buff 模式：`createWeaponDef()` 工厂函数 + `builtin` 注册表
+- 包含全部 6 种伤害类型（physical/fire/ice/lightning/poison/arcane）+ 3 种武器类别（melee/ranged/magic）(这三种为暂定,以后肯定要细分)
+- `WeaponComponent` 升级为全量 17 字段（`weaponId / weaponType / baseDamage / armorPenetration / physicalDamageBonus / critChance / hitRate / staggerRate / stunRate / knockbackRate / immobilizeRate / critDamageBonus / blockChance / blockPower / bleedChance / enchantDamage / limbDamage / magicDamage`）
+- `WeaponSystem` 升级：加载武器定义、提供 `getResolvedStats(entityId)` 合并逻辑（组件内联值 > 定义默认值）、向后兼容 4 个旧查询方法
+- 实体原型迁移：`Weapon = {type = "greatsword", baseDamage = 20, ...}` → `Weapon = {weaponId = "greatsword"}`，属性由定义层统一管理
+- 新增武器：shortsword（goblin 装备）、fangs（rat 装备）、battle_axe（orc 装备）
+
 ECS-based traditional roguelike with LÖVE2D
 
 ### isBlocked 方法优化

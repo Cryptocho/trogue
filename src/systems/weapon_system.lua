@@ -1,54 +1,110 @@
--- WeaponSystem: Weapon system placeholder
--- TODO: Future extensions —
---   1. Weapon equip/unequip logic
---   2. Weapon attribute bonuses (crit rate, hit rate, etc. from weapon)
---   3. Integration with EquipmentSystem
---   4. Weapon durability system
---   5. Two-handed vs one-handed+shield detection
---   6. Dynamic application of weapon attributes to StatsComponent.computed
+-- WeaponSystem: Resolve weapon stats from definitions + component overrides
+-- Priority: component inline values > weapon definition defaults
+-- Supports primary/secondary weapon slots
+
+local WeaponDef = require("src.data.definitions.weapon")
 
 local WeaponSystem = {
     priority = 5,
-    name = "WeaponSystem",
+    name     = "WeaponSystem",
 }
 
 function WeaponSystem:init(world)
     self.world = world
+
+    -- Load built-in weapon definitions
+    self.definitions = {}
+    if WeaponDef.builtin then
+        for id, def in pairs(WeaponDef.builtin) do
+            self.definitions[id] = def
+        end
+    end
+
+    -- Fallback: unarmed / fists
+    self._fistsDef = self.definitions["fists"]
 end
 
 function WeaponSystem:update(world, dt)
 end
 
-function WeaponSystem:getBaseDamage(world, entityId)
-    local weapon = world:getComponent(entityId, "Weapon")
-    if weapon then
-        return weapon.baseDamage
-    end
-    return 2
+-- Lookup weapon definition by weaponId
+-- @param weaponId string
+-- @return WeaponDefinition or nil
+function WeaponSystem:getDefinition(self, weaponId)
+    if not weaponId then return self._fistsDef end
+    return self.definitions[weaponId] or self._fistsDef
 end
 
-function WeaponSystem:getWeaponType(world, entityId)
-    local weapon = world:getComponent(entityId, "Weapon")
-    if weapon then
-        return weapon.type
+-- Resolve final weapon stats for an entity
+-- Priority: component inline field > weapon definition default
+-- @param entityId number
+-- @return table resolved weapon stats (merged from definition + component)
+function WeaponSystem:getResolvedStats(self, entityId)
+    local comp = self.world:getComponent(entityId, "Weapon")
+    local weaponId = comp and comp.weaponId or "fists"
+    local def = self:getDefinition(weaponId)
+
+    if not def then
+        return { weaponId = weaponId, weaponType = "melee", damageType = "physical" }
     end
-    return "fists"
+
+    -- Merge: component inline values take priority over definition defaults
+    local resolved = {
+        weaponId           = weaponId,
+        weaponType         = comp.weaponType         or def.weaponType,
+        damageType         = comp.damageType         or def.damageType,
+
+        -- Fixed / inherent
+        baseDamage         = comp.baseDamage          or def.baseDamage,
+        armorPenetration   = comp.armorPenetration    or def.armorPenetration,
+        physicalDamageBonus= comp.physicalDamageBonus or def.physicalDamageBonus,
+
+        -- Variable / enchantment
+        critChance         = comp.critChance          or def.critChance,
+        hitRate            = comp.hitRate             or def.hitRate,
+        staggerRate        = comp.staggerRate         or def.staggerRate,
+        stunRate           = comp.stunRate            or def.stunRate,
+        knockbackRate      = comp.knockbackRate       or def.knockbackRate,
+        immobilizeRate     = comp.immobilizeRate      or def.immobilizeRate,
+        critDamageBonus    = comp.critDamageBonus     or def.critDamageBonus,
+        blockChance        = comp.blockChance         or def.blockChance,
+        blockPower         = comp.blockPower          or def.blockPower,
+        bleedChance        = comp.bleedChance         or def.bleedChance,
+        enchantDamage      = comp.enchantDamage       or def.enchantDamage,
+        limbDamage         = comp.limbDamage          or def.limbDamage,
+        magicDamage        = comp.magicDamage         or def.magicDamage,
+    }
+
+    return resolved
 end
 
-function WeaponSystem:getArmorPenetration(world, entityId)
-    local weapon = world:getComponent(entityId, "Weapon")
-    if weapon then
-        return weapon.armorPenetration or 0
-    end
-    return 0
+-- Convenience: get weapon definition by id
+function WeaponSystem:getDefinitionById(self, weaponId)
+    return self:getDefinition(weaponId)
 end
 
-function WeaponSystem:getPhysicalDamageBonus(world, entityId)
-    local weapon = world:getComponent(entityId, "Weapon")
-    if weapon then
-        return weapon.physicalDamageBonus or 0
-    end
-    return 0
+-- Convenience: get base damage only  (kept for backward compatibility with RuleEngine)
+function WeaponSystem:getBaseDamage(self, world, entityId)
+    local stats = self:getResolvedStats(entityId)
+    return stats.baseDamage
+end
+
+-- Convenience: get weapon type string  (kept for backward compatibility)
+function WeaponSystem:getWeaponType(self, world, entityId)
+    local stats = self:getResolvedStats(entityId)
+    return stats.weaponType
+end
+
+-- Convenience: get armor penetration  (kept for backward compatibility)
+function WeaponSystem:getArmorPenetration(self, world, entityId)
+    local stats = self:getResolvedStats(entityId)
+    return stats.armorPenetration
+end
+
+-- Convenience: get physical damage bonus  (kept for backward compatibility)
+function WeaponSystem:getPhysicalDamageBonus(self, world, entityId)
+    local stats = self:getResolvedStats(entityId)
+    return stats.physicalDamageBonus
 end
 
 return WeaponSystem

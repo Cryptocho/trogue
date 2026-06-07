@@ -8,7 +8,7 @@ return {
             attributePoints = 0,
             skillPoints = 0,
         },
-        Weapon = {type = "greatsword", baseDamage = 20, armorPenetration = 10, physicalDamageBonus = 5},
+        Weapon = {weaponId = "greatsword"},
         Stats = {
             base = {strength = 10, agility = 5, sensing = 5, spirit = 5, magic = 5, tenacity = 0},
             current = {hp = 100, energy = 50},
@@ -21,7 +21,7 @@ return {
                 hitRate = 0,
                 handsPower = 0,
                 critChance = 0.05,
-                critMultiplier = 1.5,
+                critMultiplier = 1.2,
                 fieldOfView = 8,
                 sanPower = 0,
                 naturalResistance = 0,
@@ -50,7 +50,7 @@ return {
     goblin = {
         Renderable = {tileIndex = 3},
         Actor = {},
-        Weapon = {type = "fists", baseDamage = 2, armorPenetration = 0, physicalDamageBonus = 0},
+        Weapon = {weaponId = "shortsword"},
         Stats = {
             base = {strength = 8, agility = 6, sensing = 3, spirit = 4, magic = 3, tenacity = 0},
             current = {hp = 25, energy = 30},
@@ -63,8 +63,8 @@ return {
                 hitRate = 0,
                 handsPower = 0,
                 critChance = 0.05,
-                critMultiplier = 1.5,
-                fieldOfView = 4,
+                critMultiplier = 1.2,
+                fieldOfView = 5,
                 sanPower = 0,
                 naturalResistance = 0,
                 cooling = 0,
@@ -92,7 +92,7 @@ return {
     rat = {
         Renderable = {tileIndex = 4},
         Actor = {},
-        Weapon = {type = "fists", baseDamage = 2, armorPenetration = 0, physicalDamageBonus = 0},
+        Weapon = {weaponId = "fangs"},
         Stats = {
             base = {strength = 4, agility = 8, sensing = 2, spirit = 2, magic = 2, tenacity = 0},
             current = {hp = 3, energy = 20},
@@ -134,7 +134,7 @@ return {
     orc = {
         Renderable = {tileIndex = 5},
         Actor = {},
-        Weapon = {type = "fists", baseDamage = 2, armorPenetration = 0, physicalDamageBonus = 0},
+        Weapon = {weaponId = "battle_axe"},
         Stats = {
             base = {strength = 12, agility = 3, sensing = 2, spirit = 5, magic = 2, tenacity = 0},
             current = {hp = 35, energy = 40},
