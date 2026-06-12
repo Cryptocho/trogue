@@ -61,6 +61,11 @@ local function createWeaponDef(def)
         enchantDamage     = def.enchantDamage       or 0,   -- enchant damage
         limbDamage        = def.limbDamage          or 0,   -- limb damage
         magicDamage       = def.magicDamage         or 0,   -- magic damage
+        burnChance        = def.burnChance          or 0,   -- burn chance
+        poisonChance      = def.poisonChance        or 0,   -- poison chance
+        slowRate          = def.slowRate            or 0,   -- slow rate
+        chainChance       = def.chainChance         or 0,   -- chain lightning chance
+        magicPenetration  = def.magicPenetration    or 0,   -- magic penetration
 
         -- Tags (for filtering / UI)
         tags = def.tags or {},

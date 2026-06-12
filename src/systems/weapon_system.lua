@@ -30,7 +30,7 @@ end
 -- Lookup weapon definition by weaponId
 -- @param weaponId string
 -- @return WeaponDefinition or nil
-function WeaponSystem:getDefinition(self, weaponId)
+function WeaponSystem:getDefinition(weaponId)
     if not weaponId then return self._fistsDef end
     return self.definitions[weaponId] or self._fistsDef
 end
@@ -39,7 +39,7 @@ end
 -- Priority: component inline field > weapon definition default
 -- @param entityId number
 -- @return table resolved weapon stats (merged from definition + component)
-function WeaponSystem:getResolvedStats(self, entityId)
+function WeaponSystem:getResolvedStats(entityId)
     local comp = self.world:getComponent(entityId, "Weapon")
     local weaponId = comp and comp.weaponId or "fists"
     local def = self:getDefinition(weaponId)
@@ -73,36 +73,41 @@ function WeaponSystem:getResolvedStats(self, entityId)
         enchantDamage      = comp.enchantDamage       or def.enchantDamage,
         limbDamage         = comp.limbDamage          or def.limbDamage,
         magicDamage        = comp.magicDamage         or def.magicDamage,
+        burnChance         = comp.burnChance          or def.burnChance,
+        poisonChance       = comp.poisonChance        or def.poisonChance,
+        slowRate           = comp.slowRate            or def.slowRate,
+        chainChance        = comp.chainChance         or def.chainChance,
+        magicPenetration   = comp.magicPenetration    or def.magicPenetration,
     }
 
     return resolved
 end
 
 -- Convenience: get weapon definition by id
-function WeaponSystem:getDefinitionById(self, weaponId)
+function WeaponSystem:getDefinitionById(weaponId)
     return self:getDefinition(weaponId)
 end
 
 -- Convenience: get base damage only  (kept for backward compatibility with RuleEngine)
-function WeaponSystem:getBaseDamage(self, world, entityId)
+function WeaponSystem:getBaseDamage(world, entityId)
     local stats = self:getResolvedStats(entityId)
     return stats.baseDamage
 end
 
 -- Convenience: get weapon type string  (kept for backward compatibility)
-function WeaponSystem:getWeaponType(self, world, entityId)
+function WeaponSystem:getWeaponType(world, entityId)
     local stats = self:getResolvedStats(entityId)
     return stats.weaponType
 end
 
 -- Convenience: get armor penetration  (kept for backward compatibility)
-function WeaponSystem:getArmorPenetration(self, world, entityId)
+function WeaponSystem:getArmorPenetration(world, entityId)
     local stats = self:getResolvedStats(entityId)
     return stats.armorPenetration
 end
 
 -- Convenience: get physical damage bonus  (kept for backward compatibility)
-function WeaponSystem:getPhysicalDamageBonus(self, world, entityId)
+function WeaponSystem:getPhysicalDamageBonus(world, entityId)
     local stats = self:getResolvedStats(entityId)
     return stats.physicalDamageBonus
 end

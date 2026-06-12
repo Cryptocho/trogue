@@ -29,6 +29,11 @@ local WeaponComponent = {
     enchantDamage       = nil,   -- number  enchant damage
     limbDamage          = nil,   -- number  limb damage
     magicDamage         = nil,   -- number  magic damage
+    burnChance          = nil,   -- number  burn chance
+    poisonChance        = nil,   -- number  poison chance
+    slowRate            = nil,   -- number  slow rate
+    chainChance         = nil,   -- number  chain lightning chance
+    magicPenetration    = nil,   -- number  magic penetration
 
     -- ── Future / reserved ──
     -- durability   = nil,   -- number  weapon durability
