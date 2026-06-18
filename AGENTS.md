@@ -125,21 +125,9 @@ src/
 │   ├── poisson_disk.lua # Poisson 圆盘采样
 │   ├── minheap.lua      # 最小堆 (A* 寻路用)
 │   └── tween.lua        # kikito/tween.lua (保留但未直接使用)
-├── assets/
-│   ├── tileset_info.lua # 瓦片映射
-│   ├── tileset.png      # 瓦片图
-│   ├── defend.png       # shield 图标
-│   ├── fireball.png     # fireball 图标
-│   ├── heal.png         # heal 图标
-│   └── hit.png          # punch 图标
-tests/
-├── test_ecs.lua         # ECS 核心测试
-├── test_events.lua      # EventBus 测试
-├── test_prototype.lua   # 原型管理器测试
-├── test_component.lua   # 组件测试
-└── test_system.lua      # 系统测试 (可能已过期)
-tools/
-└── generate_tileset.py  # 临时瓦片图生成脚本
+├── assets/              # 游戏资源 (瓦片图、图标、音效等)
+│
+tools/                   # 辅助开发工具脚本
 ```
 
 ---

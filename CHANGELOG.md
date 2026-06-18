@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 图片素材标注工具
+
+- 影响的文件: `tools/tile.py`
+- 新增 4 个常量：`BITMASK_YELLOW`、`BITMASK_GRID_COLOR`、`SELECT_COLOR`、`BITMASK_DIALOG_SIZE`
+- 新增 state 字段：`bitmasks`（位掩码数据存储）、`selected_tile`（当前选中瓦片）
+- 交互模型变更：左键单击已标记瓦片→选中（绿色高亮），再次单击→取消选中；点击空白区域→取消选中
+- 侧边栏新增"位掩码"区域：按钮（无选中时禁用）+ 状态标签（"位掩码: 无" / "位掩码: 已设置"）
+- 新增 `open_bitmask_editor()` 函数：3×3 位掩码编辑弹窗（modal Toplevel），60% 透明黄色填充 + 网格线，支持点击/拖动连续标记，确定/取消/清除按钮
+- 主画布渲染：选中瓦片绿色边框高亮（2px），有位掩码的瓦片展示 3×3 黄色小点示意
+- 清理逻辑：`on_clear`/`on_invert`/`on_grid_changed` 同步清理 bitmasks 和 selected_tile
+- 导出 Lua：结构化表输出，包含 relative source（从 /src/ 起）、cols/rows、tile_width/tile_height、padding、count、tiles 数组（含可选 bitmask），头部带时间戳注释
+- 侧边栏"标记"区域新增"格式刷"按钮（dark_button 风格），点击复制当前选中瓦片的位掩码快照，进入格式刷模式，按钮文本切换为"取消格式刷"
+- 格式刷模式下左键点击/拖动到目标瓦片：深拷贝位掩码写入 `bitmasks`，目标瓦片同步加入 `marked_cells`；右键点击/拖动：清除目标瓦片位掩码并从 `marked_cells` 移除
+- 退出格式刷模式方式：再次点击"取消格式刷"按钮、右键点击空白区域、网格行列数变化、点击"清除"按钮
+- `state` 新增 `format_brush_mode`（bool）和 `format_brush_bitmask`（3×3 深拷贝快照或 nil）
+- `draw_grid_overlay` 中格式刷预览仅在鼠标悬停格子上绘制半透明橙色位掩码 `(255, 200, 0, 120)`，而非全图铺黄
+- 按钮启用逻辑与位掩码按钮一致：有选中瓦片且该瓦片已设置位掩码时启用；格式刷模式中始终保持启用
+- `on_grid_changed` / `on_clear` 同步清空格式刷状态并重置按钮文本
+- 格式刷操作不修改 `selected_tile`，不触发 `drag_mark` 普通标记逻辑（通过 mode 分支拦截）
+
 ### 武器库定义层与 WeaponSystem 重构
 
 - 影响的文件: `src/data/definitions/weapon.lua` (新建), `src/systems/weapon_system.lua` (重写), `src/components/weapon.lua` (重写), `src/data/prototypes/entities.lua`
