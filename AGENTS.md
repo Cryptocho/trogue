@@ -2,7 +2,7 @@
 
 ## 项目目标
 
-**Trogue** 是一个基于 LÖVE2D 引擎的古典 Roguelike 游戏。
+**Trogue** 是一个基于 LÖVE2D 引擎的传统 Roguelike 游戏。
 
 ---
 
@@ -72,7 +72,6 @@ RuleEngine 是核心，通过事件驱动处理战斗逻辑：
 
 - **LÖVE2D** 11.x - 游戏引擎
 - **Lua** 5.x - 脚本语言
-- **love-api** (`./love-api/`) - API 元数据，用于 IDE 补全
 
 ---
 
@@ -649,20 +648,6 @@ MapGenerator.generateMap("forest", 60, 60, {
 ```
 
 玩家生成在距离地图中心 (30,30) 最近的 floor tile。
-
----
-
-## 测试状态
-
-| 文件 | 状态 | 说明 |
-|------|------|------|
-| `test_ecs.lua` | ⚠️ 过期 | 使用旧的 OOP API (`World:new()` 而非 `createWorld()`) |
-| `test_events.lua` | ⚠️ 过期 | 同上 |
-| `test_prototype.lua` | ⚠️ 过期 | 多处 API 调用过期 (`.new()` 应为工厂函数) |
-| `test_component.lua` | ❌ 损坏 | 引用已删除的 `src.ecs.component` |
-| `test_system.lua` | ❌ 损坏 | 引用已删除的 `src.ecs.system` 和 `System:extend()` |
-
-测试文件需要更新以匹配当前纯表工厂函数风格。当前无法直接运行。
 
 ---
 

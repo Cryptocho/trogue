@@ -16,10 +16,15 @@ PAD_COLOR = (180, 180, 180, 100)
 MARK_FILL = (80, 140, 255, 100)
 MARK_OUTLINE = (255, 255, 255, 200)
 HOVER_COLOR = (255, 255, 0, 120)
+MASK_OFF = 0
+MASK_ON = 1
+MASK_IGNORE = 2
+IGNORE_FILL = (120, 120, 120, 100)
+IGNORE_OUTLINE = (200, 200, 200, 150)
 BITMASK_YELLOW = (255, 255, 0, 153)
 BITMASK_GRID_COLOR = (255, 255, 0, 100)
 SELECT_COLOR = (0, 255, 128, 200)
-BITMASK_DIALOG_SIZE = 300
+BITMASK_DIALOG_SIZE = 350
 
 WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(WORKSPACE, "src")
@@ -315,10 +320,15 @@ if filepath:
             bh = (b - t) / 3
             for br in range(3):
                 for bc in range(3):
-                    if bm[br][bc]:
+                    val = bm[br][bc]
+                    if val == MASK_ON:
                         bl = l + bc * bw
                         bt = t + br * bh
                         draw.rectangle([bl + 1, bt + 1, bl + bw - 1, bt + bh - 1], fill=BITMASK_YELLOW)
+                    elif val == MASK_IGNORE:
+                        bl = l + bc * bw
+                        bt = t + br * bh
+                        draw.rectangle([bl + 1, bt + 1, bl + bw - 1, bt + bh - 1], fill=IGNORE_FILL)
 
         fbm = state["format_brush_bitmask"]
         if fbm is not None and state["format_brush_mode"] and state["hover_cell"]:
@@ -328,10 +338,15 @@ if filepath:
             bh = (b - t) / 3
             for br in range(3):
                 for bc in range(3):
-                    if fbm[br][bc]:
+                    val = fbm[br][bc]
+                    if val == MASK_ON:
                         bl = l + bc * bw
                         bt = t + br * bh
                         draw.rectangle([bl + 1, bt + 1, bl + bw - 1, bt + bh - 1], fill=(255, 200, 0, 120))
+                    elif val == MASK_IGNORE:
+                        bl = l + bc * bw
+                        bt = t + br * bh
+                        draw.rectangle([bl + 1, bt + 1, bl + bw - 1, bt + bh - 1], fill=IGNORE_FILL)
 
         hover = state["hover_cell"]
         if hover:
@@ -643,10 +658,14 @@ if filepath:
 
             for r in range(3):
                 for c in range(3):
-                    if edit_bitmask[r][c]:
-                        l = c * cell_w
-                        t = r * cell_h
+                    val = edit_bitmask[r][c]
+                    l = c * cell_w
+                    t = r * cell_h
+                    if val == MASK_ON:
                         draw.rectangle([l, t, l + cell_w, t + cell_h], fill=BITMASK_YELLOW)
+                    elif val == MASK_IGNORE:
+                        draw.rectangle([l + 2, t + 2, l + cell_w - 2, t + cell_h - 2], fill=IGNORE_FILL)
+                        draw.line([(l + 2, t + 2), (l + cell_w - 2, t + cell_h - 2)], fill=IGNORE_OUTLINE, width=2)
 
             for i in range(1, 3):
                 x = i * cell_w
@@ -665,7 +684,21 @@ if filepath:
             if cell is None:
                 return
             r, c = cell
-            edit_bitmask[r][c] = 1 - edit_bitmask[r][c]
+            shift = bool(event.state & 0x0001)
+            if shift:
+                if edit_bitmask[r][c] == MASK_OFF:
+                    edit_bitmask[r][c] = MASK_IGNORE
+                elif edit_bitmask[r][c] == MASK_IGNORE:
+                    edit_bitmask[r][c] = MASK_OFF
+                else:
+                    edit_bitmask[r][c] = MASK_OFF
+            else:
+                if edit_bitmask[r][c] == MASK_OFF:
+                    edit_bitmask[r][c] = MASK_ON
+                elif edit_bitmask[r][c] == MASK_ON:
+                    edit_bitmask[r][c] = MASK_OFF
+                else:
+                    edit_bitmask[r][c] = MASK_ON
             bm_drag["start"] = (event.x, event.y)
             bm_drag["mark_state"] = edit_bitmask[r][c]
             bm_drag["last_cell"] = cell
@@ -716,8 +749,29 @@ if filepath:
                     edit_bitmask[r][c] = 0
             bm_redraw()
 
+        def _validate_minimal_mask(bm):
+            corners = [(0, 0), (0, 2), (2, 0), (2, 2)]
+            edge_pairs = [((0, 1), (1, 0)), ((0, 1), (1, 2)), ((2, 1), (1, 0)), ((2, 1), (1, 2))]
+            violations = []
+            for (cr, cc), (e1, e2) in zip(corners, edge_pairs):
+                if bm[cr][cc] == MASK_ON:
+                    e1r, e1c = e1
+                    e2r, e2c = e2
+                    if bm[e1r][e1c] == MASK_OFF or bm[e2r][e2c] == MASK_OFF:
+                        violations.append((cr, cc, e1, e2))
+            return violations
+
         def bm_on_confirm():
-            has_any = any(edit_bitmask[r][c] for r in range(3) for c in range(3))
+            edit_bitmask[1][1] = MASK_ON
+            violations = _validate_minimal_mask(edit_bitmask)
+            if violations:
+                msg = "违反 Minimal 约束：以下角位为 On 但相邻边未同时 On：\n"
+                for cr, cc, e1, e2 in violations:
+                    msg += f"  角位 ({cr},{cc}) 要求边 ({e1[0]},{e1[1]}) 和 ({e2[0]},{e2[1]}) 也为 On\n"
+                msg += "是否仍要强制保存？"
+                if not messagebox.askyesno("Minimal 约束警告", msg, parent=dlg):
+                    return
+            has_any = any(edit_bitmask[r][c] != MASK_OFF for r in range(3) for c in range(3))
             if has_any:
                 state["bitmasks"][(col, row)] = [row[:] for row in edit_bitmask]
             elif (col, row) in state["bitmasks"]:
@@ -743,7 +797,7 @@ if filepath:
 
         tk.Label(
             bottom, bg="#2d2d2d", fg="#888888",
-            text="左键点击/拖动切换, 右键取消",
+            text="左键: On/Off 循环 | Shift+左键: Off/Ignore 循环 | 右键: Off",
         ).pack(side=tk.LEFT)
 
         btn_row = tk.Frame(dlg, bg="#2d2d2d")
@@ -781,6 +835,7 @@ if filepath:
         lines = [
             f"-- Tileset mapping generated by tile.py at {now}",
             f"-- Marked: {len(sorted_cells)} tiles",
+            f"-- Bitmask values: 0 = Off, 1 = On, 2 = Ignore (Minimal 3x3 Autotile)",
             "",
             "return {",
             f"    source = {repr(rel_source)},",
