@@ -45,6 +45,7 @@ return {
             cooldowns = {},
         },
         Buffs = {activeBuffs = {}},
+        Inventory = {capacity = 80, items = {}},
     },
 
     goblin = {
@@ -195,5 +196,11 @@ return {
             spreadChance = 0.5,
             tickRate = 1
         }
+    },
+
+    -- ── Ground item placeholder ───────────────────────────────────────────
+    _item_placeholder = {
+        Renderable  = {tileIndex = 9},
+        InventoryItem = {itemId = nil, quantity = 1},
     },
 }

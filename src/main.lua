@@ -11,8 +11,10 @@ local InputSystem = require("src.systems.input")
 local MapRenderer = require("src.systems.map_renderer")
 local RenderSystem = require("src.systems.render")
 local WeaponSystem = require("src.systems.weapon_system")
+local PickupSystem = require("src.systems.pickup_system")
 local MapGenerator = require("src.utils.map_generator")
 local TweenSystem = require("src.systems.tween_system")
+local InventoryUI = require("src.systems.inventory_ui")
 
 -- Load configuration
 local Config = require("src.config")
@@ -40,7 +42,7 @@ function love.load()
     -- Create RuleEngine
     game.ruleEngine = RuleEngineModule.createRuleEngine(game.world, game.events)
     
-game.skillIcons = {
+    game.skillIcons = {
         punch = love.graphics.newImage("assets/hit.png"),
         heal = love.graphics.newImage("assets/heal.png"),
         shield = love.graphics.newImage("assets/defend.png"),
@@ -149,6 +151,12 @@ function love.draw()
         
         -- Draw UI
         game:drawUI()
+
+        if game.inputSystem and game.inputSystem:isInventoryUIOpen() then
+            love.graphics.push()
+            InventoryUI:draw(game.world)
+            love.graphics.pop()
+        end
     end
     
     -- Draw turn count
@@ -255,6 +263,10 @@ end
 
 -- Delegate keyboard input to InputSystem
 function love.keypressed(key, scancode, isrepeat)
+    if key == "escape" and game.inputSystem and game.inputSystem:isInventoryUIOpen() then
+        game.inputSystem:toggleInventoryUI()
+        return
+    end
     if key == "escape" and game.inputSystem and game.inputSystem:isInAimMode() then
         game.inputSystem:cancelAim()
         return
@@ -287,14 +299,14 @@ function game:getSystem(systemName)
 end
 
 function initGameWorld()
-    local mapData, enemySpawns = MapGenerator.generateMap("forest", 60, 60, {
+    local mapData, enemySpawns, itemSpawns = MapGenerator.generateMap("forest", 60, 60, {
         treeMinDist = 2.0,
         densityThreshold = 0.5,
         fbmOctaves = 6,
         fbmPersistence = 0.5,
         fbmScale = 4.0,
         poissonMaxAttempts = 5,
-        poissonSeed = nil
+        poissonSeed = nil,
     })
     
     -- Find nearest floor tile to center and spawn player
@@ -325,10 +337,20 @@ function initGameWorld()
             game.prototypes:spawn(spawn.type, {Position = {x = spawn.x, y = spawn.y}})
         end
     end
+
+    if itemSpawns then
+        for _, spawn in ipairs(itemSpawns) do
+            game.prototypes:spawn("_item_placeholder", {
+                Position = {x = spawn.x, y = spawn.y},
+                InventoryItem = {itemId = spawn.itemId, quantity = 1},
+            })
+        end
+    end
     
     -- Add systems (by priority)
     game.world:addSystem(MapRenderer)
     game.world:addSystem(TurnSystem)
+    game.world:addSystem(PickupSystem)
     game.world:addSystem(TweenSystem)
     game.world:addSystem(MovementSystem)
     game.world:addSystem(CombatSystem)

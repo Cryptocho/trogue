@@ -112,7 +112,7 @@ local function generateMap(type, width, height, options)
             end
         end
 
-        return mapData, enemySpawns
+        return mapData, enemySpawns, nil
     end
 
     return "Not Implemented"
