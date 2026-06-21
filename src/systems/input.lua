@@ -37,6 +37,7 @@ local InputSystem = {
     keyBufferTimer = 0,
     aimMode = false,
     pendingAbilityId = nil,
+    showInventoryUI = false,
 }
 
 function InputSystem:init(world, config)
@@ -100,6 +101,13 @@ function InputSystem:handleKey(key, scancode, isrepeat)
         return
     end
 
+    if self.showInventoryUI then
+        if key == "escape" or key == "i" then
+            self:toggleInventoryUI()
+        end
+        return
+    end
+
     if self.turnSystem and not self.turnSystem:isInputAllowed() then
         return
     end
@@ -136,6 +144,16 @@ function InputSystem:handleKey(key, scancode, isrepeat)
 
     if key == "space" then
         self:handleWait()
+        return
+    end
+
+    if key == "i" then
+        self:toggleInventoryUI()
+        return
+    end
+
+    if key == "p" then
+        self:handlePickup()
         return
     end
 end
@@ -467,6 +485,16 @@ end
 -- Check if currently in aim mode
 function InputSystem:isInAimMode()
     return self.aimMode
+end
+
+-- Toggle inventory UI
+function InputSystem:toggleInventoryUI()
+    self.showInventoryUI = not self.showInventoryUI
+end
+
+-- Check if inventory UI is open
+function InputSystem:isInventoryUIOpen()
+    return self.showInventoryUI
 end
 
 -- Get pending ability in aim mode
