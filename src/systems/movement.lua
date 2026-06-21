@@ -20,6 +20,23 @@ function MovementSystem:init(world)
 
     -- Cache TweenSystem reference immediately after systems are registered
     self.tweenSystem = world:getSystem("TweenSystem")
+
+    if self.events then
+        self.events:on("MoveSucceeded", function(data)
+            if data.isPlayer then
+                self:_checkOpportunityAttack(data.entity, data.x - data.dx, data.y - data.dy, data.x, data.y)
+            end
+        end, 0)
+
+        self.events:on("KnockbackApplied", function(data)
+            if data.target then
+                local playerComp = self.world.components.Player and self.world.components.Player[data.target]
+                if playerComp then
+                    self:_checkOpportunityAttack(data.target, data.fromX, data.fromY, data.toX, data.toY)
+                end
+            end
+        end, 0)
+    end
 end
 
 function MovementSystem:update(world, dt)
@@ -176,6 +193,49 @@ function MovementSystem:isBlocked(x, y)
         end
     end
     return false
+end
+
+function MovementSystem:_getAdjacentActors(x, y, excludeEntity)
+    local actors = {}
+    local directions = {{dx = -1, dy = 0}, {dx = 1, dy = 0}, {dx = 0, dy = -1}, {dx = 0, dy = 1}}
+    for _, dir in ipairs(directions) do
+        local nx, ny = x + dir.dx, y + dir.dy
+        if Coordinates.isInBounds(nx, ny,
+            self.world:getSystem("MapRenderer").width,
+            self.world:getSystem("MapRenderer").height) then
+            local entities = self.world:getSpatialHash():getAt(nx, ny)
+            if entities then
+                for _, eid in ipairs(entities) do
+                    if eid ~= excludeEntity and self.world:hasComponent(eid, "Actor") then
+                        table.insert(actors, eid)
+                    end
+                end
+            end
+        end
+    end
+    return actors
+end
+
+function MovementSystem:_checkOpportunityAttack(entity, oldX, oldY, newX, newY)
+    local adjacentActors = self:_getAdjacentActors(oldX, oldY, entity)
+    for _, actor in ipairs(adjacentActors) do
+        local oldDist = Coordinates.manhattanDistance(oldX, oldY,
+            self.world.components.Position[actor].x, self.world.components.Position[actor].y)
+        local newDist = Coordinates.manhattanDistance(newX, newY,
+            self.world.components.Position[actor].x, self.world.components.Position[actor].y)
+        if oldDist <= 1 and newDist > 1 then
+            if self.events then
+                self.events:emit("OpportunityAttack", {
+                    attacker = actor,
+                    target = entity,
+                    fromX = oldX,
+                    fromY = oldY,
+                    toX = newX,
+                    toY = newY,
+                })
+            end
+        end
+    end
 end
 
 return MovementSystem

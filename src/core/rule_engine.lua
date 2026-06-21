@@ -126,6 +126,17 @@ function _ruleEngineRegisterEvents(self)
     self.events:on("KnockbackRequest", function(data)
         _ruleEngineProcessKnockback(self, data)
     end, 100)
+
+    -- Listen for opportunity attack
+    self.events:on("OpportunityAttack", function(data)
+        _ruleEngineProcessOpportunityAttack(self, data)
+    end, 0)
+end
+
+-- Private: Process opportunity attack
+function _ruleEngineProcessOpportunityAttack(self, data)
+    if not data.attacker or not data.target then return end
+    _ruleEngineApplyEffect(self, "opportunity_attack", data.attacker, data.target)
 end
 
 -- Get ability definition by ID

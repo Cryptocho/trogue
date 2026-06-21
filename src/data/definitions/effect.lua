@@ -140,5 +140,19 @@ return {
             type = EffectType.KNOCKBACK,
             value = 3,
         }),
+
+        -- Opportunity Attack (enemy attacks when player leaves adjacent tile)
+        opportunity_attack = createEffectDefinition({
+            id = "opportunity_attack",
+            name = "Opportunity Attack",
+            description = "Attack when target leaves adjacent tile",
+            type = EffectType.DAMAGE,
+            valueFormula = {
+                basePercent = 0.5,
+                statScaling = {{stat = "strength", multiplier = 2}},
+            },
+            damageType = DamageType.PHYSICAL,
+            chance = 0.5,
+        }),
     },
 }

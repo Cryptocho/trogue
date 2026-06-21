@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 趁手打击（Opportunity Attack）机制
+
+- 影响的文件: `src/data/definitions/effect.lua`, `src/core/rule_engine.lua`, `src/systems/movement.lua`
+- 新增 `opportunity_attack` 内置效果（`type=DAMAGE`，`damageType=PHYSICAL`，`chance=0.5`，`valueFormula={basePercent=0.5, statScaling={{strength, 2}}}`）
+- `RuleEngine` 新增 `OpportunityAttack` 事件监听（priority=0），处理函数 `_ruleEngineProcessOpportunityAttack` 直接复用 `_ruleEngineApplyEffect` 的概率判定和伤害管道
+- `MovementSystem` 新增两个监听器：
+  - `MoveSucceeded`（玩家移动后，根据 `dx/dy` 推算旧位置，检查旧邻格敌人是否不再相邻）
+  - `KnockbackApplied`（玩家被击退后，检查 from/to 邻格敌人是否不再相邻）
+- 新增 `_getAdjacentActors(x, y, excludeEntity)`：查询指定位置四方向 spatial hash，返回带 `Actor` 组件且非自身的实体
+- 新增 `_checkOpportunityAttack(entity, oldX, oldY, newX, newY)`：对旧位置邻格每个敌人，若旧曼哈顿距离 ≤1 且新距离 >1，则发射 `OpportunityAttack` 事件
+- 事件时序：`MoveSucceeded/KnockbackApplied` → `OpportunityAttack` → `DamageRequest` → 伤害/护盾/死亡处理 → `MoveSucceeded` 继续 → `endPlayerTurn()` → `PlayerTurnEnd`，确保发生在敌方回合开始前
+
 ### 图片素材标注工具
 
 - 影响的文件: `tools/tile.py`

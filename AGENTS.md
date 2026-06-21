@@ -564,7 +564,7 @@ renderSystem:setRuleEngine(ruleEngine)
 ### 内置内容清单
 
 **能力 (5 个)**: punch, heal, shield, fireball, passive_strength
-**效果 (6 个)**: damage_physical, damage_fire, heal_minor, buff_shield, burn, burn_damage
+**效果 (7 个)**: damage_physical, damage_fire, heal_minor, buff_shield, burn, burn_damage, opportunity_attack
 **Buff (4 个)**: shield (SHIELD, damageAbsorb=10), burning (DOT, tickEffect=burn_damage), strength (BUFF, physicalDamageBonus=3), passive_strength_buff (BUFF, physicalDamageBonus=3)
 
 ---
@@ -616,6 +616,14 @@ Knockback 效果通过 `KnockbackRequest` → `KnockbackApplied` 事件链处理
 - `_ruleEngineProcessKnockback` 处理击退：沿远离 source 方向逐格推进，遇墙壁/实体/边界停止
 - 位移后同步更新 Position + SpatialHash + Tween 动画
 - 发射 `KnockbackApplied` 事件通知 UI / 其他系统
+
+### 12. 趁手打击流水线 (Opportunity Attack Pipeline)
+玩家移出敌人邻格时，敌人概率性发动免费攻击：
+- `MoveSucceeded` / `KnockbackApplied` → `MovementSystem` 检查旧位置邻格敌人是否不再相邻
+- 满足条件则发射 `OpportunityAttack`（包含 attacker/target/fromX/Y/toX/Y）
+- `RuleEngine` 监听 `OpportunityAttack`（priority=0），调用 `_ruleEngineApplyEffect("opportunity_attack", attacker, target)`
+- 效果自带 `chance=0.5` 概率判定和 `valueFormula` 伤害公式，复用 `DamageRequest` → `DamageDealt` 完整管道
+- 事件发生在 `PlayerTurnEnd` 之前，确保敌方回合开始前完成所有趁手打击判定
 
 ---
 
