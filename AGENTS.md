@@ -97,7 +97,7 @@ src/
 │   ├── renderable.lua   # 渲染信息 (tileIndex)
 │   ├── solid.lua        # 固体标记 (不可通行)
 │   ├── effect_tile.lua  # 地面效果 (毒/火/冰)
-│   ├── weapon.lua       # 武器属性 {type, baseDamage, armorPenetration, physicalDamageBonus}
+│   ├── weapon.lua       # 武器属性 (22字段，weaponId/weaponType/baseDamage/armorPenetration/physicalDamageBonus/critChance/hitRate/staggerRate/stunRate/knockbackRate/immobilizeRate/critDamageBonus/blockChance/blockPower/bleedChance/enchantDamage/limbDamage/magicDamage/burnChance/poisonChance/slowRate/chainChance/magicPenetration)
 │   └── position_tween.lua # 移动动画插值状态
 ├── systems/
 │   ├── input.lua        # 统一输入处理 (WASD+斜向/点击移动+A*/数字键选技能)
@@ -459,6 +459,7 @@ World 的 setComponent/addComponent/removeComponent 会自动同步 SpatialHash�
     critChance, hitRate, staggerRate, stunRate, knockbackRate,
     immobilizeRate, critDamageBonus, blockChance, blockPower,
     bleedChance, enchantDamage, limbDamage, magicDamage,
+    burnChance, poisonChance, slowRate, chainChance, magicPenetration,
 }
 ```
  WeaponSystem 负责合并定义默认值 + 组件实例覆盖值（`getResolvedStats(entityId)`）。
@@ -563,7 +564,7 @@ renderSystem:setRuleEngine(ruleEngine)
 ### 内置内容清单
 
 **能力 (5 个)**: punch, heal, shield, fireball, passive_strength
-**效果 (7 个)**: damage_physical, damage_fire, heal_minor, buff_shield, burn, burn_damage, opportunity_attack
+**效果 (8 个)**: damage_physical, damage_fire, heal_minor, buff_shield, burn, burn_damage, opportunity_attack, knockback_1
 **Buff (4 个)**: shield (SHIELD, damageAbsorb=10), burning (DOT, tickEffect=burn_damage), strength (BUFF, physicalDamageBonus=3), passive_strength_buff (BUFF, physicalDamageBonus=3)
 
 ---
