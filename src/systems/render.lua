@@ -16,26 +16,35 @@ local RenderSystem = {
 function RenderSystem:init(world)
     self.world = world
 
-    -- Load tileset for enemies + map (unchanged)
-    self.tileset = love.graphics.newImage("assets/tileset.png")
+    local okTileset, tileset = pcall(love.graphics.newImage, "assets/tileset.png")
+    self.tileset = okTileset and tileset or nil
 
-    -- Load image.png for player sprite and scale it to TILE_SIZE
-    self.playerImage = love.graphics.newImage("assets/image.png")
-    local imgW, imgH = self.playerImage:getDimensions()
-    -- Scale factor: fit within TILE_SIZE while preserving aspect ratio
-    self.playerScale = math.min(Config.TILE_SIZE / imgW, Config.TILE_SIZE / imgH)
-    -- Centered offset so the image aligns at the bottom of the tile cell
-    self.playerDrawW = imgW * self.playerScale
-    self.playerDrawH = imgH * self.playerScale
-    self.playerOffsetX = (Config.TILE_SIZE - self.playerDrawW) / 2
-    self.playerOffsetY = Config.TILE_SIZE - self.playerDrawH
+    local okPlayer, playerImg = pcall(love.graphics.newImage, "assets/image.png")
+    self.playerImage = okPlayer and playerImg or nil
 
-    -- Pre-create quads for each tile (enemies use tileset)
-    for i = 0, 7 do
-        local tx = (i % Config.TILES_PER_ROW) * Config.TILE_SIZE
-        local ty = math.floor(i / Config.TILES_PER_ROW) * Config.TILE_SIZE
-        self.quads[i] = love.graphics.newQuad(tx, ty, Config.TILE_SIZE, Config.TILE_SIZE,
-                                              self.tileset:getDimensions())
+    if self.playerImage then
+        local imgW, imgH = self.playerImage:getDimensions()
+        self.playerScale = math.min(Config.TILE_SIZE / imgW, Config.TILE_SIZE / imgH)
+        self.playerDrawW = imgW * self.playerScale
+        self.playerDrawH = imgH * self.playerScale
+        self.playerOffsetX = (Config.TILE_SIZE - self.playerDrawW) / 2
+        self.playerOffsetY = Config.TILE_SIZE - self.playerDrawH
+    else
+        self.playerScale = 1
+        self.playerDrawW = Config.TILE_SIZE
+        self.playerDrawH = Config.TILE_SIZE
+        self.playerOffsetX = 0
+        self.playerOffsetY = 0
+    end
+
+    self.quads = {}
+    if self.tileset then
+        for i = 0, 7 do
+            local tx = (i % Config.TILES_PER_ROW) * Config.TILE_SIZE
+            local ty = math.floor(i / Config.TILES_PER_ROW) * Config.TILE_SIZE
+            self.quads[i] = love.graphics.newQuad(tx, ty, Config.TILE_SIZE, Config.TILE_SIZE,
+                                                  self.tileset:getDimensions())
+        end
     end
 end
 
@@ -51,32 +60,41 @@ function RenderSystem:drawEntities(world, offsetX, offsetY)
         local renderable = result.components.Renderable
         local tween = result.components.PositionTween
 
-        if result.components.Player or result.components.Actor then
-            if pos and renderable then
-                -- Use tweened visual position if available, otherwise tile-based
-                local renderX, renderY
-                if tween and tween.active then
-                    renderX, renderY = tween.visualX, tween.visualY
-                else
-                    renderX, renderY = pos.x, pos.y
-                end
-                local wx, wy = Coordinates.tileToWorld(renderX, renderY)
-                local x = wx + offsetX
-                local y = wy + offsetY
+        if (result.components.Player or result.components.Actor) and pos and renderable then
+            local renderX, renderY
+            if tween and tween.active then
+                renderX, renderY = tween.visualX, tween.visualY
+            else
+                renderX, renderY = pos.x, pos.y
+            end
+            local wx, wy = Coordinates.tileToWorld(renderX, renderY)
+            local x = wx + offsetX
+            local y = wy + offsetY
 
-                if result.components.Player then
-                    -- Player: draw image.png scaled to fit TILE_SIZE (preserve aspect ratio)
-                    local drawX = x + self.playerOffsetX
-                    local drawY = y + self.playerOffsetY
-                    love.graphics.draw(self.playerImage, drawX, drawY, 0, self.playerScale, self.playerScale)
+            if result.components.Player then
+                if self.playerImage then
+                    love.graphics.draw(self.playerImage, x + self.playerOffsetX, y + self.playerOffsetY, 0, self.playerScale, self.playerScale)
                 else
-                    -- Enemy: draw from tileset quad as before
-                    local quad = self.quads[renderable.tileIndex]
-                    if quad then
-                        love.graphics.draw(self.tileset, quad, x, y)
-                    end
+                    love.graphics.setColor(0, 1, 1, 1)
+                    love.graphics.rectangle("fill", x, y, Config.TILE_SIZE, Config.TILE_SIZE)
+                    love.graphics.setColor(1, 1, 1, 1)
+                end
+            else
+                if self.tileset and self.quads[renderable.tileIndex] then
+                    love.graphics.draw(self.tileset, self.quads[renderable.tileIndex], x, y)
+                else
+                    love.graphics.setColor(1, 0.5, 0.5, 1)
+                    love.graphics.rectangle("fill", x + 1, y + 1, Config.TILE_SIZE - 2, Config.TILE_SIZE - 2)
+                    love.graphics.setColor(1, 1, 1, 1)
                 end
             end
+        elseif result.components.InventoryItem and pos then
+            local wx, wy = Coordinates.tileToWorld(pos.x, pos.y)
+            local x = wx + offsetX
+            local y = wy + offsetY
+            love.graphics.setColor(1, 0.85, 0.2, 0.7)
+            love.graphics.circle("fill", x + Config.TILE_SIZE / 2, y + Config.TILE_SIZE / 2, Config.TILE_SIZE / 3)
+            love.graphics.setColor(1, 1, 1, 1)
         end
     end
 end
@@ -122,7 +140,7 @@ function RenderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
         self._inputSystem = self.world:getSystem("InputSystem")
         inputSystem = self._inputSystem
     end
-    if not inputSystem or not inputSystem:isInAimMode() then return end
+    if not inputSystem or not inputSystem.isInAimMode or not inputSystem:isInAimMode() then return end
 
     local ruleEngine = inputSystem.ruleEngine
     if not ruleEngine then return end

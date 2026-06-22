@@ -45,7 +45,8 @@ return {
             cooldowns = {},
         },
         Buffs = {activeBuffs = {}},
-        Inventory = {capacity = 80, items = {}},
+        Inventory = {gridCols = 10, gridRows = 8, slots = {}, items = {}, nextKey = 1},
+        Equipment = {slots = {main_hand = nil, off_hand = nil, armor = nil, helmet = nil}},
     },
 
     goblin = {

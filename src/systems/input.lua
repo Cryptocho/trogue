@@ -108,6 +108,16 @@ function InputSystem:handleKey(key, scancode, isrepeat)
         return
     end
 
+    if key == "i" then
+        self:toggleInventoryUI()
+        return
+    end
+
+    if key == "p" then
+        self:handlePickup()
+        return
+    end
+
     if self.turnSystem and not self.turnSystem:isInputAllowed() then
         return
     end
@@ -146,16 +156,10 @@ function InputSystem:handleKey(key, scancode, isrepeat)
         self:handleWait()
         return
     end
+end
 
-    if key == "i" then
-        self:toggleInventoryUI()
-        return
-    end
-
-    if key == "p" then
-        self:handlePickup()
-        return
-    end
+function InputSystem:toggleInventoryUI()
+    self.showInventoryUI = not self.showInventoryUI
 end
 
 function InputSystem:addToKeyBuffer(movement)
@@ -534,6 +538,32 @@ function InputSystem:_getMapRenderer()
         self._mapRenderer = self.world:getSystem("MapRenderer")
     end
     return self._mapRenderer
+end
+
+function InputSystem:handlePickup()
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return end
+
+    local playerId = players[1].id
+    local playerPos = players[1].components.Position
+
+    local spatialHash = self.world:getSpatialHash()
+    local entities = spatialHash:getAt(playerPos.x, playerPos.y)
+    if not entities or #entities == 0 then return end
+
+    local hasItem = false
+    for _, eid in ipairs(entities) do
+        local invItem = self.world:getComponent(eid, "InventoryItem")
+        if invItem then hasItem = true; break end
+    end
+
+    if hasItem and self.events then
+        self.events:emit("PickupRequest", {
+            entity = playerId,
+            targetX = playerPos.x,
+            targetY = playerPos.y,
+        })
+    end
 end
 
 return InputSystem

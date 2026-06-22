@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 大背包（Grid Inventory）系统
+
+- 影响的文件: `src/data/definitions/item.lua` (新建), `src/components/inventory.lua` (重写), `src/components/equipment.lua` (新建), `src/components/inventory_item.lua` (新建), `src/systems/inventory_system.lua` (新建), `src/systems/inventory_ui.lua` (重写), `src/systems/input.lua`, `src/systems/render.lua`, `src/systems/pickup_system.lua` (删除), `src/data/prototypes/entities.lua`, `src/utils/map_generator.lua`, `src/main.lua`, `doc/selfplan.md` (新建)
+- 新建 `src/data/definitions/item.lua`：ItemDefinition 工厂函数 + `builtin` 注册表，包含武器类(10 种)/消耗品类(2 种)/装备类(2 种)，每件物品定义 `gridWidth`×`gridHeight` 背包占用尺寸，武器引用已有 `weaponId`，消耗品引用 `effectId`，装备指定 `equipSlot`
+- 新建 `LootTable` 表：goblin/rat/orc 三种敌人击杀掉落权重配置
+- `InventoryComponent` 重构为网格模型：`gridCols=10, gridRows=8, slots[row][col]=itemKey, items[key]={itemId,row,col}`
+- 新建 `EquipmentComponent`：纯数据装备槽 `{main_hand, off_hand, armor, helmet}`
+- 新建 `InventoryItemComponent`：地面物品实体标记组件 `{itemId}`
+- 新建 `InventorySystem`（priority=2）：核心背包逻辑
+  - 网格操作：`canPlace()`, `findFreeSlot()`, `placeItem()`, `removeItem()`, `clearGridOnly()`（装备时保留 item 数据仅释放格子）
+  - 拾取：监听 `PickupRequest`，空间查询→尺寸检查→装入背包→销毁地面实体→发射 `PickupSucceeded/Failed`
+  - 击杀掉落：监听 `EntityDied`（priority=10），根据敌人武器 ID 反查类型→权重随机→在死亡位置 `spawn` 地面物品
+  - 丢弃：监听 `InventoryDropItem`，从背包移除→在玩家位置 spawn 地面物品→发射 `ItemDropped`
+  - 使用：监听 `InventoryUseItem`，仅限消耗品→发射 `HealRequest`（heal_minor 效果）→销毁
+  - 装备：监听 `InventoryEquipItem`，`clearGridOnly`（保留 item 数据）→写入 `Equipment.slots[slot]`→更新 `Weapon.weaponId`
+  - 卸下：监听 `InventoryUnequipItem`，查询 `inv.items[itemKey]`→找空闲网格位→写回格子/背包满则掉落→武器还原 `fists`
+- 重写 `InventoryUI`（独立模块，非 ECS 系统）：10×8 网格 + 右侧装备槽面板 + 鼠标悬停 tooltip
+  - 物品按类型渲染颜色（武器红/消耗品绿/装备蓝），多格物品按 `gridWidth×gridHeight` 绘制矩形
+  - 鼠标：左键拿起/放下（拖拽），右键丢弃，点击装备槽卸下，悬停显示物品详情 tooltip
+  - 键盘：方向键移动光标，Enter 拿起/放下，E 装备，D 丢弃，U 使用消耗品
+  - 持有物品跟随鼠标渲染预览
+  - 底部显示 `Items: N  Cells: 80` 容量
+- `InputSystem` 新增 `toggleInventoryUI()` / `isInventoryUIOpen()` / `handlePickup()`，`i`/`p` 键移至 `isInputAllowed` 检查之前确保回合中可操作
+- `RenderSystem.drawEntities()` 新增地面物品渲染分支：`InventoryItem` 实体绘制黄色圆形标记
+- `main.lua` 集成：`InventorySystem` 替换 `PickupSystem`；`love.update` 中 `love.keyboard.isDown` 轮询 Tab/I/P 键（绕过中文输入法字母键拦截）；`love.keypressed`/`love.mousepressed` 背包开启时转发给 `InventoryUI`
+- 删除 `src/systems/pickup_system.lua`，逻辑合并至 `InventorySystem`
+- `MapGenerator.generateMap()` 新增 `itemSpawns` 第三返回值和 `itemSpawnMinDist`/`itemDensity`/`itemTypes` 参数（预留，当前未使用）
+- 玩家原型 `Inventory` 改为网格结构，新增 `Equipment` 组件
+- 新建 `doc/selfplan.md`：完整实现计划与架构决策
+
+### 占位图片素材生成
+
+- 影响的文件: `assets/tileset.png` (新建), `assets/image.png` (新建), `assets/hit.png` (新建), `assets/heal.png` (新建), `assets/defend.png` (新建), `assets/fireball.png` (新建)
+- 使用 Python 脚本生成 16×16 纯色 PNG 占位素材，解决 `assets/` 目录缺失导致游戏启动崩溃的问题
+- `RenderSystem` 图片加载改用 `pcall` 包裹，缺失素材时 fallback 为纯色矩形
+
 ### 趁手打击（Opportunity Attack）机制
 
 - 影响的文件: `src/data/definitions/effect.lua`, `src/core/rule_engine.lua`, `src/systems/movement.lua`

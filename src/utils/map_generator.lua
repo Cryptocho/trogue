@@ -18,9 +18,13 @@ local Poisson = require("src.utils.poisson_disk")
 --   - poissonSeed (number): Random seed for Poisson sampling (default nil/os.time).
 --   - enemySpawnMinDist (number): Minimum distance from center for enemy spawn (default 8).
 --   - enemyDensity (number): Enemy density per tile, ~enemyCount = width*height*density (default 0.008).
+--   - itemSpawnMinDist (number): Minimum distance from center for item spawn (default 2).
+--   - itemDensity (number): Item density per tile, ~itemCount = width*height*density (default 0.003).
+--   - itemTypes (table): Array of item type strings (default {"weapon_shortsword", "weapon_battle_axe"}).
 --
 -- @return table: 2D array of characters (e.g., "." for floor, "^" for tree).
 -- @return table: Array of enemy spawns {x, y, type}, or nil if no enemies placed.
+-- @return table: Array of item spawns {x, y, itemId}, or nil if no items placed.
 local function generateMap(type, width, height, options)
     if type == "forest" then
         local perlinNoise = Perlin.new(0.5, 2.0, false)
@@ -112,7 +116,42 @@ local function generateMap(type, width, height, options)
             end
         end
 
-        return mapData, enemySpawns, nil
+        -- Item spawning
+        local itemSpawnMinDist = (options and options.itemSpawnMinDist) or 2
+        local itemDensity = (options and options.itemDensity) or 0.003
+        local itemTypes = (options and options.itemTypes) or {"weapon_shortsword", "weapon_battle_axe"}
+
+        local itemTiles = {}
+        for y = 1, height do
+            for x = 1, width do
+                if mapData[y]:sub(x, x) == "." then
+                    local dist = math.abs(x - centerX) + math.abs(y - centerY)
+                    if dist >= itemSpawnMinDist then
+                        itemTiles[#itemTiles + 1] = {x = x, y = y}
+                    end
+                end
+            end
+        end
+
+        local itemCount = math.floor(width * height * itemDensity)
+        itemCount = math.min(itemCount, #itemTiles)
+
+        local itemSpawns = nil
+        if itemCount > 0 and #itemTypes > 0 then
+            for i = #itemTiles, 2, -1 do
+                local j = math.random(i)
+                itemTiles[i], itemTiles[j] = itemTiles[j], itemTiles[i]
+            end
+
+            itemSpawns = {}
+            for i = 1, itemCount do
+                local tile = itemTiles[i]
+                local itemType = itemTypes[math.random(#itemTypes)]
+                itemSpawns[#itemSpawns + 1] = {x = tile.x, y = tile.y, itemId = itemType}
+            end
+        end
+
+        return mapData, enemySpawns, itemSpawns
     end
 
     return "Not Implemented"

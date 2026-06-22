@@ -11,7 +11,7 @@ local InputSystem = require("src.systems.input")
 local MapRenderer = require("src.systems.map_renderer")
 local RenderSystem = require("src.systems.render")
 local WeaponSystem = require("src.systems.weapon_system")
-local PickupSystem = require("src.systems.pickup_system")
+local InventorySystemModule = require("src.systems.inventory_system")
 local MapGenerator = require("src.utils.map_generator")
 local TweenSystem = require("src.systems.tween_system")
 local InventoryUI = require("src.systems.inventory_ui")
@@ -27,6 +27,7 @@ local game = {
     inputSystem = nil,
     ruleEngine = nil,
     selectedAbility = nil,
+    inventoryVisible = false,
 }
 
 function love.load()
@@ -42,12 +43,17 @@ function love.load()
     -- Create RuleEngine
     game.ruleEngine = RuleEngineModule.createRuleEngine(game.world, game.events)
     
-    game.skillIcons = {
-        punch = love.graphics.newImage("assets/hit.png"),
-        heal = love.graphics.newImage("assets/heal.png"),
-        shield = love.graphics.newImage("assets/defend.png"),
-        fireball = love.graphics.newImage("assets/fireball.png"),
+    game.skillIcons = {}
+    local iconFiles = {
+        punch = "assets/hit.png",
+        heal = "assets/heal.png",
+        shield = "assets/defend.png",
+        fireball = "assets/fireball.png",
     }
+    for key, path in pairs(iconFiles) do
+        local ok, img = pcall(love.graphics.newImage, path)
+        if ok then game.skillIcons[key] = img end
+    end
 
     initGameWorld()
     
@@ -87,6 +93,36 @@ function love.load()
 end
 
 function love.update(dt)
+    -- Inventory toggle via polling (Tab or I key)
+    for _, testKey in ipairs({"tab", "i"}) do
+        if love.keyboard.isDown(testKey) then
+            if not game["_down_" .. testKey] then
+                game["_down_" .. testKey] = true
+                game.inventoryVisible = not game.inventoryVisible
+                if game.inputSystem then
+                    game.inputSystem.showInventoryUI = game.inventoryVisible
+                end
+                if not game.inventoryVisible then
+                    InventoryUI:resetCursor()
+                end
+            end
+        else
+            game["_down_" .. testKey] = false
+        end
+    end
+
+    -- Pickup via polling (P key)
+    if love.keyboard.isDown("p") then
+        if not game._down_p then
+            game._down_p = true
+            if game.inputSystem then
+                game.inputSystem:handlePickup()
+            end
+        end
+    else
+        game._down_p = false
+    end
+
     if game.world then
         game.world:update(dt)
         game.world:processDespawns()
@@ -152,10 +188,9 @@ function love.draw()
         -- Draw UI
         game:drawUI()
 
-        if game.inputSystem and game.inputSystem:isInventoryUIOpen() then
-            love.graphics.push()
+        -- Inventory UI
+        if game.inventoryVisible then
             InventoryUI:draw(game.world)
-            love.graphics.pop()
         end
     end
     
@@ -263,10 +298,11 @@ end
 
 -- Delegate keyboard input to InputSystem
 function love.keypressed(key, scancode, isrepeat)
-    if key == "escape" and game.inputSystem and game.inputSystem:isInventoryUIOpen() then
-        game.inputSystem:toggleInventoryUI()
+    if game.inventoryVisible then
+        InventoryUI:handleKey(key, game.world)
         return
     end
+
     if key == "escape" and game.inputSystem and game.inputSystem:isInAimMode() then
         game.inputSystem:cancelAim()
         return
@@ -278,6 +314,10 @@ end
 
 -- Delegate mouse input to InputSystem
 function love.mousepressed(x, y, button)
+    if game.inventoryVisible then
+        InventoryUI:handleMouse(x, y, button, game.world)
+        return
+    end
     if game.inputSystem then
         if button == 1 then
             if game.inputSystem:isInAimMode() then
@@ -299,7 +339,7 @@ function game:getSystem(systemName)
 end
 
 function initGameWorld()
-    local mapData, enemySpawns, itemSpawns = MapGenerator.generateMap("forest", 60, 60, {
+    local mapData, enemySpawns = MapGenerator.generateMap("forest", 60, 60, {
         treeMinDist = 2.0,
         densityThreshold = 0.5,
         fbmOctaves = 6,
@@ -337,20 +377,11 @@ function initGameWorld()
             game.prototypes:spawn(spawn.type, {Position = {x = spawn.x, y = spawn.y}})
         end
     end
-
-    if itemSpawns then
-        for _, spawn in ipairs(itemSpawns) do
-            game.prototypes:spawn("_item_placeholder", {
-                Position = {x = spawn.x, y = spawn.y},
-                InventoryItem = {itemId = spawn.itemId, quantity = 1},
-            })
-        end
-    end
     
     -- Add systems (by priority)
     game.world:addSystem(MapRenderer)
     game.world:addSystem(TurnSystem)
-    game.world:addSystem(PickupSystem)
+    game.world:addSystem(InventorySystemModule)
     game.world:addSystem(TweenSystem)
     game.world:addSystem(MovementSystem)
     game.world:addSystem(CombatSystem)
