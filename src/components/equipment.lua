@@ -1,4 +1,4 @@
-{
+return {
     slots = {
         main_hand = nil,
         off_hand  = nil,

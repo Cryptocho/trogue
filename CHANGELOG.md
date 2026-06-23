@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 背包快捷键合并（E 键统一使用/装备）
+
+- 影响的文件: `src/systems/inventory_ui.lua`
+- 移除独立的 `U` 键使用逻辑，合并到 `E` 键：光标处物品为消耗品时自动使用、为装备时自动装备
+
+### 异常机制设计文档
+
+- 影响的文件: `doc/System/Exception-mechanism.md` (新建)
+- 定义五种异常机制设计：眩晕（禁止技能/减控制抗性/减准度/减闪避）、中毒（每回合 hp×1%+1）、流血（每回合 hp×3%+2）、击退（反方向移动/碰撞伤害）、虚弱（减伤/增加技能消耗/增加受击伤害）
+
+### 组件文件语法修复
+
+- 影响的文件: `src/components/inventory.lua`, `src/components/inventory_item.lua`, `src/components/equipment.lua`
+- 文件开头从 `{` 改为 `return {`，消除 linter 警告
+
 ### 大背包（Grid Inventory）系统
 
 - 影响的文件: `src/data/definitions/item.lua` (新建), `src/components/inventory.lua` (重写), `src/components/equipment.lua` (新建), `src/components/inventory_item.lua` (新建), `src/systems/inventory_system.lua` (新建), `src/systems/inventory_ui.lua` (重写), `src/systems/input.lua`, `src/systems/render.lua`, `src/systems/pickup_system.lua` (删除), `src/data/prototypes/entities.lua`, `src/utils/map_generator.lua`, `src/main.lua`, `doc/selfplan.md` (新建)

@@ -337,8 +337,6 @@ function InventoryUI:handleKey(key, world)
         self:_keyEquip(world)
     elseif key == "d" then
         self:_keyDrop(world)
-    elseif key == "u" then
-        self:_keyUse(world)
     end
 end
 
@@ -378,12 +376,21 @@ function InventoryUI:_keyEquip(world)
         local item = inv.items[cursorKey]
         if item then
             local itemDef = ItemDef.builtin[item.itemId]
-            if itemDef and itemDef.equipSlot then
-                if world.eventBus then
-                    world.eventBus:emit("InventoryEquipItem", {
-                        entity = playerId,
-                        itemKey = cursorKey,
-                    })
+            if itemDef then
+                if itemDef.type == ItemDef.ItemType.CONSUMABLE then
+                    if world.eventBus then
+                        world.eventBus:emit("InventoryUseItem", {
+                            entity = playerId,
+                            itemKey = cursorKey,
+                        })
+                    end
+                elseif itemDef.equipSlot then
+                    if world.eventBus then
+                        world.eventBus:emit("InventoryEquipItem", {
+                            entity = playerId,
+                            itemKey = cursorKey,
+                        })
+                    end
                 end
             end
         end
