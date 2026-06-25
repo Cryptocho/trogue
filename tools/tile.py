@@ -29,6 +29,11 @@ BITMASK_DIALOG_SIZE = 350
 WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(WORKSPACE, "src")
 
+_loading_project = False
+
+from tile_model import TilesetMeta, TileDef, GroupDef, TilesetProject
+from tile_lua_parser import parse_lua_table
+
 
 def relpath_from_src(path):
     abs_path = os.path.abspath(path)
@@ -40,10 +45,25 @@ root.withdraw()
 
 filepath = filedialog.askopenfilename(
     initialdir="../src/assets",
-    filetypes=[("图片文件", "*.png *.jpg")],
+    filetypes=[("支持的格式", "*.png *.jpg *.lua"), ("图片文件", "*.png *.jpg"), ("Lua 文件", "*.lua")],
 )
 
+_initial_import_data = None
+
 if filepath:
+    if filepath.lower().endswith(".lua"):
+        with open(filepath, "r", encoding="utf-8") as f:
+            text = f.read()
+        data = parse_lua_table(text)
+        source_rel = data.get("source", "")
+        png_path = os.path.join(WORKSPACE, source_rel) if source_rel else ""
+        if not png_path or not os.path.exists(png_path):
+            messagebox.showerror("图片未找到", f"无法找到图片:\n{png_path}")
+            root.destroy()
+            exit(1)
+        _initial_import_data = data
+        filepath = png_path
+
     root.deiconify()
     img = Image.open(filepath).convert("RGBA")
 
@@ -169,18 +189,22 @@ if filepath:
     bitmask_btn.config(state=tk.DISABLED)
 
     def update_bitmask_label():
-        st = state["selected_tile"]
-        if st and st in state["bitmasks"]:
+        if selected_tile_index is not None and selected_tile_index < len(project.tiles):
+            tile = project.tiles[selected_tile_index]
+            has_bm = tile.bitmask is not None and any(any(c != MASK_OFF for c in row) for row in tile.bitmask)
+        else:
+            has_bm = False
+        if has_bm:
             bitmask_label.config(text="位掩码: 已设置")
         else:
             bitmask_label.config(text="位掩码: 无")
-        if st:
+        if selected_tile_index is not None:
             bitmask_btn.config(state=tk.NORMAL)
         else:
             bitmask_btn.config(state=tk.DISABLED)
         if state["format_brush_mode"]:
             fmt_btn.config(state=tk.NORMAL)
-        elif st and st in state["bitmasks"]:
+        elif has_bm:
             fmt_btn.config(state=tk.NORMAL)
         else:
             fmt_btn.config(state=tk.DISABLED)
@@ -194,12 +218,13 @@ if filepath:
         redraw()
 
     def on_format_brush():
-        st = state["selected_tile"]
         if not state["format_brush_mode"]:
-            if st is None or st not in state["bitmasks"]:
+            if selected_tile_index is None or selected_tile_index >= len(project.tiles):
                 return
-            bm = state["bitmasks"][st]
-            state["format_brush_bitmask"] = [row[:] for row in bm]
+            tile = project.tiles[selected_tile_index]
+            if tile.bitmask is None or not any(any(c != MASK_OFF for c in row) for row in tile.bitmask):
+                return
+            state["format_brush_bitmask"] = [row[:] for row in tile.bitmask]
             state["format_brush_mode"] = True
             state["drag_mark"] = None
             fmt_btn.config(text="取消格式刷")
@@ -225,14 +250,81 @@ if filepath:
         "view_cx": img.width / 2,
         "view_cy": img.height / 2,
         "drag_start": None,
-        "marked_cells": set(),
         "hover_cell": None,
         "drag_mark": None,  # (start_x, start_y, mark_state)
-        "bitmasks": {},          # {(col, row): [[0,0,0],[0,0,0],[0,0,0]]}
-        "selected_tile": None,   # (col, row) or None
         "format_brush_mode": False,
         "format_brush_bitmask": None,  # [[0,0,0],[0,0,0],[0,0,0]] or None
     }
+
+    project = TilesetProject()
+    selected_tile_index = None  # int | None，替代 state["selected_tile"]
+
+    if _initial_import_data is not None:
+        data = _initial_import_data
+        project.meta.source = data.get("source", "")
+        project.meta.cols = data.get("cols", 1)
+        project.meta.rows = data.get("rows", 1)
+        project.meta.tile_width = data.get("tile_width", 0)
+        project.meta.tile_height = data.get("tile_height", 0)
+        project.meta.padding = data.get("padding", 0)
+
+        tiles_data = data.get("tiles", [])
+        if isinstance(tiles_data, dict):
+            tiles_list = [tiles_data[k] for k in sorted(tiles_data.keys())]
+        else:
+            tiles_list = tiles_data
+        for i, tile_entry in enumerate(tiles_list):
+            if tile_entry is None:
+                continue
+            tile = TileDef(
+                index=i,
+                col=tile_entry.get("col", 0),
+                row=tile_entry.get("row", 0),
+                properties=tile_entry.get("properties", {}),
+                bitmask=tile_entry.get("bitmask"),
+            )
+            project.tiles.append(tile)
+
+        groups_data = data.get("groups", {})
+        if isinstance(groups_data, dict):
+            for name, group_entry in groups_data.items():
+                group = GroupDef(
+                    name=name,
+                    tile_indices=list(group_entry.get("tiles", [])),
+                )
+                project.groups.append(group)
+
+        cols_var.set(project.meta.cols)
+        rows_var.set(project.meta.rows)
+        padding_var.set(project.meta.padding)
+        selected_tile_index = None
+
+    def find_tile_index(col, row):
+        for i, t in enumerate(project.tiles):
+            if t.col == col and t.row == row:
+                return i
+        return None
+
+    def get_or_create_tile(col, row):
+        idx = find_tile_index(col, row)
+        if idx is not None:
+            return idx, project.tiles[idx]
+        new_idx = len(project.tiles)
+        tile = TileDef(index=new_idx, col=col, row=row)
+        project.tiles.append(tile)
+        return new_idx, tile
+
+    def remove_tile(col, row):
+        global selected_tile_index
+        idx = find_tile_index(col, row)
+        if idx is not None:
+            del project.tiles[idx]
+            for i, t in enumerate(project.tiles):
+                t.index = i
+            if selected_tile_index == idx:
+                selected_tile_index = None
+            elif selected_tile_index is not None and selected_tile_index > idx:
+                selected_tile_index -= 1
 
     checker_tile = Image.new("RGBA", (CELL * 2, CELL * 2))
     checker_tile.paste(LIGHT, (0, 0, CELL, CELL))
@@ -305,16 +397,19 @@ if filepath:
                     if p * 2 < r - l and p * 2 < b - t:
                         draw.rectangle([l + p, t + p, r - p, b - p], outline=PAD_COLOR, width=1)
 
-        for col, row in state["marked_cells"]:
-            l, t, r, b = get_cell_rect(col, row, scale, ox, oy)
+        for t in project.tiles:
+            l, t, r, b = get_cell_rect(t.col, t.row, scale, ox, oy)
             draw.rectangle([l, t, r, b], fill=MARK_FILL, outline=MARK_OUTLINE, width=1)
 
-        st = state["selected_tile"]
-        if st:
-            l, t, r, b = get_cell_rect(st[0], st[1], scale, ox, oy)
-            draw.rectangle([l, t, r, b], outline=SELECT_COLOR, width=2)
+        if selected_tile_index is not None and selected_tile_index < len(project.tiles):
+            t = project.tiles[selected_tile_index]
+            l, t_rect, r, b = get_cell_rect(t.col, t.row, scale, ox, oy)
+            draw.rectangle([l, t_rect, r, b], outline=SELECT_COLOR, width=2)
 
-        for (col, row), bm in state["bitmasks"].items():
+        for t in project.tiles:
+            if t.bitmask is None:
+                continue
+            col, row, bm = t.col, t.row, t.bitmask
             l, t, r, b = get_cell_rect(col, row, scale, ox, oy)
             bw = (r - l) / 3
             bh = (b - t) / 3
@@ -369,7 +464,7 @@ if filepath:
         tile_size_label.config(text=f"图块尺寸: {cw} x {ch} px")
 
     def update_mark_count():
-        mark_count_label.config(text=f"已标记: {len(state['marked_cells'])}")
+        mark_count_label.config(text=f"已标记: {len(project.tiles)}")
 
     def redraw():
         cw, ch = canvas.winfo_width(), canvas.winfo_height()
@@ -400,9 +495,12 @@ if filepath:
         zoom_label.config(text=f"缩放: {int(scale * 100)}%")
 
     def on_grid_changed(*args):
-        state["marked_cells"].clear()
-        state["bitmasks"].clear()
-        state["selected_tile"] = None
+        if _loading_project:
+            return
+        global selected_tile_index
+        project.tiles.clear()
+        project.groups.clear()
+        selected_tile_index = None
         state["format_brush_mode"] = False
         state["format_brush_bitmask"] = None
         state["drag_mark"] = None
@@ -451,39 +549,43 @@ if filepath:
         state["drag_start"] = None
 
     def on_left_press(event):
+        global selected_tile_index
         if state["format_brush_mode"]:
             cell = cell_at_canvas_pos(event.x, event.y)
             if cell is None:
                 exit_format_brush()
                 return
             fbm = state["format_brush_bitmask"]
+            idx, tile = get_or_create_tile(cell[0], cell[1])
             if fbm is not None:
                 has_any = any(fbm[r][c] for r in range(3) for c in range(3))
                 if has_any:
-                    state["bitmasks"][cell] = [row[:] for row in fbm]
+                    tile.bitmask = [row[:] for row in fbm]
                 else:
-                    state["bitmasks"].pop(cell, None)
-                state["marked_cells"].add(cell)
-                state["drag_mark"] = (event.x, event.y, True, cell)
-                update_mark_count()
-                update_bitmask_label()
-                redraw()
+                    tile.bitmask = None
+            else:
+                tile.bitmask = None
+            state["drag_mark"] = (event.x, event.y, True, cell)
+            update_mark_count()
+            update_bitmask_label()
+            redraw()
             return
 
         cell = cell_at_canvas_pos(event.x, event.y)
         if cell is None:
-            state["selected_tile"] = None
+            selected_tile_index = None
             state["hover_cell"] = None
             update_bitmask_label()
             redraw()
             return
-        if cell in state["marked_cells"]:
-            if state["selected_tile"] == cell:
-                state["selected_tile"] = None
+        existing_idx = find_tile_index(cell[0], cell[1])
+        if existing_idx is not None:
+            if selected_tile_index == existing_idx:
+                selected_tile_index = None
             else:
-                state["selected_tile"] = cell
+                selected_tile_index = existing_idx
         else:
-            state["marked_cells"].add(cell)
+            get_or_create_tile(cell[0], cell[1])
             mark_state = True
             state["drag_mark"] = (event.x, event.y, mark_state, cell)
         update_mark_count()
@@ -494,13 +596,13 @@ if filepath:
         state["drag_mark"] = None
 
     def on_right_press(event):
+        global selected_tile_index
         if state["format_brush_mode"]:
             cell = cell_at_canvas_pos(event.x, event.y)
             if cell is None:
                 exit_format_brush()
                 return
-            state["bitmasks"].pop(cell, None)
-            state["marked_cells"].discard(cell)
+            remove_tile(cell[0], cell[1])
             state["drag_mark"] = (event.x, event.y, False, cell)
             update_mark_count()
             update_bitmask_label()
@@ -510,12 +612,9 @@ if filepath:
         cell = cell_at_canvas_pos(event.x, event.y)
         if cell is None:
             return
-        if cell in state["marked_cells"]:
-            state["marked_cells"].discard(cell)
-            if cell in state["bitmasks"]:
-                del state["bitmasks"][cell]
-            if state["selected_tile"] == cell:
-                state["selected_tile"] = None
+        existing_idx = find_tile_index(cell[0], cell[1])
+        if existing_idx is not None:
+            remove_tile(cell[0], cell[1])
             state["drag_mark"] = (event.x, event.y, False, cell)
             update_mark_count()
             update_bitmask_label()
@@ -534,14 +633,13 @@ if filepath:
             dm = state["drag_mark"]
             if dm and cell and cell != dm[3]:
                 if dm[2]:
+                    idx, tile = get_or_create_tile(cell[0], cell[1])
                     if fbm is not None and any(fbm[r][c] for r in range(3) for c in range(3)):
-                        state["bitmasks"][cell] = [row[:] for row in fbm]
+                        tile.bitmask = [row[:] for row in fbm]
                     else:
-                        state["bitmasks"].pop(cell, None)
-                    state["marked_cells"].add(cell)
+                        tile.bitmask = None
                 else:
-                    state["bitmasks"].pop(cell, None)
-                    state["marked_cells"].discard(cell)
+                    remove_tile(cell[0], cell[1])
                 state["drag_mark"] = (dm[0], dm[1], dm[2], cell)
                 update_mark_count()
                 update_bitmask_label()
@@ -556,9 +654,9 @@ if filepath:
             cell = cell_at_canvas_pos(event.x, event.y)
             if cell and cell != dm[3]:
                 if dm[2]:
-                    state["marked_cells"].add(cell)
+                    get_or_create_tile(cell[0], cell[1])
                 else:
-                    state["marked_cells"].discard(cell)
+                    remove_tile(cell[0], cell[1])
                 state["drag_mark"] = (dm[0], dm[1], dm[2], cell)
                 update_mark_count()
                 redraw()
@@ -574,9 +672,10 @@ if filepath:
             redraw()
 
     def on_clear():
-        state["marked_cells"].clear()
-        state["bitmasks"].clear()
-        state["selected_tile"] = None
+        global selected_tile_index
+        project.tiles.clear()
+        project.groups.clear()
+        selected_tile_index = None
         state["format_brush_mode"] = False
         state["format_brush_bitmask"] = None
         state["drag_mark"] = None
@@ -586,14 +685,20 @@ if filepath:
         redraw()
 
     def on_invert():
+        global selected_tile_index
         cols = _safe_int(cols_var)
         rows = _safe_int(rows_var)
-        all_cells = {(c, r) for r in range(rows) for c in range(cols)}
-        state["marked_cells"] = all_cells - state["marked_cells"]
-        state["bitmasks"] = {k: v for k, v in state["bitmasks"].items() if k in state["marked_cells"]}
-        if state["selected_tile"] not in state["marked_cells"]:
-            state["selected_tile"] = None
-            update_bitmask_label()
+        to_add = []
+        for r in range(rows):
+            for c in range(cols):
+                idx = find_tile_index(c, r)
+                if idx is None:
+                    to_add.append((c, r))
+        project.tiles.clear()
+        for i, (c, r) in enumerate(to_add):
+            project.tiles.append(TileDef(index=i, col=c, row=r))
+        selected_tile_index = None
+        update_bitmask_label()
         update_mark_count()
         redraw()
 
@@ -601,11 +706,10 @@ if filepath:
     invert_btn.config(command=on_invert)
 
     def open_bitmask_editor():
-        st = state["selected_tile"]
-        if st is None:
+        if selected_tile_index is None or selected_tile_index >= len(project.tiles):
             return
-
-        col, row = st
+        tile = project.tiles[selected_tile_index]
+        col, row = tile.col, tile.row
         dlg = tk.Toplevel()
         dlg.title(f"位掩码编辑 - ({col}, {row})")
         dlg.configure(bg="#2d2d2d")
@@ -616,7 +720,7 @@ if filepath:
         dlg.lift()
         dlg.focus_force()
 
-        bitmask = state["bitmasks"].get((col, row))
+        bitmask = tile.bitmask
         if bitmask is None:
             bitmask = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
         edit_bitmask = [row[:] for row in bitmask]
@@ -773,9 +877,9 @@ if filepath:
                     return
             has_any = any(edit_bitmask[r][c] != MASK_OFF for r in range(3) for c in range(3))
             if has_any:
-                state["bitmasks"][(col, row)] = [row[:] for row in edit_bitmask]
-            elif (col, row) in state["bitmasks"]:
-                del state["bitmasks"][(col, row)]
+                tile.bitmask = [row[:] for row in edit_bitmask]
+            else:
+                tile.bitmask = None
             update_bitmask_label()
             dlg.destroy()
             redraw()
@@ -813,8 +917,7 @@ if filepath:
     bitmask_btn.config(command=open_bitmask_editor)
 
     def on_export():
-        marked = state["marked_cells"]
-        if not marked:
+        if not project.tiles:
             messagebox.showwarning("导出", "没有已标记的图块。")
             return
 
@@ -823,7 +926,7 @@ if filepath:
         padding = _safe_int(padding_var)
         cw = img.width // cols
         ch = img.height // rows
-        sorted_cells = sorted(marked, key=lambda c: (c[1], c[0]))
+        sorted_tiles = sorted(project.tiles, key=lambda t: (t.row, t.col))
 
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         normalized = filepath.replace("\\", "/")
@@ -834,7 +937,7 @@ if filepath:
             rel_source = os.path.basename(normalized)
         lines = [
             f"-- Tileset mapping generated by tile.py at {now}",
-            f"-- Marked: {len(sorted_cells)} tiles",
+            f"-- Marked: {len(sorted_tiles)} tiles",
             f"-- Bitmask values: 0 = Off, 1 = On, 2 = Ignore (Minimal 3x3 Autotile)",
             "",
             "return {",
@@ -844,20 +947,37 @@ if filepath:
             f"    tile_width = {cw},",
             f"    tile_height = {ch},",
             f"    padding = {padding},",
-            f"    count = {len(sorted_cells)},",
+            f"    count = {len(sorted_tiles)},",
             "    tiles = {",
         ]
-        for i, (col, row) in enumerate(sorted_cells):
-            bm = state["bitmasks"].get((col, row))
-            if bm and any(any(cell for cell in row_bm) for row_bm in bm):
-                lines.append(f"        [{i}] = {{ col = {col}, row = {row}, bitmask = {{")
+        for i, t in enumerate(sorted_tiles):
+            entry = f"        [{i}] = {{ col = {t.col}, row = {t.row}"
+            if t.properties:
+                props_parts = []
+                for k, v in t.properties.items():
+                    if isinstance(v, bool):
+                        props_parts.append(f"{k} = {str(v).lower()}")
+                    elif isinstance(v, (int, float)):
+                        props_parts.append(f"{k} = {v}")
+                    else:
+                        props_parts.append(f"{k} = {repr(v)}")
+                entry += f", properties = {{ {', '.join(props_parts)} }}"
+            bm = t.bitmask
+            if bm and any(any(c for c in row_bm) for row_bm in bm):
+                lines.append(entry + f", bitmask = {{")
                 lines.append(f"            {{{bm[0][0]}, {bm[0][1]}, {bm[0][2]}}},")
                 lines.append(f"            {{{bm[1][0]}, {bm[1][1]}, {bm[1][2]}}},")
                 lines.append(f"            {{{bm[2][0]}, {bm[2][1]}, {bm[2][2]}}},")
                 lines.append(f"        }} }},")
             else:
-                lines.append(f"        [{i}] = {{ col = {col}, row = {row} }},")
-        lines.append("    }")
+                lines.append(entry + " },")
+        lines.append("    },")
+        if project.groups:
+            lines.append("    groups = {")
+            for group in project.groups:
+                tiles_str = ", ".join(str(i) for i in group.tile_indices)
+                lines.append(f"        {group.name} = {{ tiles = {{ {tiles_str} }} }},")
+            lines.append("    },")
         lines.append("}")
         lines.append("")
 
@@ -923,6 +1043,87 @@ if filepath:
         text.config(state=tk.DISABLED)
 
     export_btn.config(command=on_export)
+
+    def on_import():
+        global filepath, img, project, selected_tile_index, _loading_project
+        lua_path = filedialog.askopenfilename(
+            filetypes=[("Lua 文件", "*.lua"), ("所有文件", "*.*")],
+        )
+        if not lua_path:
+            return
+
+        with open(lua_path, "r", encoding="utf-8") as f:
+            text = f.read()
+
+        try:
+            data = parse_lua_table(text)
+        except Exception as e:
+            messagebox.showerror("解析失败", f"无法解析文件:\n{e}")
+            return
+
+        source_rel = data.get("source", "")
+        png_path = os.path.join(WORKSPACE, source_rel) if source_rel else ""
+        if not png_path or not os.path.exists(png_path):
+            messagebox.showerror("图片未找到", f"无法找到图片:\n{png_path}")
+            return
+
+        filepath = png_path
+        img = Image.open(png_path).convert("RGBA")
+
+        project.meta.source = source_rel
+        project.meta.cols = data.get("cols", 1)
+        project.meta.rows = data.get("rows", 1)
+        project.meta.tile_width = data.get("tile_width", 0)
+        project.meta.tile_height = data.get("tile_height", 0)
+        project.meta.padding = data.get("padding", 0)
+
+        project.tiles.clear()
+        project.groups.clear()
+        tiles_data = data.get("tiles", [])
+        if isinstance(tiles_data, dict):
+            tiles_list = [tiles_data[k] for k in sorted(tiles_data.keys())]
+        else:
+            tiles_list = tiles_data
+        for i, tile_entry in enumerate(tiles_list):
+            if tile_entry is None:
+                continue
+            tile = TileDef(
+                index=i,
+                col=tile_entry.get("col", 0),
+                row=tile_entry.get("row", 0),
+                properties=tile_entry.get("properties", {}),
+                bitmask=tile_entry.get("bitmask"),
+            )
+            project.tiles.append(tile)
+
+        groups_data = data.get("groups", {})
+        if isinstance(groups_data, dict):
+            for name, group_entry in groups_data.items():
+                group = GroupDef(
+                    name=name,
+                    tile_indices=list(group_entry.get("tiles", [])),
+                )
+                project.groups.append(group)
+
+        selected_tile_index = None
+
+        _loading_project = True
+        cols_var.set(project.meta.cols)
+        rows_var.set(project.meta.rows)
+        padding_var.set(project.meta.padding)
+        _loading_project = False
+
+        root.title(filepath)
+        update_tile_info()
+        update_mark_count()
+        update_bitmask_label()
+        state["format_brush_mode"] = False
+        state["format_brush_bitmask"] = None
+        state["drag_mark"] = None
+        fmt_btn.config(text="格式刷")
+        redraw()
+
+    root.bind("<Control-o>", lambda e: on_import())
 
     canvas.bind("<Configure>", lambda e: redraw())
     canvas.bind("<MouseWheel>", on_wheel)

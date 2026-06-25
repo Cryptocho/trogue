@@ -189,7 +189,10 @@ love src
 4. 在检查之后或用户要求时, 更新 CHANGELOG.md, 检查之前禁止修改CHANGELOG.md
 5. 检查是否需要更新AGENTS.md
 6. 询问用户是否写 commit message ,如果是则给出 commit message(英文) 预览等待用户确认,禁止直接提交
-7. 确认后提交所有变更并推送
+7. 确认后提交**所有**变更(包括非本次变更)并推送
+> - Plans must include detailed steps and specifics, including steps in the development process
+> - After creating a plan, you must use a subagent to review it for feasibility and completeness, then you can call `plan_exit`
+> - CHANGELOG和提交消息不应包含阶段数等内部内容
 
 ### CHANGELOG 格式规范
 在 `## [Unreleased]` 下按功能模块组织变更，每个模块使用 `### 功能描述` 标题。

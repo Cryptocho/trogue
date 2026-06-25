@@ -15,6 +15,7 @@
 !/worldmap.drawio
 !/temp/
 !/temp/**
+/temp/godot/
 !/doc/
 !/doc/**
 !bitmask_and_autotile.md
