@@ -10,7 +10,7 @@ DARK = (19, 22, 29, 255)
 ZOOM_MIN = 0.025
 ZOOM_MAX = 32.0
 ZOOM_STEP = 1.1
-SIDEBAR_W = 210
+SIDEBAR_W = 280
 GRID_COLOR = (255, 255, 255, 80)
 PAD_COLOR = (180, 180, 180, 100)
 MARK_FILL = (80, 140, 255, 100)
@@ -25,6 +25,7 @@ BITMASK_YELLOW = (255, 255, 0, 153)
 BITMASK_GRID_COLOR = (255, 255, 0, 100)
 SELECT_COLOR = (0, 255, 128, 200)
 BITMASK_DIALOG_SIZE = 350
+PROP_PAINT_FILL = (255, 140, 0, 140)
 
 WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(WORKSPACE, "src")
@@ -70,12 +71,54 @@ if filepath:
     main_frame = tk.Frame(root)
     main_frame.pack(fill=tk.BOTH, expand=True)
 
-    canvas = tk.Canvas(main_frame, highlightthickness=0)
+    canvas = tk.Canvas(main_frame, highlightthickness=0, takefocus=True)
     canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    sidebar = tk.Frame(main_frame, width=SIDEBAR_W, bg="#2d2d2d")
-    sidebar.pack(side=tk.RIGHT, fill=tk.Y)
-    sidebar.pack_propagate(False)
+    sidebar_outer = tk.Frame(main_frame, width=SIDEBAR_W, bg="#2d2d2d")
+    sidebar_outer.pack(side=tk.RIGHT, fill=tk.Y)
+    sidebar_outer.pack_propagate(False)
+
+    sidebar_canvas = tk.Canvas(sidebar_outer, bg="#2d2d2d", highlightthickness=0, width=SIDEBAR_W - 12, takefocus=True)
+    sidebar_scrollbar = tk.Scrollbar(sidebar_outer, orient=tk.VERTICAL, command=sidebar_canvas.yview)
+    sidebar_canvas.configure(yscrollcommand=sidebar_scrollbar.set)
+    sidebar_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    sidebar_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    sidebar = tk.Frame(sidebar_canvas, bg="#2d2d2d")
+    _sidebar_win_id = sidebar_canvas.create_window((0, 0), window=sidebar, anchor=tk.NW)
+
+    def _configure_sidebar_width(event):
+        sidebar_canvas.itemconfig(_sidebar_win_id, width=event.width)
+
+    sidebar_canvas.bind("<Configure>", _configure_sidebar_width, add="+")
+
+    def _update_scrollregion(event=None):
+        sidebar_canvas.configure(scrollregion=sidebar_canvas.bbox("all"))
+
+    sidebar.bind("<Configure>", _update_scrollregion)
+
+    def _on_sidebar_wheel(event):
+        if getattr(event, "num", 0) == 4 or getattr(event, "delta", 0) > 0:
+            sidebar_canvas.yview_scroll(-1, "units")
+        elif getattr(event, "num", 0) == 5 or getattr(event, "delta", 0) < 0:
+            sidebar_canvas.yview_scroll(1, "units")
+
+    def _root_wheel(event):
+        rx = root.winfo_pointerx() - root.winfo_rootx()
+        if rx > root.winfo_width() - SIDEBAR_W:
+            _on_sidebar_wheel(event)
+
+    root.bind_all("<MouseWheel>", _root_wheel, add="+")
+    root.bind_all("<Button-4>", _root_wheel, add="+")
+    root.bind_all("<Button-5>", _root_wheel, add="+")
+
+    def _sidebar_steal_focus(event):
+        w = event.widget
+        if isinstance(w, (tk.Entry, tk.Button, tk.Spinbox)):
+            return
+        canvas.focus_set()
+
+    root.bind_all("<Button-1>", _sidebar_steal_focus, add="+")
 
     tk.Label(
         sidebar, bg="#2d2d2d", fg="#888888", anchor="w", font=("", 9, "bold"),
@@ -164,12 +207,8 @@ if filepath:
         )
         return btn
 
-    clear_btn = dark_button(mark_btn_frame, "清除", None)
-    clear_btn.pack(side=tk.LEFT)
-    invert_btn = dark_button(mark_btn_frame, "反选", None)
-    invert_btn.pack(side=tk.LEFT, padx=(4, 0))
     fmt_btn = dark_button(mark_btn_frame, "格式刷", None)
-    fmt_btn.pack(side=tk.LEFT, padx=(4, 0))
+    fmt_btn.pack(side=tk.LEFT)
 
     tk.Frame(sidebar, height=1, bg="#444444").pack(fill=tk.X, padx=10, pady=8)
 
@@ -237,6 +276,28 @@ if filepath:
 
     tk.Frame(sidebar, height=1, bg="#444444").pack(fill=tk.X, padx=10, pady=8)
 
+    tk.Label(
+        sidebar, bg="#2d2d2d", fg="#888888", anchor="w", font=("", 9, "bold"),
+        text="属性",
+    ).pack(fill=tk.X, padx=10, pady=(0, 2))
+
+    props_hint_label = tk.Label(
+        sidebar, bg="#2d2d2d", fg="#666666", anchor="w",
+        text="选择瓦片以编辑属性",
+    )
+    props_hint_label.pack(fill=tk.X, padx=14, pady=1)
+
+    props_container = tk.Frame(sidebar, bg="#2d2d2d")
+    props_container.pack(fill=tk.X, padx=10, pady=1)
+    props_container.pack_forget()
+
+    props_add_btn = dark_button(sidebar, "+ 添加属性", None)
+    props_add_btn.pack(fill=tk.X, padx=10, pady=(0, 1))
+    props_add_btn.pack_forget()
+
+    props_bottom_sep = tk.Frame(sidebar, height=1, bg="#444444")
+    props_bottom_sep.pack(fill=tk.X, padx=10, pady=8)
+
     export_btn = dark_button(sidebar, "导出 Lua", None)
     export_btn.pack(fill=tk.X, padx=14, pady=4)
 
@@ -254,6 +315,9 @@ if filepath:
         "drag_mark": None,  # (start_x, start_y, mark_state)
         "format_brush_mode": False,
         "format_brush_bitmask": None,  # [[0,0,0],[0,0,0],[0,0,0]] or None
+        "property_paint_mode": False,
+        "property_paint_key": None,
+        "property_paint_value": None,
     }
 
     project = TilesetProject()
@@ -448,6 +512,11 @@ if filepath:
             l, t, r, b = get_cell_rect(hover[0], hover[1], scale, ox, oy)
             draw.rectangle([l, t, r, b], outline=HOVER_COLOR, width=2)
 
+        if state["property_paint_mode"] and state["hover_cell"]:
+            hc = state["hover_cell"]
+            p_l, p_t, p_r, p_b = get_cell_rect(hc[0], hc[1], scale, ox, oy)
+            draw.rectangle([p_l, p_t, p_r, p_b], fill=PROP_PAINT_FILL)
+
         return Image.alpha_composite(result, overlay)
 
     def _safe_int(var):
@@ -494,6 +563,173 @@ if filepath:
 
         zoom_label.config(text=f"缩放: {int(scale * 100)}%")
 
+    # ── 属性编辑器 ──
+
+    def parse_value(s):
+        s = s.strip()
+        sl = s.lower()
+        if sl == "true":
+            return True
+        if sl == "false":
+            return False
+        try:
+            if "." in s:
+                return float(s)
+            return int(s)
+        except ValueError:
+            return s
+
+    def on_property_changed(row_frame):
+        if selected_tile_index is None or selected_tile_index >= len(project.tiles):
+            return
+        try:
+            tile = project.tiles[selected_tile_index]
+            old_key = row_frame._key_str
+            new_key = row_frame._key_entry.get().strip()
+            new_value_str = row_frame._value_entry.get().strip()
+        except tk.TclError:
+            return
+        if old_key in tile.properties:
+            del tile.properties[old_key]
+        if new_key:
+            tile.properties[new_key] = parse_value(new_value_str)
+        row_frame._key_str = new_key
+
+    def on_delete_property(row_frame):
+        if selected_tile_index is None or selected_tile_index >= len(project.tiles):
+            return
+        try:
+            tile = project.tiles[selected_tile_index]
+            key = row_frame._key_entry.get().strip()
+        except tk.TclError:
+            return
+        if key in tile.properties:
+            del tile.properties[key]
+        rebuild_property_rows(tile)
+
+    def on_add_property():
+        if selected_tile_index is None or selected_tile_index >= len(project.tiles):
+            return
+        tile = project.tiles[selected_tile_index]
+        tile.properties[""] = ""
+        rebuild_property_rows(tile)
+        children = props_container.winfo_children()
+        if children:
+            new_row = children[-1]
+            if hasattr(new_row, "_key_entry"):
+                new_row._key_entry.focus_set()
+
+    def on_property_row_click(row_frame):
+        if selected_tile_index is None or selected_tile_index >= len(project.tiles):
+            return
+        try:
+            key = row_frame._key_entry.get().strip()
+            value_str = row_frame._value_entry.get().strip()
+        except tk.TclError:
+            return
+        if not key:
+            return
+        if state["format_brush_mode"]:
+            exit_format_brush()
+        state["property_paint_mode"] = True
+        state["property_paint_key"] = key
+        state["property_paint_value"] = parse_value(value_str)
+        state["drag_mark"] = None
+        for child in props_container.winfo_children():
+            if isinstance(child, tk.Frame) and hasattr(child, "_key_entry"):
+                child.config(bg="#4a4a3a" if child is row_frame else "#2d2d2d")
+        update_prop_paint_status()
+        redraw()
+
+    def exit_property_paint():
+        state["property_paint_mode"] = False
+        state["property_paint_key"] = None
+        state["property_paint_value"] = None
+        state["drag_mark"] = None
+        for child in props_container.winfo_children():
+            if isinstance(child, tk.Frame) and hasattr(child, "_key_entry"):
+                child.config(bg="#2d2d2d")
+        update_prop_paint_status()
+        redraw()
+
+    def update_prop_paint_status():
+        if state["property_paint_mode"]:
+            val = state["property_paint_value"]
+            val_str = "true" if val is True else "false" if val is False else str(val)
+            props_hint_label.config(
+                text=f"属性刷: {state['property_paint_key']} = {val_str}",
+                fg="#ff8c00",
+            )
+        elif selected_tile_index is not None and selected_tile_index < len(project.tiles):
+            props_hint_label.config(text="选择瓦片以编辑属性", fg="#666666")
+            props_hint_label.pack_forget()
+        else:
+            props_hint_label.config(text="选择瓦片以编辑属性", fg="#666666")
+
+    def create_property_row(key_str, value):
+        row_frame = tk.Frame(props_container, bg="#2d2d2d")
+        row_frame.pack(fill=tk.X, pady=1)
+
+        value_str = "true" if value is True else "false" if value is False else str(value)
+
+        del_btn = tk.Button(
+            row_frame, text="X", command=lambda: on_delete_property(row_frame),
+            bg="#3a3a3a", fg="#cc6666", relief=tk.FLAT, bd=0,
+            activebackground="#555555", activeforeground="#ff6666",
+            padx=6, pady=0, font=("", 10),
+        )
+        del_btn.pack(side=tk.RIGHT, padx=(1, 0))
+
+        paint_btn = tk.Button(
+            row_frame, text="P", command=lambda: on_property_row_click(row_frame),
+            bg="#4a4a2a", fg="#ffcc00", relief=tk.FLAT, bd=0,
+            activebackground="#555555", activeforeground="#ffffff",
+            padx=6, pady=0, font=("", 9),
+        )
+        paint_btn.pack(side=tk.RIGHT, padx=(2, 2))
+
+        key_entry = tk.Entry(
+            row_frame, width=10,
+            bg="#3a3a3a", fg="#cccccc", insertbackground="#cccccc",
+            relief=tk.FLAT,
+        )
+        key_entry.insert(0, str(key_str))
+        key_entry.pack(side=tk.LEFT)
+        key_entry.bind("<FocusOut>", lambda e: on_property_changed(row_frame))
+
+        value_entry = tk.Entry(
+            row_frame, width=14,
+            bg="#3a3a3a", fg="#cccccc", insertbackground="#cccccc",
+            relief=tk.FLAT,
+        )
+        value_entry.insert(0, value_str)
+        value_entry.pack(side=tk.LEFT, padx=(2, 0))
+        value_entry.bind("<FocusOut>", lambda e: on_property_changed(row_frame))
+
+        row_frame._key_entry = key_entry
+        row_frame._value_entry = value_entry
+        row_frame._key_str = key_str
+
+    def rebuild_property_rows(tile):
+        for w in list(props_container.winfo_children()):
+            w.destroy()
+        for k, v in tile.properties.items():
+            create_property_row(k, v)
+
+    def update_properties_panel():
+        if selected_tile_index is not None and selected_tile_index < len(project.tiles):
+            props_hint_label.pack_forget()
+            props_container.pack(before=props_bottom_sep, fill=tk.X, padx=10, pady=1)
+            props_add_btn.pack(before=props_bottom_sep, fill=tk.X, padx=10, pady=(0, 1))
+            props_add_btn.config(command=on_add_property)
+            rebuild_property_rows(project.tiles[selected_tile_index])
+        else:
+            if state["property_paint_mode"]:
+                exit_property_paint()
+            props_hint_label.pack(before=props_bottom_sep, fill=tk.X, padx=14, pady=1)
+            props_container.pack_forget()
+            props_add_btn.pack_forget()
+
     def on_grid_changed(*args):
         if _loading_project:
             return
@@ -504,11 +740,15 @@ if filepath:
         state["format_brush_mode"] = False
         state["format_brush_bitmask"] = None
         state["drag_mark"] = None
+        state["property_paint_mode"] = False
+        state["property_paint_key"] = None
+        state["property_paint_value"] = None
         fmt_btn.config(text="格式刷")
         update_tile_info()
         update_mark_count()
         update_bitmask_label()
         redraw()
+        update_properties_panel()
 
     cols_var.trace_add("write", on_grid_changed)
     rows_var.trace_add("write", on_grid_changed)
@@ -550,6 +790,21 @@ if filepath:
 
     def on_left_press(event):
         global selected_tile_index
+        canvas.focus_set()
+
+        if state["property_paint_mode"]:
+            cell = cell_at_canvas_pos(event.x, event.y)
+            if cell is None:
+                exit_property_paint()
+                return
+            idx, tile = get_or_create_tile(cell[0], cell[1])
+            tile.properties[state["property_paint_key"]] = state["property_paint_value"]
+            state["drag_mark"] = (event.x, event.y, True, cell)
+            update_mark_count()
+            update_properties_panel()
+            redraw()
+            return
+
         if state["format_brush_mode"]:
             cell = cell_at_canvas_pos(event.x, event.y)
             if cell is None:
@@ -591,12 +846,19 @@ if filepath:
         update_mark_count()
         update_bitmask_label()
         redraw()
+        update_properties_panel()
 
     def on_left_release(event):
         state["drag_mark"] = None
 
     def on_right_press(event):
         global selected_tile_index
+        canvas.focus_set()
+
+        if state["property_paint_mode"]:
+            exit_property_paint()
+            return
+
         if state["format_brush_mode"]:
             cell = cell_at_canvas_pos(event.x, event.y)
             if cell is None:
@@ -606,6 +868,7 @@ if filepath:
             state["drag_mark"] = (event.x, event.y, False, cell)
             update_mark_count()
             update_bitmask_label()
+            update_properties_panel()
             redraw()
             return
 
@@ -618,6 +881,7 @@ if filepath:
             state["drag_mark"] = (event.x, event.y, False, cell)
             update_mark_count()
             update_bitmask_label()
+            update_properties_panel()
             redraw()
 
     def on_right_release(event):
@@ -625,6 +889,21 @@ if filepath:
 
     def on_mouse_move(event):
         if state["drag_start"]:
+            return
+
+        if state["property_paint_mode"]:
+            cell = cell_at_canvas_pos(event.x, event.y)
+            dm = state["drag_mark"]
+            if dm and cell and cell != dm[3]:
+                idx, tile = get_or_create_tile(cell[0], cell[1])
+                tile.properties[state["property_paint_key"]] = state["property_paint_value"]
+                state["drag_mark"] = (dm[0], dm[1], dm[2], cell)
+                update_mark_count()
+                update_properties_panel()
+                redraw()
+            elif not dm and cell and cell != state["hover_cell"]:
+                state["hover_cell"] = cell
+                redraw()
             return
 
         if state["format_brush_mode"]:
@@ -670,40 +949,6 @@ if filepath:
         if state["hover_cell"] is not None:
             state["hover_cell"] = None
             redraw()
-
-    def on_clear():
-        global selected_tile_index
-        project.tiles.clear()
-        project.groups.clear()
-        selected_tile_index = None
-        state["format_brush_mode"] = False
-        state["format_brush_bitmask"] = None
-        state["drag_mark"] = None
-        fmt_btn.config(text="格式刷")
-        update_mark_count()
-        update_bitmask_label()
-        redraw()
-
-    def on_invert():
-        global selected_tile_index
-        cols = _safe_int(cols_var)
-        rows = _safe_int(rows_var)
-        to_add = []
-        for r in range(rows):
-            for c in range(cols):
-                idx = find_tile_index(c, r)
-                if idx is None:
-                    to_add.append((c, r))
-        project.tiles.clear()
-        for i, (c, r) in enumerate(to_add):
-            project.tiles.append(TileDef(index=i, col=c, row=r))
-        selected_tile_index = None
-        update_bitmask_label()
-        update_mark_count()
-        redraw()
-
-    clear_btn.config(command=on_clear)
-    invert_btn.config(command=on_invert)
 
     def open_bitmask_editor():
         if selected_tile_index is None or selected_tile_index >= len(project.tiles):
@@ -1124,6 +1369,14 @@ if filepath:
         redraw()
 
     root.bind("<Control-o>", lambda e: on_import())
+
+    def on_escape():
+        if state["property_paint_mode"]:
+            exit_property_paint()
+        elif state["format_brush_mode"]:
+            exit_format_brush()
+
+    root.bind("<Escape>", lambda e: on_escape())
 
     canvas.bind("<Configure>", lambda e: redraw())
     canvas.bind("<MouseWheel>", on_wheel)

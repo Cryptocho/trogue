@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### tile.py 属性编辑器
+
+- 影响的文件: `tools/tile.py`, `tools/tile-test.md`
+- 新增属性编辑面板：sidebar "属性" 区域，支持 key-value 属性列表 (Key/Value Entry + X 删除 + P 属性刷按钮)
+- Value 自动类型推断：`true`/`false`(不区分大小写) → boolean，含小数点 → float，纯数字 → int，其他 → string
+- 属性读写双向绑定：FocusOut 写回 `TileDef.properties`，tile 切换时刷新面板
+- 新增属性刷 (Property Paint) 工具：点击 P 按钮进入，左键点击/拖动画布写入目标 tile，右键/空白处/Escape 退出
+- 侧栏宽 210→280，内部 Canvas+Scrollbar 支持滚动
+- 移除无用的"清除""反选"按钮
+
 ### tile.py 数据模型重构
 
 - 影响的文件: `tools/tile.py`, `tools/tile_model.py` (新建), `tools/tile_lua_parser.py` (新建), `tools/tile-test.md`
