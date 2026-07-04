@@ -1,5 +1,6 @@
 import os
 import datetime
+import random
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageDraw, ImageTk
@@ -26,6 +27,15 @@ BITMASK_GRID_COLOR = (255, 255, 0, 100)
 SELECT_COLOR = (0, 255, 128, 200)
 BITMASK_DIALOG_SIZE = 350
 PROP_PAINT_FILL = (255, 140, 0, 140)
+
+
+def generate_group_color():
+    import colorsys
+    h = random.random()
+    s = random.uniform(0.6, 0.9)
+    v = random.uniform(0.7, 1.0)
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    return (int(r * 255), int(g * 255), int(b * 255), 120)
 
 WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(WORKSPACE, "src")
@@ -257,6 +267,8 @@ if filepath:
         redraw()
 
     def on_format_brush():
+        if state["group_edit_mode"] is not None:
+            exit_group_edit()
         if not state["format_brush_mode"]:
             if selected_tile_index is None or selected_tile_index >= len(project.tiles):
                 return
@@ -275,6 +287,177 @@ if filepath:
     fmt_btn.config(command=on_format_brush)
 
     tk.Frame(sidebar, height=1, bg="#444444").pack(fill=tk.X, padx=10, pady=8)
+
+    # ── 分组 ──
+
+    tk.Label(
+        sidebar, bg="#2d2d2d", fg="#888888", anchor="w", font=("", 9, "bold"),
+        text="分组",
+    ).pack(fill=tk.X, padx=10, pady=(0, 2))
+
+    groups_container = tk.Frame(sidebar, bg="#2d2d2d")
+    groups_container.pack(fill=tk.X, padx=10, pady=1)
+
+    new_group_btn = dark_button(sidebar, "+ 新建分组", None)
+    new_group_btn.pack(fill=tk.X, padx=14, pady=4)
+
+    group_hint_label = tk.Label(
+        sidebar, bg="#2d2d2d", fg="#666666", anchor="w",
+        text="",
+    )
+    group_hint_label.pack(fill=tk.X, padx=14, pady=1)
+    group_hint_label.pack_forget()
+    # NOTE: pack_forget() 后重新 pack() 必须带 before= 锚定位置,
+    # 否则 Tkinter 默认追加到父容器末尾.
+
+    groups_sep = tk.Frame(sidebar, height=1, bg="#444444")
+    groups_sep.pack(fill=tk.X, padx=10, pady=8)
+
+    group_rows = []
+
+    # ── 分组管理函数 ──
+
+    def rebuild_groups_list():
+        for row in group_rows:
+            for w in list(row.winfo_children()):
+                w.destroy()
+            row.destroy()
+        group_rows.clear()
+
+        for w in list(groups_container.winfo_children()):
+            w.destroy()
+
+        if project.groups:
+            for gi, group in enumerate(project.groups):
+                is_active = (state["group_edit_mode"] == gi)
+                row = tk.Frame(groups_container, bg="#3a3a4a" if is_active else "#2d2d2d")
+                row.pack(fill=tk.X, pady=1)
+
+                color = state["group_color_map"].get(gi, (80, 80, 80, 255))
+                color_hex = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
+                color_indicator = tk.Canvas(row, width=8, height=8, bg=color_hex, highlightthickness=0)
+                color_indicator.pack(side=tk.LEFT, padx=(2, 4))
+                color_indicator.pack_propagate(False)
+
+                name_label = tk.Label(
+                    row, bg=row["bg"], fg="#cccccc", anchor="w",
+                    text=group.name,
+                    cursor="hand2",
+                )
+                name_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                name_label.bind("<Button-1>", lambda e, idx=gi: on_group_row_click(idx))
+
+                count_label = tk.Label(
+                    row, bg=row["bg"], fg="#888888", anchor="w",
+                    text=str(len(group.tile_indices)),
+                )
+                count_label.pack(side=tk.LEFT, padx=(2, 2))
+
+                del_btn = tk.Button(
+                    row, text="X", command=lambda idx=gi: on_delete_group(idx),
+                    bg="#3a3a3a", fg="#cc6666", relief=tk.FLAT, bd=0,
+                    activebackground="#555555", activeforeground="#ff6666",
+                    padx=6, pady=0, font=("", 10),
+                )
+                del_btn.pack(side=tk.RIGHT, padx=(1, 0))
+
+                group_rows.append(row)
+        else:
+            tk.Label(
+                groups_container, bg="#2d2d2d", fg="#666666", anchor="w",
+                text="暂无分组",
+            ).pack(fill=tk.X, padx=4, pady=1)
+
+    def on_new_group():
+        dlg = tk.Toplevel(root)
+        dlg.title("新建分组")
+        dlg.configure(bg="#2d2d2d")
+        dlg.resizable(False, False)
+        dlg.attributes('-topmost', True)
+        dlg.geometry(f"260x100+{root.winfo_x() + 100}+{root.winfo_y() + 100}")
+        dlg.deiconify()
+        dlg.lift()
+        dlg.focus_force()
+
+        tk.Label(dlg, bg="#2d2d2d", fg="#cccccc", text="请输入分组名称:").pack(padx=10, pady=(10, 4), anchor=tk.W)
+        entry = tk.Entry(dlg, bg="#3a3a3a", fg="#cccccc", insertbackground="#cccccc", relief=tk.FLAT)
+        entry.pack(fill=tk.X, padx=10, pady=2)
+        entry.focus_set()
+
+        def on_ok(event=None):
+            name = entry.get().strip()
+            if name:
+                if state["group_edit_mode"] is not None:
+                    exit_group_edit()
+                group = GroupDef(name=name, tile_indices=[])
+                project.groups.append(group)
+                rebuild_groups_list()
+                redraw()
+            dlg.destroy()
+
+        def on_cancel():
+            dlg.destroy()
+
+        btn_row = tk.Frame(dlg, bg="#2d2d2d")
+        btn_row.pack(fill=tk.X, padx=10, pady=(6, 10))
+        dark_button(btn_row, "确定", on_ok).pack(side=tk.RIGHT)
+        dark_button(btn_row, "取消", on_cancel).pack(side=tk.RIGHT, padx=(0, 4))
+        entry.bind("<Return>", on_ok)
+        dlg.protocol("WM_DELETE_WINDOW", on_cancel)
+
+    def on_delete_group(gi):
+        if gi < 0 or gi >= len(project.groups):
+            return
+        if state["group_edit_mode"] is not None:
+            exit_group_edit()
+        del project.groups[gi]
+        old_map = state["group_color_map"]
+        state["group_color_map"] = {}
+        for idx in range(len(project.groups)):
+            if idx in old_map:
+                state["group_color_map"][idx] = old_map[idx]
+            if idx >= gi and (idx + 1) in old_map:
+                state["group_color_map"][idx] = old_map[idx + 1]
+        rebuild_groups_list()
+        redraw()
+
+    def on_group_row_click(gi):
+        if gi < 0 or gi >= len(project.groups):
+            return
+        if state["group_edit_mode"] == gi:
+            exit_group_edit()
+        else:
+            enter_group_edit(gi)
+
+    def enter_group_edit(gi):
+        if gi < 0 or gi >= len(project.groups):
+            return
+        if state["format_brush_mode"]:
+            exit_format_brush()
+        if state["property_paint_mode"]:
+            exit_property_paint()
+        if gi not in state["group_color_map"]:
+            state["group_color_map"][gi] = generate_group_color()
+        state["group_edit_mode"] = gi
+        state["drag_mark"] = None
+        group_name = project.groups[gi].name
+        group_hint_label.config(
+            text=f"分组: {group_name} — 点击/拖拽 tile 加入/移出",
+            fg="#ff8c00",
+        )
+        group_hint_label.pack(before=groups_sep, fill=tk.X, padx=14, pady=1)
+        rebuild_groups_list()
+        redraw()
+
+    def exit_group_edit():
+        if state["group_edit_mode"] is not None:
+            state["group_edit_mode"] = None
+            state["drag_mark"] = None
+            group_hint_label.pack_forget()
+            rebuild_groups_list()
+            redraw()
+
+    new_group_btn.config(command=on_new_group)
 
     tk.Label(
         sidebar, bg="#2d2d2d", fg="#888888", anchor="w", font=("", 9, "bold"),
@@ -318,6 +501,8 @@ if filepath:
         "property_paint_mode": False,
         "property_paint_key": None,
         "property_paint_value": None,
+        "group_edit_mode": None,  # None | int (index into project.groups)
+        "group_color_map": {},    # dict[int, tuple] (group_index → RGBA color)
     }
 
     project = TilesetProject()
@@ -357,6 +542,7 @@ if filepath:
                     tile_indices=list(group_entry.get("tiles", [])),
                 )
                 project.groups.append(group)
+        rebuild_groups_list()
 
         cols_var.set(project.meta.cols)
         rows_var.set(project.meta.rows)
@@ -389,6 +575,16 @@ if filepath:
                 selected_tile_index = None
             elif selected_tile_index is not None and selected_tile_index > idx:
                 selected_tile_index -= 1
+            for group in project.groups:
+                new_indices = []
+                for ti in group.tile_indices:
+                    if ti == idx:
+                        continue
+                    elif ti > idx:
+                        new_indices.append(ti - 1)
+                    else:
+                        new_indices.append(ti)
+                group.tile_indices = new_indices
 
     checker_tile = Image.new("RGBA", (CELL * 2, CELL * 2))
     checker_tile.paste(LIGHT, (0, 0, CELL, CELL))
@@ -517,6 +713,22 @@ if filepath:
             p_l, p_t, p_r, p_b = get_cell_rect(hc[0], hc[1], scale, ox, oy)
             draw.rectangle([p_l, p_t, p_r, p_b], fill=PROP_PAINT_FILL)
 
+        gi = state["group_edit_mode"]
+        if gi is not None and gi < len(project.groups):
+            gcolor = state["group_color_map"].get(gi)
+            if gcolor:
+                group = project.groups[gi]
+                outline_color = (gcolor[0], gcolor[1], gcolor[2], 255)
+                for idx_in_group, ti in enumerate(group.tile_indices):
+                    if ti < len(project.tiles):
+                        td = project.tiles[ti]
+                        gl, gt, gr, gb = get_cell_rect(td.col, td.row, scale, ox, oy)
+                        draw.rectangle([gl, gt, gr, gb], fill=gcolor)
+                        if idx_in_group == 0:
+                            draw.rectangle([gl, gt, gr, gb], outline=(255, 215, 0, 255), width=3)
+                        else:
+                            draw.rectangle([gl, gt, gr, gb], outline=outline_color, width=1)
+
         return Image.alpha_composite(result, overlay)
 
     def _safe_int(var):
@@ -631,6 +843,8 @@ if filepath:
             return
         if state["format_brush_mode"]:
             exit_format_brush()
+        if state["group_edit_mode"] is not None:
+            exit_group_edit()
         state["property_paint_mode"] = True
         state["property_paint_key"] = key
         state["property_paint_value"] = parse_value(value_str)
@@ -743,7 +957,12 @@ if filepath:
         state["property_paint_mode"] = False
         state["property_paint_key"] = None
         state["property_paint_value"] = None
+        state["group_edit_mode"] = None
+        state["group_color_map"] = {}
+        group_hint_label.pack_forget()
         fmt_btn.config(text="格式刷")
+        rebuild_groups_list()
+        update_prop_paint_status()
         update_tile_info()
         update_mark_count()
         update_bitmask_label()
@@ -805,6 +1024,26 @@ if filepath:
             redraw()
             return
 
+        if state["group_edit_mode"] is not None:
+            cell = cell_at_canvas_pos(event.x, event.y)
+            if cell is None:
+                exit_group_edit()
+                return
+            gi = state["group_edit_mode"]
+            if gi < len(project.groups):
+                idx = find_tile_index(cell[0], cell[1])
+                if idx is not None:
+                    group = project.groups[gi]
+                    was_in = idx in group.tile_indices
+                    if was_in:
+                        group.tile_indices.remove(idx)
+                    else:
+                        group.tile_indices.append(idx)
+                    state["drag_mark"] = (event.x, event.y, not was_in, cell)
+                    rebuild_groups_list()
+                    redraw()
+            return
+
         if state["format_brush_mode"]:
             cell = cell_at_canvas_pos(event.x, event.y)
             if cell is None:
@@ -835,14 +1074,11 @@ if filepath:
             return
         existing_idx = find_tile_index(cell[0], cell[1])
         if existing_idx is not None:
-            if selected_tile_index == existing_idx:
-                selected_tile_index = None
-            else:
-                selected_tile_index = existing_idx
+            remove_tile(cell[0], cell[1])
+            state["drag_mark"] = (event.x, event.y, False, cell)
         else:
             get_or_create_tile(cell[0], cell[1])
-            mark_state = True
-            state["drag_mark"] = (event.x, event.y, mark_state, cell)
+            state["drag_mark"] = (event.x, event.y, True, cell)
         update_mark_count()
         update_bitmask_label()
         redraw()
@@ -872,14 +1108,36 @@ if filepath:
             redraw()
             return
 
+        if state["group_edit_mode"] is not None:
+            cell = cell_at_canvas_pos(event.x, event.y)
+            if cell is None:
+                return
+            gi = state["group_edit_mode"]
+            if gi < len(project.groups):
+                idx = find_tile_index(cell[0], cell[1])
+                if idx is not None:
+                    group = project.groups[gi]
+                    if idx in group.tile_indices:
+                        group.tile_indices.remove(idx)
+                        group.tile_indices.insert(0, idx)
+                        state["drag_mark"] = (event.x, event.y, False, cell)
+                        rebuild_groups_list()
+                        redraw()
+            return
+
         cell = cell_at_canvas_pos(event.x, event.y)
         if cell is None:
+            selected_tile_index = None
+            update_bitmask_label()
+            update_properties_panel()
+            redraw()
             return
         existing_idx = find_tile_index(cell[0], cell[1])
         if existing_idx is not None:
-            remove_tile(cell[0], cell[1])
-            state["drag_mark"] = (event.x, event.y, False, cell)
-            update_mark_count()
+            if selected_tile_index == existing_idx:
+                selected_tile_index = None
+            else:
+                selected_tile_index = existing_idx
             update_bitmask_label()
             update_properties_panel()
             redraw()
@@ -923,6 +1181,29 @@ if filepath:
                 update_mark_count()
                 update_bitmask_label()
                 redraw()
+            elif not dm and cell and cell != state["hover_cell"]:
+                state["hover_cell"] = cell
+                redraw()
+            return
+
+        if state["group_edit_mode"] is not None:
+            dm = state["drag_mark"]
+            cell = cell_at_canvas_pos(event.x, event.y)
+            if dm and cell and cell != dm[3]:
+                gi = state["group_edit_mode"]
+                if gi < len(project.groups):
+                    idx = find_tile_index(cell[0], cell[1])
+                    if idx is not None:
+                        group = project.groups[gi]
+                        if dm[2]:
+                            if idx not in group.tile_indices:
+                                group.tile_indices.append(idx)
+                        else:
+                            if idx in group.tile_indices:
+                                group.tile_indices.remove(idx)
+                        state["drag_mark"] = (dm[0], dm[1], dm[2], cell)
+                        rebuild_groups_list()
+                        redraw()
             elif not dm and cell and cell != state["hover_cell"]:
                 state["hover_cell"] = cell
                 redraw()
@@ -1221,7 +1502,7 @@ if filepath:
             lines.append("    groups = {")
             for group in project.groups:
                 tiles_str = ", ".join(str(i) for i in group.tile_indices)
-                lines.append(f"        {group.name} = {{ tiles = {{ {tiles_str} }} }},")
+                lines.append(f'        ["{group.name}"] = {{ tiles = {{ {tiles_str} }} }},')
             lines.append("    },")
         lines.append("}")
         lines.append("")
@@ -1365,7 +1646,11 @@ if filepath:
         state["format_brush_mode"] = False
         state["format_brush_bitmask"] = None
         state["drag_mark"] = None
+        state["group_edit_mode"] = None
+        state["group_color_map"] = {}
+        group_hint_label.pack_forget()
         fmt_btn.config(text="格式刷")
+        rebuild_groups_list()
         redraw()
 
     root.bind("<Control-o>", lambda e: on_import())
@@ -1375,6 +1660,8 @@ if filepath:
             exit_property_paint()
         elif state["format_brush_mode"]:
             exit_format_brush()
+        elif state["group_edit_mode"] is not None:
+            exit_group_edit()
 
     root.bind("<Escape>", lambda e: on_escape())
 

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### tile.py 分组管理
+
+- 影响的文件: `tools/tile.py`, `tools/tile-test.md`
+- 侧栏新增"分组"区域（位掩码与属性之间）：分组列表容器、颜色指示块、组名行、tile 数量、删除按钮、`[+ 新建分组]` 按钮
+- `generate_group_color()` 使用 HSV 随机生成高亮色（alpha=120），区分 MARK_FILL/PROP_PAINT_FILL
+- 新增 `group_edit_mode` 和 `group_color_map` 状态字段
+- 编辑分组模式与格式刷、属性刷三者互斥，进入一个自动退出另外两个
+- 左键点击/拖拽：在已标记 tile 上切换分组归属（添加/移除）
+- 右键：设为首个（移除并插入 `tile_indices[0]`），用于标记 Icon tile
+- 画布渲染：编辑模式下当前组 tile 以随机高亮色填充显示
+- `remove_tile()` 同步修复所有 group 的 `tile_indices`（删除索引、前移后续索引）
+- Esc 键退出编辑分组模式
+- 网格变更时自动清空分组状态并重建列表
+- Lua 导出使用 `["组名"]` 安全引用语法
+- 初始导入/Ctrl+O 回读时自动重建分组列表
+
 ### tile.py 属性编辑器
 
 - 影响的文件: `tools/tile.py`, `tools/tile-test.md`
