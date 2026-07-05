@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 纹理加载与显示
+
+- 影响的文件: `tools/editor/src/texture_loader.hpp` (新建), `tools/editor/src/texture_loader.cpp` (新建), `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`
+- 新建 `texture_loader.hpp/.cpp` 提供三个函数：
+  - `loadTexture(renderer, path)` — 使用 SDL3_image 加载纹理，设置 NEAREST 缩放模式
+  - `toImTextureID(tex)` — 内联转换 `SDL_Texture*` 为 `ImTextureID`（`ImU64`）
+  - `resolveProjectRoot()` — 从可执行路径向上查找含 `src/assets/` 的目录
+- `main.cpp` 集成：启动时调用 `resolveProjectRoot()` 构造纹理路径，自动加载 `tileset.png`，加载成功时 `SDL_Log` 输出纹理尺寸
+- ImGui 纹理预览窗口：加载成功显示 `ImGui::Image`，失败显示红色错误消息（区分"项目根目录未找到"和"纹理加载失败"）
+- 添加 File → Exit 菜单栏骨架
+- 资源清理：退出时 `SDL_DestroyTexture`，`resolveProjectRoot` 中 `SDL_free` 释放 `SDL_GetBasePath` 返回值
+
+### 编辑器数据模型
+
+- 影响的文件: `tools/editor/src/tileset.hpp` (新建), `tools/editor/src/main.cpp`, `tools/editor/tests/test_data_model.cpp` (新建), `tools/editor/CMakeLists.txt`
+- 新建 `tileset.hpp` 定义编辑器核心数据结构
+- `TileSetSource`: 纹理源（name/texturePath/margins/separation/regionSize）
+- `TileSet`: tile 集合（name/tileWidth/tileHeight/sources/tiles）
+- `OcclusionRegion`: 遮蔽矩形（x/y/w/h/zOrder）
+- `TileData`: tile 数据（id/atlasCoords/sizeInAtlas/isWall/flipH/V/occlusionRegions 等）
+- `MapCell`: 地图单元格（tileSetIndex/tileId）
+- `GameMap`: 地图（name/width/height/cells/tileSets）
+- 新建 `tests/test_data_model.cpp`，包含 16 个单元测试覆盖全部 struct 的默认值、赋值、嵌套使用、row-major 访问模式
+- CMakeLists.txt 添加 BUILD_TESTS 选项，`trogue-tileset-editor_tests` 可执行目标
+
 ### Added
 
 - 影响的文件: `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`, `.gitignore`, `AGENTS.md`
