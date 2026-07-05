@@ -12,6 +12,7 @@ find_package(imgui REQUIRED)
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/texture_loader.cpp
+    src/atlas_view.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE include)

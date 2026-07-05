@@ -31,9 +31,12 @@ tools/editor/
 ├── CMakeLists.txt          # add_executable 含 src/*.cpp；tests 用 BUILD_TESTS 独立目标
 ├── PLAN.md                 # 10 阶段开发计划（所有实现以此为源）
 ├── include/
+│   ├── atlas_view.hpp      # 图集视图函数声明
+│   ├── editor_state.hpp    # 编辑器全局状态（纹理/缩放/平移/地图/hover）
 │   ├── tileset.hpp         # 数据模型（TileSetSource → OcclusionRegion → TileData → TileSet → MapCell → GameMap）
 │   └── texture_loader.hpp  # 纹理加载函数声明
 ├── src/
+│   ├── atlas_view.cpp      # 图集视图实现（纹理/网格/缩放/平移/悬停）
 │   ├── main.cpp            # 入口 + SDL3/ImGui 循环
 │   └── texture_loader.cpp  # 纹理加载、路径解析实现
 ├── tests/

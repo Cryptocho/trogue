@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 图集视图（Atlas View）
+
+- 影响的文件: `tools/editor/include/editor_state.hpp` (新建), `tools/editor/include/atlas_view.hpp` (新建), `tools/editor/src/atlas_view.cpp` (新建), `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`
+- 新建 `EditorState` 结构体，统一管理 TileSet/atlasTexture/缩放/平移/选中/hover/地图数据
+- 实现 `drawAtlasView` 渲染图集纹理，填充主菜单栏下方整个工作区（非浮动窗口）
+- 鼠标滚轮缩放，范围 [0.25, 16.0]，缩放以鼠标位置为中心
+- 鼠标中键拖拽平移
+- 网格叠加：基于 `source.margins/separation/regionSize` 计算，跟随缩放/平移变换
+- 坐标转换：`screenToAtlasCoords` / 悬停提示 `Tile: (col, row)`
+- 纹理首次加载时默认居中显示
+
 ### 纹理加载与显示
 
 - 影响的文件: `tools/editor/src/texture_loader.hpp` (新建), `tools/editor/src/texture_loader.cpp` (新建), `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`
