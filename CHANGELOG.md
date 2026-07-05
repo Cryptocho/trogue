@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- 影响的文件: `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`, `.gitignore`, `AGENTS.md`
+- 新建 `tools/editor/` 目录，基于 SDL3 + SDL3_image + ImGui 的瓦片集编辑器（替换原先 Python tkinter 方案）
+- `.gitignore` 添加 `tools/editor/build/` 排除构建产物
+- CMake 构建系统：CMake 3.20+, C++17, find_package 链接 SDL3/SDL3_image/imgui
+- 创建 1280×720 窗口，SDL_Renderer 渲染，VSYNC 开启
+- ImGui 集成：CreateContext + SDL3/SDLRenderer3 后端，显示 Demo 窗口
+- 主循环处理 SDL_EVENT_QUIT 和 ESC 键退出
+- 全部资源通过系统包管理器链接（非源码构建）
+
 ### tile.py 分组管理
 
 - 影响的文件: `tools/tile.py`, `tools/tile-test.md`

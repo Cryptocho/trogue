@@ -133,7 +133,8 @@ src/
 │   └── tween.lua        # kikito/tween.lua (保留但未直接使用)
 ├── assets/              # 游戏资源 (瓦片图、图标、音效等)
 │
-tools/                   # 辅助开发工具脚本
+tools/
+└── editor/              # 瓦片集编辑器 (C++/SDL3/ImGui)
 ```
 
 ---
