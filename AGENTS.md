@@ -130,11 +130,12 @@ src/
 │   ├── fbm.lua          # Fractional Brownian Motion
 │   ├── poisson_disk.lua # Poisson 圆盘采样
 │   ├── minheap.lua      # 最小堆 (A* 寻路用)
+│   ├── autotile.lua     # AutoTile 4-bit bitmask + Quad 构建
 │   └── tween.lua        # kikito/tween.lua (保留但未直接使用)
 ├── assets/              # 游戏资源 (瓦片图、图标、音效等)
 │
 tools/
-└── editor/              # 瓦片集编辑器 (C++/SDL3/ImGui)
+└── addons/              # tileset 导出
 ```
 
 ---
@@ -194,6 +195,7 @@ love src
 > - Plans must include detailed steps and specifics, including steps in the development process (step 3~7) and placed in .kilo/plans
 > - After creating a plan, you must use a subagent to review it for feasibility and completeness, then you can call `plan_exit`
 > - CHANGELOG和提交消息不应包含阶段数, AGENTS.md, TODO.md等内部内容
+> - 禁止自检, 自检是没用的, 必须使用subagent
 
 ### CHANGELOG 格式规范
 在 `## [Unreleased]` 下按功能模块组织变更，每个模块使用 `### 功能描述` 标题。

@@ -4,88 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### 图集视图（Atlas View）
+### AutoTile 地板渲染系统
 
-- 影响的文件: `tools/editor/include/editor_state.hpp` (新建), `tools/editor/include/atlas_view.hpp` (新建), `tools/editor/src/atlas_view.cpp` (新建), `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`
-- 新建 `EditorState` 结构体，统一管理 TileSet/atlasTexture/缩放/平移/选中/hover/地图数据
-- 实现 `drawAtlasView` 渲染图集纹理，填充主菜单栏下方整个工作区（非浮动窗口）
-- 鼠标滚轮缩放，范围 [0.25, 16.0]，缩放以鼠标位置为中心
-- 鼠标中键拖拽平移
-- 网格叠加：基于 `source.margins/separation/regionSize` 计算，跟随缩放/平移变换
-- 坐标转换：`screenToAtlasCoords` / 悬停提示 `Tile: (col, row)`
-- 纹理首次加载时默认居中显示
-
-### 纹理加载与显示
-
-- 影响的文件: `tools/editor/src/texture_loader.hpp` (新建), `tools/editor/src/texture_loader.cpp` (新建), `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`
-- 新建 `texture_loader.hpp/.cpp` 提供三个函数：
-  - `loadTexture(renderer, path)` — 使用 SDL3_image 加载纹理，设置 NEAREST 缩放模式
-  - `toImTextureID(tex)` — 内联转换 `SDL_Texture*` 为 `ImTextureID`（`ImU64`）
-  - `resolveProjectRoot()` — 从可执行路径向上查找含 `src/assets/` 的目录
-- `main.cpp` 集成：启动时调用 `resolveProjectRoot()` 构造纹理路径，自动加载 `tileset.png`，加载成功时 `SDL_Log` 输出纹理尺寸
-- ImGui 纹理预览窗口：加载成功显示 `ImGui::Image`，失败显示红色错误消息（区分"项目根目录未找到"和"纹理加载失败"）
-- 添加 File → Exit 菜单栏骨架
-- 资源清理：退出时 `SDL_DestroyTexture`，`resolveProjectRoot` 中 `SDL_free` 释放 `SDL_GetBasePath` 返回值
-
-### 编辑器数据模型
-
-- 影响的文件: `tools/editor/src/tileset.hpp` (新建), `tools/editor/src/main.cpp`, `tools/editor/tests/test_data_model.cpp` (新建), `tools/editor/CMakeLists.txt`
-- 新建 `tileset.hpp` 定义编辑器核心数据结构
-- `TileSetSource`: 纹理源（name/texturePath/margins/separation/regionSize）
-- `TileSet`: tile 集合（name/tileWidth/tileHeight/sources/tiles）
-- `OcclusionRegion`: 遮蔽矩形（x/y/w/h/zOrder）
-- `TileData`: tile 数据（id/atlasCoords/sizeInAtlas/isWall/flipH/V/occlusionRegions 等）
-- `MapCell`: 地图单元格（tileSetIndex/tileId）
-- `GameMap`: 地图（name/width/height/cells/tileSets）
-- 新建 `tests/test_data_model.cpp`，包含 16 个单元测试覆盖全部 struct 的默认值、赋值、嵌套使用、row-major 访问模式
-- CMakeLists.txt 添加 BUILD_TESTS 选项，`trogue-tileset-editor_tests` 可执行目标
-
-### Added
-
-- 影响的文件: `tools/editor/src/main.cpp`, `tools/editor/CMakeLists.txt`, `.gitignore`, `AGENTS.md`
-- 新建 `tools/editor/` 目录，基于 SDL3 + SDL3_image + ImGui 的瓦片集编辑器（替换原先 Python tkinter 方案）
-- `.gitignore` 添加 `tools/editor/build/` 排除构建产物
-- CMake 构建系统：CMake 3.20+, C++17, find_package 链接 SDL3/SDL3_image/imgui
-- 创建 1280×720 窗口，SDL_Renderer 渲染，VSYNC 开启
-- ImGui 集成：CreateContext + SDL3/SDLRenderer3 后端，显示 Demo 窗口
-- 主循环处理 SDL_EVENT_QUIT 和 ESC 键退出
-- 全部资源通过系统包管理器链接（非源码构建）
-
-### tile.py 分组管理
-
-- 影响的文件: `tools/tile.py`, `tools/tile-test.md`
-- 侧栏新增"分组"区域（位掩码与属性之间）：分组列表容器、颜色指示块、组名行、tile 数量、删除按钮、`[+ 新建分组]` 按钮
-- `generate_group_color()` 使用 HSV 随机生成高亮色（alpha=120），区分 MARK_FILL/PROP_PAINT_FILL
-- 新增 `group_edit_mode` 和 `group_color_map` 状态字段
-- 编辑分组模式与格式刷、属性刷三者互斥，进入一个自动退出另外两个
-- 左键点击/拖拽：在已标记 tile 上切换分组归属（添加/移除）
-- 右键：设为首个（移除并插入 `tile_indices[0]`），用于标记 Icon tile
-- 画布渲染：编辑模式下当前组 tile 以随机高亮色填充显示
-- `remove_tile()` 同步修复所有 group 的 `tile_indices`（删除索引、前移后续索引）
-- Esc 键退出编辑分组模式
-- 网格变更时自动清空分组状态并重建列表
-- Lua 导出使用 `["组名"]` 安全引用语法
-- 初始导入/Ctrl+O 回读时自动重建分组列表
-
-### tile.py 属性编辑器
-
-- 影响的文件: `tools/tile.py`, `tools/tile-test.md`
-- 新增属性编辑面板：sidebar "属性" 区域，支持 key-value 属性列表 (Key/Value Entry + X 删除 + P 属性刷按钮)
-- Value 自动类型推断：`true`/`false`(不区分大小写) → boolean，含小数点 → float，纯数字 → int，其他 → string
-- 属性读写双向绑定：FocusOut 写回 `TileDef.properties`，tile 切换时刷新面板
-- 新增属性刷 (Property Paint) 工具：点击 P 按钮进入，左键点击/拖动画布写入目标 tile，右键/空白处/Escape 退出
-- 侧栏宽 210→280，内部 Canvas+Scrollbar 支持滚动
-- 移除无用的"清除""反选"按钮
-
-### tile.py 数据模型重构
-
-- 影响的文件: `tools/tile.py`, `tools/tile_model.py` (新建), `tools/tile_lua_parser.py` (新建), `tools/tile-test.md`
-- `state` dict 中的 `marked_cells`/`bitmasks`/`selected_tile` 迁移到 `TilesetProject` 数据类 + `selected_tile_index`
-- 新建 `tile_model.py`：`TilesetMeta`、`TileDef`、`GroupDef`、`TilesetProject` 四个 `@dataclass`
-- 新建 `tile_lua_parser.py`：递归下降 Lua 表解析器，支持字符串/数字/布尔/nil/数组/嵌套表
-- 启动时文件对话框支持直接选择 `.lua` 文件，自动加载对应 PNG 并还原 tile 数据
-- Ctrl+O 运行时导入 `.lua` 文件
-- 导出增强：tile 条目增加 `properties` 字段，顶层增加 `groups` 表
+- 影响的文件: `src/utils/autotile.lua` (新建), `src/assets/pixel-set-library/dungen-tile/tileset.lua` (新建), `src/systems/map_renderer.lua` (修改), `temp/addons/tileset_exporter/tileset_exporter.gd` (新建)
+- 新建 `Autotile` 模块，提供 4-bit bitmask 计算和 LÖVE Quad 构建功能
+- 从 `tileset_exporter` 导出 tileset 数据文件 `tileset.lua`，使用整数键 bitmask_map 支持 O(1) 查找
+- `MapRenderer` 地板渲染从平铺 `image.png` 替换为 autotile quad 系统，wall/tree 渲染保持不变
+- 新建 `tileset_exporter`，支持 JSON/Lua 双格式导出，共享构建逻辑
 
 ### 背包快捷键合并（E 键统一使用/装备）
 
@@ -117,21 +42,6 @@ All notable changes to this project will be documented in this file.
 - 新增 `_getAdjacentActors(x, y, excludeEntity)`：查询指定位置四方向 spatial hash，返回带 `Actor` 组件且非自身的实体
 - 新增 `_checkOpportunityAttack(entity, oldX, oldY, newX, newY)`：对旧位置邻格每个敌人，若旧曼哈顿距离 ≤1 且新距离 >1，则发射 `OpportunityAttack` 事件
 - 事件时序：`MoveSucceeded/KnockbackApplied` → `OpportunityAttack` → `DamageRequest` → 伤害/护盾/死亡处理 → `MoveSucceeded` 继续 → `endPlayerTurn()` → `PlayerTurnEnd`，确保发生在敌方回合开始前
-
-### 图片素材标注工具
-
-- 影响的文件: `tools/tile.py`, `tools/tile-test.md` (新建)
-- 三态位掩码支持：新增 `MASK_OFF(0)` / `MASK_ON(1)` / `MASK_IGNORE(2)` 常量及 `IGNORE_FILL/IGNORE_OUTLINE` 颜色
-- 编辑器交互：左键 On↔Off 循环；Shift+左键 Off↔Ignore 循环；右键强制 Off
-- 编辑器渲染：`bm_redraw` 三态区分（On=黄色填充，Ignore=灰色填充+斜线纹理，Off=透明）
-- 主视图预览：`draw_grid_overlay` 及格式刷悬停预览均区分三态渲染
-- Minimal 3x3 约束校验：`_validate_minimal_mask` 检查角位-On 时相邻边是否同时-On；违反时 `askyesno` 警告允许强制保存
-- 中心单元格自动修复：`bm_on_confirm` 中自动将 `(1,1)` 设为 On，防止用户将其设为 Off/Ignore
-- 导出 Lua：头部注释增加 `Bitmask values: 0 = Off, 1 = On, 2 = Ignore` 说明
-- 位掩码编辑器对话框尺寸从 `300` 增大至 `350`（宽高各 +50px）
-- 编辑器底部提示文字更新为三键操作说明
-- 向后兼容：旧数据（仅 0/1）无需迁移，自动兼容；`any()` 真值检查正确识别 Ignore(2)
-- 格式刷深拷贝安全：`[row[:] for row in bm]` 复制 2 值无问题
 
 ### 武器库定义层与 WeaponSystem 重构
 

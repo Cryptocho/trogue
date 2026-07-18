@@ -3,6 +3,7 @@
 
 local Config = require("src.config")
 local Coordinates = require("src.core.coordinates")
+local Autotile = require("src.utils.autotile")
 
 local TILE_FLOOR = 0
 local TILE_WALL = 1
@@ -19,7 +20,9 @@ local MapRenderer = {
 
     -- Graphics resources
     tileset = nil,
-    floorImage = nil,   -- image.png used as tiled floor texture
+    floorTilesetImage = nil,
+    floorQuads = {},
+    floorBitmasks = {},
     quads = {},
 }
 
@@ -30,17 +33,11 @@ function MapRenderer:init(world)
     self.tileset = love.graphics.newImage("assets/tileset.png")
     self.tileset:setFilter("nearest", "nearest")
 
-    -- Load image.png as tiled floor texture
-    self.floorImage = love.graphics.newImage("assets/pixel-set-library/dungen-tile/image.png")
-    self.floorImage:setFilter("nearest", "nearest")
-    local imgW, imgH = self.floorImage:getDimensions()
-    -- Scale floor image so it fits within a single tile cell without stretching
-    self.floorScale = math.min(Config.TILE_SIZE / imgW, Config.TILE_SIZE / imgH)
-    -- Centered offset within each tile cell
-    self.floorDrawW = imgW * self.floorScale
-    self.floorDrawH = imgH * self.floorScale
-    self.floorOffsetX = (Config.TILE_SIZE - self.floorDrawW) / 2
-    self.floorOffsetY = (Config.TILE_SIZE - self.floorDrawH) / 2
+    -- Load floor tileset for autotile rendering
+    self.floorTilesetImage = love.graphics.newImage("assets/pixel-set-library/dungen-tile/Tile Set.png")
+    self.floorTilesetImage:setFilter("nearest", "nearest")
+    local tileset = require("assets.pixel-set-library.dungen-tile.tileset")
+    self.floorQuads = Autotile.buildQuads(tileset, self.floorTilesetImage:getDimensions())
 
     -- Pre-create quads for each tile (walls, traps use tileset)
     for i = 0, 8 do
@@ -68,6 +65,23 @@ function MapRenderer:loadMap(mapData)
             end
 
             self.tiles[y][x] = tileIndex
+        end
+    end
+
+    self.floorBitmasks = {}
+    local matchFn = function(px, py)
+        if px < 1 or px > self.width or py < 1 or py > self.height then
+            return false
+        end
+        return self.tiles[py][px] == TILE_FLOOR
+    end
+
+    for y = 1, self.height do
+        self.floorBitmasks[y] = {}
+        for x = 1, self.width do
+            if self.tiles[y][x] == TILE_FLOOR then
+                self.floorBitmasks[y][x] = Autotile.computeBitmask(x, y, matchFn)
+            end
         end
     end
 end
@@ -111,9 +125,11 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
             local quad = self.quads[tileIndex]
 
             if tileIndex == TILE_FLOOR then
-                -- Floor: draw image.png tiled, centered within the tile cell
-                love.graphics.draw(self.floorImage, screenX + self.floorOffsetX, screenY + self.floorOffsetY,
-                                   0, self.floorScale, self.floorScale)
+                local bm = self.floorBitmasks[y] and self.floorBitmasks[y][x]
+                local floorQuad = bm and self.floorQuads[bm]
+                if floorQuad then
+                    love.graphics.draw(self.floorTilesetImage, floorQuad, screenX, screenY)
+                end
             elseif quad then
                 -- Walls, traps, etc.: draw from tileset quad
                 love.graphics.draw(self.tileset, quad, screenX, screenY)
