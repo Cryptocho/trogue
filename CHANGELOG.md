@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### TileSet 导出器支持 Scene Tiles
+
+- 影响的文件: `tools/addons/tileset_exporter/tileset_exporter.gd`
+- 新增 `_extract_scene_tiles()` 和 `_find_sprite2d()` 函数，从 `TileSetScenesCollectionSource` 中提取场景瓦片数据
+- 支持 `Sprite2D` + `AtlasTexture` 或 `Texture2D` 的场景，提取 texture_path、region、offset、centered、z_index
+- 导出格式新增顶层 `scene_tiles` 数组（仅非空时写入），JSON/Lua 序列化自动处理新字段
+- 不支持的场景（无 Sprite2D、无纹理、非支持纹理类型）输出 `push_warning` 并跳过
+
+### 树精灵渲染（Scene Tile 集成）
+
+- 影响的文件: `src/systems/map_renderer.lua`, `src/main.lua`, `src/assets/tileset.lua` (新建), `src/assets/Decorations.png` (新建), `src/assets/Tile Set.png` (迁移)
+- `MapRenderer:init()` 从 `tileset.lua` 读取 `scene_tiles` 数据，加载 `Decorations.png`，按 region 创建 tree quad 并存储 offset
+- `MapRenderer:draw()` 跳过 TILE_TREE（树在独立 pass 绘制）
+- 新增 `MapRenderer:drawTrees(cameraX, cameraY, offsetX, offsetY)`：以 tile 中心为基准应用 region 居中 + offset 偏移绘制树精灵
+- 绘制顺序：地面 → 实体 → 树（z_index=1）→ 血条 → 瞄准预览
+- 地板瓦片路径从 `pixel-set-library/dungen-tile/` 迁移至 `assets/Tile Set.png`
+- **注意**: 当前 z_index 为全局整数排序，未来需要引入遮蔽区域（occlusion region）概念，用于精确控制 asset 的哪一部分绘制在其它之上（例如树冠遮挡角色但树干不遮挡）
+
 ### AutoTile 地板渲染系统
 
 - 影响的文件: `src/utils/autotile.lua` (新建), `src/assets/pixel-set-library/dungen-tile/tileset.lua` (新建), `src/systems/map_renderer.lua` (修改), `temp/addons/tileset_exporter/tileset_exporter.gd` (新建)

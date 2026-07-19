@@ -271,4 +271,25 @@ return {
             },
         },
     },
+    ["scene_tiles"] = {
+        {
+            ["source_id"] = 3,
+            ["scene_id"] = 1,
+            ["scene_path"] = "res://assets/tree.tscn",
+            ["texture_path"] = "Decorations.png",
+            ["texture_res_path"] = "res://assets/Decorations.png",
+            ["region"] = {
+                ["x"] = 11.0,
+                ["y"] = 143.0,
+                ["w"] = 70.0,
+                ["h"] = 98.0,
+            },
+            ["offset"] = {
+                ["x"] = 0.0,
+                ["y"] = -38.0,
+            },
+            ["centered"] = true,
+            ["z_index"] = 1,
+        },
+    },
 }

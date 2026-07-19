@@ -143,8 +143,9 @@ func _on_save_picked(save_path: String) -> void:
 
 	var tiles: Array = data.get("tiles", [])
 	var tsets: Array = data.get("terrain_sets", [])
-	print("[TileSet Exporter] %s: %d tiles (%dx%d grid), %d terrain set(s) → %s" % [
-		_export_format.to_upper(), tiles.size(), data["columns"], data["rows"], tsets.size(), save_path
+	var scene_tiles: Array = data.get("scene_tiles", [])
+	print("[TileSet Exporter] %s: %d tiles (%dx%d grid), %d terrain set(s), %d scene tile(s) → %s" % [
+		_export_format.to_upper(), tiles.size(), data["columns"], data["rows"], tsets.size(), scene_tiles.size(), save_path
 	])
 
 
@@ -234,6 +235,10 @@ func _build_export(ts: TileSet) -> Dictionary:
 	d["texture_res_path"] = tex_path
 	d["tiles"] = all_tiles
 	d["bitmask_map"] = bitmask_map
+
+	var scene_tiles := _extract_scene_tiles(ts)
+	if not scene_tiles.is_empty():
+		d["scene_tiles"] = scene_tiles
 
 	return d
 
@@ -393,3 +398,75 @@ func _type_str(t: int) -> String:
 
 func _color_hex(c: Color) -> String:
 	return "#%02x%02x%02x" % [int(c.r * 255), int(c.g * 255), int(c.b * 255)]
+
+
+func _find_sprite2d(node: Node, depth: int) -> Sprite2D:
+	if node is Sprite2D:
+		return node as Sprite2D
+	if depth >= 2:
+		return null
+	for child in node.get_children():
+		var result := _find_sprite2d(child, depth + 1)
+		if result != null:
+			return result
+	return null
+
+
+func _extract_scene_tiles(ts: TileSet) -> Array:
+	var result: Array = []
+	for si in range(ts.get_source_count()):
+		var sid := ts.get_source_id(si)
+		var src = ts.get_source(sid)
+		if not src is TileSetScenesCollectionSource:
+			continue
+		var scene_src: TileSetScenesCollectionSource = src as TileSetScenesCollectionSource
+		for i in range(scene_src.get_scene_tiles_count()):
+			var id: int = scene_src.get_scene_tile_id(i)
+			var scene: PackedScene = scene_src.get_scene_tile_scene(id)
+			var instance := scene.instantiate()
+
+			var sprite := _find_sprite2d(instance, 0)
+			if sprite == null:
+				push_warning("[TileSet Exporter] Scene tile %d: no Sprite2D found, skipping" % id)
+				instance.queue_free()
+				continue
+
+			var tex = sprite.texture
+			if tex == null:
+				push_warning("[TileSet Exporter] Scene tile %d: Sprite2D has no texture, skipping" % id)
+				instance.queue_free()
+				continue
+
+			var tex_path: String
+			var region: Dictionary
+
+			if tex is AtlasTexture:
+				var atlas_tex: AtlasTexture = tex as AtlasTexture
+				tex_path = atlas_tex.atlas.resource_path
+				var r: Rect2 = atlas_tex.region
+				region = {"x": r.position.x, "y": r.position.y, "w": r.size.x, "h": r.size.y}
+			elif tex is Texture2D:
+				tex_path = tex.resource_path
+				region = {"x": 0, "y": 0, "w": tex.get_width(), "h": tex.get_height()}
+			else:
+				push_warning("[TileSet Exporter] Scene tile %d: unsupported texture type, skipping" % id)
+				instance.queue_free()
+				continue
+
+			var offset: Dictionary = {"x": sprite.offset.x, "y": sprite.offset.y}
+			var centered: bool = sprite.centered
+			var z_index: int = sprite.z_index
+			instance.queue_free()
+
+			result.append({
+				"source_id": sid,
+				"scene_id": id,
+				"scene_path": scene.resource_path,
+				"texture_path": tex_path.get_file(),
+				"texture_res_path": tex_path,
+				"region": region,
+				"offset": offset,
+				"centered": centered,
+				"z_index": z_index,
+			})
+	return result

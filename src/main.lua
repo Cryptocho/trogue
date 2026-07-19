@@ -178,6 +178,14 @@ function love.draw()
         local renderSystem = game:getSystem("RenderSystem")
         if renderSystem then
             renderSystem:drawEntities(game.world, offsetX, offsetY)
+        end
+        
+        -- Draw trees (z_index=1, above entities)
+        if mapRenderer then
+            mapRenderer:drawTrees(cameraX, cameraY, offsetX, offsetY)
+        end
+        
+        if renderSystem then
             renderSystem:drawHealthBars(game.world, offsetX, offsetY)
             renderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
         end

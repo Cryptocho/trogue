@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://cbrtpxdmy1nlf"]
+
+[ext_resource type="Texture2D" uid="uid://bodcklax74hoe" path="res://assets/Decorations.png" id="1_w0jqk"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w0jqk"]
+atlas = ExtResource("1_w0jqk")
+region = Rect2(11, 143, 70, 98)
+
+[node name="Sprite2D" type="Sprite2D" unique_id=719863932]
+z_index = 1
+texture = SubResource("AtlasTexture_w0jqk")
+offset = Vector2(0, -38)

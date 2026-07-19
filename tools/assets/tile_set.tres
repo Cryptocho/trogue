@@ -1,6 +1,7 @@
 [gd_resource type="TileSet" format=3 uid="uid://co4unddwm7mfm"]
 
 [ext_resource type="Texture2D" uid="uid://cp0lsx37g68cr" path="res://assets/Tile Set.png" id="1_eslq1"]
+[ext_resource type="PackedScene" uid="uid://cbrtpxdmy1nlf" path="res://assets/tree.tscn" id="2_ki5qi"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_ki5qi"]
 texture = ExtResource("1_eslq1")
@@ -101,6 +102,9 @@ texture = ExtResource("1_eslq1")
 4:6/0/terrain = 0
 4:6/0/custom_data_0 = true
 
+[sub_resource type="TileSetScenesCollectionSource" id="TileSetScenesCollectionSource_b4n3o"]
+scenes/1/scene = ExtResource("2_ki5qi")
+
 [resource]
 terrain_set_0/mode = 0
 terrain_set_0/terrain_0/name = "Terrain 0"
@@ -108,3 +112,4 @@ terrain_set_0/terrain_0/color = Color(1, 0.85882354, 0, 1)
 custom_data_layer_0/name = "Ground"
 custom_data_layer_0/type = 1
 sources/0 = SubResource("TileSetAtlasSource_ki5qi")
+sources/3 = SubResource("TileSetScenesCollectionSource_b4n3o")

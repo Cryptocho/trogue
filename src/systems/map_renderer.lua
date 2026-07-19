@@ -24,6 +24,14 @@ local MapRenderer = {
     floorQuads = {},
     floorBitmasks = {},
     quads = {},
+
+    -- Scene tile (tree) resources
+    treeImage = nil,
+    treeQuad = nil,
+    treeRegionW = 0,
+    treeRegionH = 0,
+    treeOffsetX = 0,
+    treeOffsetY = 0,
 }
 
 function MapRenderer:init(world)
@@ -34,9 +42,9 @@ function MapRenderer:init(world)
     self.tileset:setFilter("nearest", "nearest")
 
     -- Load floor tileset for autotile rendering
-    self.floorTilesetImage = love.graphics.newImage("assets/pixel-set-library/dungen-tile/Tile Set.png")
+    self.floorTilesetImage = love.graphics.newImage("assets/Tile Set.png")
     self.floorTilesetImage:setFilter("nearest", "nearest")
-    local tileset = require("assets.pixel-set-library.dungen-tile.tileset")
+    local tileset = require("assets.tileset")
     self.floorQuads = Autotile.buildQuads(tileset, self.floorTilesetImage:getDimensions())
 
     -- Pre-create quads for each tile (walls, traps use tileset)
@@ -45,6 +53,23 @@ function MapRenderer:init(world)
         local ty = math.floor(i / Config.TILES_PER_ROW) * Config.TILE_SIZE
         self.quads[i] = love.graphics.newQuad(tx, ty, Config.TILE_SIZE, Config.TILE_SIZE,
                                               self.tileset:getDimensions())
+    end
+
+    -- Load scene tiles (tree) from tileset.lua
+    local tilesetDef = require("assets.tileset")
+    if tilesetDef.scene_tiles and #tilesetDef.scene_tiles > 0 then
+        local treeTile = tilesetDef.scene_tiles[1]
+        local ok, img = pcall(love.graphics.newImage, "assets/" .. treeTile.texture_path)
+        if ok then
+            img:setFilter("nearest", "nearest")
+            self.treeImage = img
+            local r = treeTile.region
+            self.treeRegionW = r.w
+            self.treeRegionH = r.h
+            self.treeQuad = love.graphics.newQuad(r.x, r.y, r.w, r.h, img:getDimensions())
+            self.treeOffsetX = treeTile.offset.x
+            self.treeOffsetY = treeTile.offset.y
+        end
     end
 end
 
@@ -100,11 +125,9 @@ function MapRenderer:isSolid(x, y)
 end
 
 function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
-    -- Calculate visible area based on camera position
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
 
-    -- Visible tile range
     local viewWidth = screenWidth / Config.SCALE / Config.TILE_SIZE
     local viewHeight = screenHeight / Config.SCALE / Config.TILE_SIZE
 
@@ -113,26 +136,58 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
     local startY = math.max(1, math.floor(cameraY - viewHeight / 2))
     local endY = math.min(self.height, math.ceil(cameraY + viewHeight / 2))
 
-    -- Draw only visible tiles
     for y = startY, endY do
         for x = startX, endX do
             local tileIndex = self.tiles[y][x]
-            local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
-                screenWidth, screenHeight, Config.SCALE)
-            screenX = math.floor(screenX)
-            screenY = math.floor(screenY)
+            if tileIndex ~= TILE_TREE then
+                local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
+                    screenWidth, screenHeight, Config.SCALE)
+                screenX = math.floor(screenX)
+                screenY = math.floor(screenY)
 
-            local quad = self.quads[tileIndex]
-
-            if tileIndex == TILE_FLOOR then
-                local bm = self.floorBitmasks[y] and self.floorBitmasks[y][x]
-                local floorQuad = bm and self.floorQuads[bm]
-                if floorQuad then
-                    love.graphics.draw(self.floorTilesetImage, floorQuad, screenX, screenY)
+                if tileIndex == TILE_FLOOR then
+                    local bm = self.floorBitmasks[y] and self.floorBitmasks[y][x]
+                    local floorQuad = bm and self.floorQuads[bm]
+                    if floorQuad then
+                        love.graphics.draw(self.floorTilesetImage, floorQuad, screenX, screenY)
+                    end
+                else
+                    local quad = self.quads[tileIndex]
+                    if quad then
+                        love.graphics.draw(self.tileset, quad, screenX, screenY)
+                    end
                 end
-            elseif quad then
-                -- Walls, traps, etc.: draw from tileset quad
-                love.graphics.draw(self.tileset, quad, screenX, screenY)
+            end
+        end
+    end
+end
+
+function MapRenderer:drawTrees(cameraX, cameraY, offsetX, offsetY)
+    if not self.treeImage then return end
+
+    local screenWidth = love.graphics.getWidth()
+    local screenHeight = love.graphics.getHeight()
+
+    local viewWidth = screenWidth / Config.SCALE / Config.TILE_SIZE
+    local viewHeight = screenHeight / Config.SCALE / Config.TILE_SIZE
+
+    local startX = math.max(1, math.floor(cameraX - viewWidth / 2))
+    local endX = math.min(self.width, math.ceil(cameraX + viewWidth / 2))
+    local startY = math.max(1, math.floor(cameraY - viewHeight / 2))
+    local endY = math.min(self.height, math.ceil(cameraY + viewHeight / 2))
+
+    for y = startY, endY do
+        for x = startX, endX do
+            if self.tiles[y][x] == TILE_TREE then
+                local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
+                    screenWidth, screenHeight, Config.SCALE)
+                screenX = math.floor(screenX)
+                screenY = math.floor(screenY)
+
+                local drawX = screenX + Config.TILE_SIZE / 2 - self.treeRegionW / 2 + self.treeOffsetX
+                local drawY = screenY + Config.TILE_SIZE / 2 - self.treeRegionH / 2 + self.treeOffsetY
+
+                love.graphics.draw(self.treeImage, self.treeQuad, drawX, drawY)
             end
         end
     end
