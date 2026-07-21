@@ -99,6 +99,60 @@ function RenderSystem:drawEntities(world, offsetX, offsetY)
     end
 end
 
+function RenderSystem:getEntityPositions(world)
+    local entityList = {}
+    local entities = world:query({"Position", "Renderable"})
+
+    for _, result in ipairs(entities) do
+        local pos = result.components.Position
+        local renderable = result.components.Renderable
+        local tween = result.components.PositionTween
+
+        if (result.components.Player or result.components.Actor) and pos and renderable then
+            local renderX, renderY
+            if tween and tween.active then
+                renderX, renderY = tween.visualX, tween.visualY
+            else
+                renderX, renderY = pos.x, pos.y
+            end
+            table.insert(entityList, {
+                entityId = result.entityId,
+                renderX = renderX,
+                renderY = renderY,
+                logicY = pos.y,  -- Use logic position for sorting
+                isPlayer = result.components.Player ~= nil,
+                tileIndex = renderable.tileIndex
+            })
+        end
+    end
+
+    return entityList
+end
+
+function RenderSystem:drawSingleEntity(entity, offsetX, offsetY)
+    local wx, wy = Coordinates.tileToWorld(entity.renderX, entity.renderY)
+    local x = wx + offsetX
+    local y = wy + offsetY
+
+    if entity.isPlayer then
+        if self.playerImage then
+            love.graphics.draw(self.playerImage, x + self.playerOffsetX, y + self.playerOffsetY, 0, self.playerScale, self.playerScale)
+        else
+            love.graphics.setColor(0, 1, 1, 1)
+            love.graphics.rectangle("fill", x, y, Config.TILE_SIZE, Config.TILE_SIZE)
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    else
+        if self.tileset and self.quads[entity.tileIndex] then
+            love.graphics.draw(self.tileset, self.quads[entity.tileIndex], x, y)
+        else
+            love.graphics.setColor(1, 0.5, 0.5, 1)
+            love.graphics.rectangle("fill", x + 1, y + 1, Config.TILE_SIZE - 2, Config.TILE_SIZE - 2)
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    end
+end
+
 function RenderSystem:drawHealthBars(world, offsetX, offsetY)
     local entities = world:query({"Position", "Stats", "Renderable"})
 

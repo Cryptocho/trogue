@@ -174,15 +174,72 @@ function love.draw()
             mapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
         end
         
-        -- Draw entities
+        -- Draw trees and entities sorted by y coordinate
         local renderSystem = game:getSystem("RenderSystem")
-        if renderSystem then
-            renderSystem:drawEntities(game.world, offsetX, offsetY)
-        end
-        
-        -- Draw trees (z_index=1, above entities)
-        if mapRenderer then
-            mapRenderer:drawTrees(cameraX, cameraY, offsetX, offsetY)
+        if mapRenderer and renderSystem then
+            local trees = mapRenderer:getTreePositions(cameraX, cameraY)
+            local entities = renderSystem:getEntityPositions(game.world)
+            
+            -- Group by y: trees[y] and ents[y]
+            local treesByY = {}
+            local entsByY = {}
+            local allY = {}
+            
+            for _, tree in ipairs(trees) do
+                local y = tree.y
+                if not treesByY[y] then treesByY[y] = {}; allY[y] = true end
+                table.insert(treesByY[y], tree)
+            end
+            for _, entity in ipairs(entities) do
+                local y = entity.logicY
+                if not entsByY[y] then entsByY[y] = {}; allY[y] = true end
+                table.insert(entsByY[y], entity)
+            end
+            
+            -- Sort y values ascending
+            local yList = {}
+            for y in pairs(allY) do table.insert(yList, y) end
+            table.sort(yList)
+            
+            -- Draw by y level: trees first, then entities (entities on top)
+            for _, y in ipairs(yList) do
+                -- Draw trees at this y
+                local treeGroup = treesByY[y]
+                if treeGroup then
+                    for _, tree in ipairs(treeGroup) do
+                        -- Check if player is behind this tree
+                        local alpha = 1.0
+                        for _, entity in ipairs(entities) do
+                            if entity.isPlayer then
+                                local treeScreenX = tree.drawX
+                                local treeScreenY = tree.drawY
+                                local playerWx, playerWy = Coordinates.tileToWorld(entity.renderX, entity.renderY)
+                                local playerScreenX = playerWx + offsetX
+                                local playerScreenY = playerWy + offsetY
+                                
+                                if playerScreenX + Config.TILE_SIZE > treeScreenX and
+                                   playerScreenX < treeScreenX + mapRenderer.treeRegionW and
+                                   playerScreenY + Config.TILE_SIZE > treeScreenY and
+                                   playerScreenY < treeScreenY + mapRenderer.treeRegionH then
+                                    if entity.logicY < y then
+                                        alpha = 0.3
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                        mapRenderer:drawSingleTree(tree, alpha)
+                    end
+                end
+                
+                -- Draw entities at this y
+                local entGroup = entsByY[y]
+                if entGroup then
+                    for _, entity in ipairs(entGroup) do
+                        renderSystem:drawSingleEntity(entity, offsetX, offsetY)
+                    end
+                end
+            end
         end
         
         if renderSystem then

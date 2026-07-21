@@ -162,20 +162,19 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
     end
 end
 
-function MapRenderer:drawTrees(cameraX, cameraY, offsetX, offsetY)
-    if not self.treeImage then return end
+function MapRenderer:getTreePositions(cameraX, cameraY)
+    if not self.treeImage then return {} end
 
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
-
     local viewWidth = screenWidth / Config.SCALE / Config.TILE_SIZE
     local viewHeight = screenHeight / Config.SCALE / Config.TILE_SIZE
-
     local startX = math.max(1, math.floor(cameraX - viewWidth / 2))
     local endX = math.min(self.width, math.ceil(cameraX + viewWidth / 2))
     local startY = math.max(1, math.floor(cameraY - viewHeight / 2))
     local endY = math.min(self.height, math.ceil(cameraY + viewHeight / 2))
 
+    local trees = {}
     for y = startY, endY do
         for x = startX, endX do
             if self.tiles[y][x] == TILE_TREE then
@@ -183,14 +182,19 @@ function MapRenderer:drawTrees(cameraX, cameraY, offsetX, offsetY)
                     screenWidth, screenHeight, Config.SCALE)
                 screenX = math.floor(screenX)
                 screenY = math.floor(screenY)
-
                 local drawX = screenX + Config.TILE_SIZE / 2 - self.treeRegionW / 2 + self.treeOffsetX
                 local drawY = screenY + Config.TILE_SIZE / 2 - self.treeRegionH / 2 + self.treeOffsetY
-
-                love.graphics.draw(self.treeImage, self.treeQuad, drawX, drawY)
+                table.insert(trees, {x = x, y = y, drawX = drawX, drawY = drawY})
             end
         end
     end
+    return trees
+end
+
+function MapRenderer:drawSingleTree(tree, alpha)
+    love.graphics.setColor(1, 1, 1, alpha or 1.0)
+    love.graphics.draw(self.treeImage, self.treeQuad, tree.drawX, tree.drawY)
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 return MapRenderer
