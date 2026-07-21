@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 背包 UI 自适应缩放
+
+- 影响的文件: `src/systems/inventory_ui.lua`
+- 布局函数（`gridX/Y`、`slotScreenX/Y`、`gridPanelWidth/Height`、`equipPanelX/Width`）新增 `scale` 参数
+- 新增 `getScale()` 函数，根据窗口大小与参考分辨率（640×480）计算缩放比例
+- 新增 `getScaledSmallFont(scale)` 动态生成缩放后的字体
+- `draw()` 中 `SLOT_SIZE`、`SLOT_GAP`、`PANEL_PAD`、`TITLE_H` 等常量均乘以缩放比例
+- 所有交互函数（`_gridPosAt`、`_getEquipSlotAt`、`_drawTooltip`、`_showTooltip`）同步适配缩放
+
 ### Y 坐标排序渲染（透视效果）
 
 - 影响的文件: `src/main.lua`, `src/systems/map_renderer.lua`, `src/systems/render.lua`

@@ -8,6 +8,7 @@ local PANEL_PAD  = 12
 local TITLE_H    = 20
 local GRID_COLS  = 10
 local GRID_ROWS  = 8
+local REF_W, REF_H = 640, 480  -- reference window size
 
 local InventoryUI = {
     cursorRow = 1,
@@ -26,6 +27,15 @@ local function getSmallFont()
     return InventoryUI._smallFont
 end
 
+local function getScaledSmallFont(scale)
+    local size = math.max(8, math.floor(8 * scale))
+    local key = "_font_" .. size
+    if not InventoryUI[key] then
+        InventoryUI[key] = love.graphics.newFont(size)
+    end
+    return InventoryUI[key]
+end
+
 local ITEM_COLORS = {
     weapon     = {0.85, 0.35, 0.25},
     consumable = {0.25, 0.75, 0.35},
@@ -42,36 +52,40 @@ local EQUIP_LABELS = {
 
 -- Layout helpers
 
-local function gridX(panelX)
-    return panelX + PANEL_PAD
+local function getScale()
+    return math.min(love.graphics.getWidth() / REF_W, love.graphics.getHeight() / REF_H)
 end
 
-local function gridY(panelY)
-    return panelY + PANEL_PAD + TITLE_H
+local function gridX(panelX, s)
+    return panelX + PANEL_PAD * s
 end
 
-local function slotScreenX(panelX, col)
-    return gridX(panelX) + (col - 1) * (SLOT_SIZE + SLOT_GAP)
+local function gridY(panelY, s)
+    return panelY + PANEL_PAD * s + TITLE_H * s
 end
 
-local function slotScreenY(panelY, row)
-    return gridY(panelY) + (row - 1) * (SLOT_SIZE + SLOT_GAP)
+local function slotScreenX(panelX, col, s)
+    return gridX(panelX, s) + (col - 1) * (SLOT_SIZE * s + SLOT_GAP * s)
 end
 
-local function gridPanelWidth()
-    return GRID_COLS * SLOT_SIZE + (GRID_COLS - 1) * SLOT_GAP + PANEL_PAD * 2
+local function slotScreenY(panelY, row, s)
+    return gridY(panelY, s) + (row - 1) * (SLOT_SIZE * s + SLOT_GAP * s)
 end
 
-local function gridPanelHeight()
-    return GRID_ROWS * SLOT_SIZE + (GRID_ROWS - 1) * SLOT_GAP + PANEL_PAD * 2 + TITLE_H
+local function gridPanelWidth(s)
+    return GRID_COLS * SLOT_SIZE * s + (GRID_COLS - 1) * SLOT_GAP * s + PANEL_PAD * s * 2
 end
 
-local function equipPanelX(gridPanelX)
-    return gridPanelX + gridPanelWidth() + 16
+local function gridPanelHeight(s)
+    return GRID_ROWS * SLOT_SIZE * s + (GRID_ROWS - 1) * SLOT_GAP * s + PANEL_PAD * s * 2 + TITLE_H * s
 end
 
-local function equipPanelWidth()
-    return 4 * (SLOT_SIZE + SLOT_GAP) + PANEL_PAD * 2
+local function equipPanelX(gridPanelX, s)
+    return gridPanelX + gridPanelWidth(s) + 16 * s
+end
+
+local function equipPanelWidth(s)
+    return 4 * (SLOT_SIZE * s + SLOT_GAP * s) + PANEL_PAD * s * 2
 end
 
 -- Main draw
@@ -85,45 +99,56 @@ function InventoryUI:draw(world)
     local equipComp = player.components.Equipment
     local playerId = player.id
 
+    local s = getScale()
+    local ss = SLOT_SIZE * s
+    local sg = SLOT_GAP * s
+    local sp = PANEL_PAD * s
+    local st = TITLE_H * s
+
     -- Panel positions (centered)
-    local eqPanelW = equipPanelWidth()
-    local totalW = gridPanelWidth() + eqPanelW + 16
-    local totalH = gridPanelHeight()
+    local eqPanelW = equipPanelWidth(s)
+    local totalW = gridPanelWidth(s) + eqPanelW + 16 * s
+    local totalH = gridPanelHeight(s)
     local startX = (love.graphics.getWidth() - totalW) / 2
     local startY = (love.graphics.getHeight() - totalH) / 2
 
     -- Inventory background
     love.graphics.setColor(0.06, 0.06, 0.06, 0.92)
-    love.graphics.rectangle("fill", startX, startY, gridPanelWidth(), totalH, 6, 6)
+    love.graphics.rectangle("fill", startX, startY, gridPanelWidth(s), totalH, 6 * s, 6 * s)
     love.graphics.setColor(0.35, 0.35, 0.35, 1)
-    love.graphics.rectangle("line", startX, startY, gridPanelWidth(), totalH, 6, 6)
+    love.graphics.rectangle("line", startX, startY, gridPanelWidth(s), totalH, 6 * s, 6 * s)
 
     -- Title
+    local titleFont = love.graphics.newFont(math.floor(12 * s))
+    love.graphics.setFont(titleFont)
     love.graphics.setColor(0.9, 0.9, 0.9, 1)
-    love.graphics.printf("Inventory", startX, startY + 5, gridPanelWidth(), "center")
+    love.graphics.printf("Inventory", startX, startY + 5 * s, gridPanelWidth(s), "center")
+    love.graphics.setFont(love.graphics.newFont())  -- reset to default
 
     -- Grid slots
-    self:_drawGrid(startX, startY, invComp)
+    self:_drawGrid(startX, startY, invComp, s)
 
     -- Keyboard cursor
     if not self.heldItemKey then
-        local csx = slotScreenX(startX, self.cursorCol)
-        local csy = slotScreenY(startY, self.cursorRow)
+        local csx = slotScreenX(startX, self.cursorCol, s)
+        local csy = slotScreenY(startY, self.cursorRow, s)
         love.graphics.setColor(1, 0.85, 0.2, 0.7)
-        love.graphics.rectangle("line", csx - 1, csy - 1, SLOT_SIZE + 2, SLOT_SIZE + 2)
+        love.graphics.rectangle("line", csx - 1, csy - 1, ss + 2, ss + 2)
     end
 
     -- Equipment panel
     if equipComp then
-        local eqX = equipPanelX(startX)
+        local eqX = equipPanelX(startX, s)
         love.graphics.setColor(0.06, 0.06, 0.06, 0.92)
-        love.graphics.rectangle("fill", eqX, startY, eqPanelW, totalH, 6, 6)
+        love.graphics.rectangle("fill", eqX, startY, eqPanelW, totalH, 6 * s, 6 * s)
         love.graphics.setColor(0.35, 0.35, 0.35, 1)
-        love.graphics.rectangle("line", eqX, startY, eqPanelW, totalH, 6, 6)
+        love.graphics.rectangle("line", eqX, startY, eqPanelW, totalH, 6 * s, 6 * s)
+        love.graphics.setFont(titleFont)
         love.graphics.setColor(0.9, 0.9, 0.9, 1)
-        love.graphics.printf("Equipment", eqX, startY + 5, eqPanelW, "center")
+        love.graphics.printf("Equipment", eqX, startY + 5 * s, eqPanelW, "center")
+        love.graphics.setFont(love.graphics.newFont())
 
-        self:_drawEquipment(eqX, startY, invComp, equipComp)
+        self:_drawEquipment(eqX, startY, invComp, equipComp, s)
     end
 
     -- Capacity text
@@ -132,86 +157,102 @@ function InventoryUI:draw(world)
         used = used + 1
     end
     local total = invComp.gridCols * invComp.gridRows
+    local capFont = love.graphics.newFont(math.floor(10 * s))
+    love.graphics.setFont(capFont)
     love.graphics.setColor(0.7, 0.7, 0.7, 1)
     love.graphics.printf(string.format("Items: %d  Cells: %d", used, total),
-        startX, startY + totalH - 18, gridPanelWidth(), "center")
+        startX, startY + totalH - 18 * s, gridPanelWidth(s), "center")
+    love.graphics.setFont(love.graphics.newFont())
 
     -- Held item (mouse drag)
     if self.heldItemKey then
         local mx, my = love.mouse.getPosition()
         local itemDef = ItemDef.builtin[self.heldItemId]
         if itemDef then
-            local w = itemDef.gridWidth * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP
-            local h = itemDef.gridHeight * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP
+            local w = itemDef.gridWidth * (ss + sg) - sg
+            local h = itemDef.gridHeight * (ss + sg) - sg
             local c = ITEM_COLORS[itemDef.type] or {0.5, 0.5, 0.5}
             love.graphics.setColor(c[1], c[2], c[3], 0.8)
-            love.graphics.rectangle("fill", mx - w / 2, my - h / 2, w, h, 3, 3)
+            love.graphics.rectangle("fill", mx - w / 2, my - h / 2, w, h, 3 * s, 3 * s)
+            local dragFont = love.graphics.newFont(math.floor(10 * s))
+            love.graphics.setFont(dragFont)
             love.graphics.setColor(1, 1, 1, 0.9)
-            love.graphics.printf(itemDef.name, mx - w / 2, my - h / 2 + 8, w, "center")
+            love.graphics.printf(itemDef.name, mx - w / 2, my - h / 2 + 8 * s, w, "center")
+            love.graphics.setFont(love.graphics.newFont())
         end
     end
 
     -- Tooltip
-    self:_drawTooltip(startX, startY, invComp, equipComp, playerId)
+    self:_drawTooltip(startX, startY, invComp, equipComp, playerId, s)
 
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function InventoryUI:_drawGrid(panelX, panelY, invComp)
+function InventoryUI:_drawGrid(panelX, panelY, invComp, s)
+    local ss = SLOT_SIZE * s
+    local sg = SLOT_GAP * s
+
     for row = 1, GRID_ROWS do
         for col = 1, GRID_COLS do
-            local sx = slotScreenX(panelX, col)
-            local sy = slotScreenY(panelY, row)
+            local sx = slotScreenX(panelX, col, s)
+            local sy = slotScreenY(panelY, row, s)
 
             love.graphics.setColor(0.15, 0.15, 0.15, 1)
-            love.graphics.rectangle("fill", sx, sy, SLOT_SIZE, SLOT_SIZE, 3, 3)
+            love.graphics.rectangle("fill", sx, sy, ss, ss, 3 * s, 3 * s)
             love.graphics.setColor(0.3, 0.3, 0.3, 1)
-            love.graphics.rectangle("line", sx, sy, SLOT_SIZE, SLOT_SIZE, 3, 3)
+            love.graphics.rectangle("line", sx, sy, ss, ss, 3 * s, 3 * s)
         end
     end
 
     -- Draw items (only those NOT held)
+    local smallFont = getScaledSmallFont(s)
     for key, item in pairs(invComp.items) do
         if key ~= self.heldItemKey and item.row > 0 then
             local itemDef = ItemDef.builtin[item.itemId]
             if itemDef then
-                local sx = slotScreenX(panelX, item.col)
-                local sy = slotScreenY(panelY, item.row)
-                local w = itemDef.gridWidth * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP
-                local h = itemDef.gridHeight * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP
+                local sx = slotScreenX(panelX, item.col, s)
+                local sy = slotScreenY(panelY, item.row, s)
+                local w = itemDef.gridWidth * (ss + sg) - sg
+                local h = itemDef.gridHeight * (ss + sg) - sg
                 local c = ITEM_COLORS[itemDef.type] or {0.5, 0.5, 0.5}
 
                 love.graphics.setColor(c[1], c[2], c[3], 0.85)
-                love.graphics.rectangle("fill", sx + 1, sy + 1, w - 2, h - 2, 3, 3)
+                love.graphics.rectangle("fill", sx + 1, sy + 1, w - 2, h - 2, 3 * s, 3 * s)
 
                 if itemDef.gridWidth > 1 or itemDef.gridHeight > 1 then
                     love.graphics.setColor(1, 1, 1, 0.15)
-                    love.graphics.rectangle("line", sx + 1, sy + 1, w - 2, h - 2, 3, 3)
+                    love.graphics.rectangle("line", sx + 1, sy + 1, w - 2, h - 2, 3 * s, 3 * s)
                 end
 
                 love.graphics.setColor(1, 1, 1, 0.95)
-                love.graphics.setFont(getSmallFont())
-                love.graphics.printf(self:_shortName(itemDef.name), sx, sy + h / 2 - 6, w, "center")
+                love.graphics.setFont(smallFont)
+                love.graphics.printf(self:_shortName(itemDef.name), sx, sy + h / 2 - 6 * s, w, "center")
             end
         end
     end
 end
 
-function InventoryUI:_drawEquipment(eqX, eqY, invComp, equipComp)
-    local slotY = eqY + PANEL_PAD + TITLE_H
+function InventoryUI:_drawEquipment(eqX, eqY, invComp, equipComp, s)
+    local ss = SLOT_SIZE * s
+    local sp = PANEL_PAD * s
+    local st = TITLE_H * s
+    local slotY = eqY + sp + st
 
     for i, slot in ipairs(EQUIP_SLOTS) do
-        local y = slotY + (i - 1) * (SLOT_SIZE * 2 + 8)
-        local sx = eqX + PANEL_PAD
+        local y = slotY + (i - 1) * (ss * 2 + 8 * s)
+        local sx = eqX + sp
         local sy = y
 
         love.graphics.setColor(0.25, 0.25, 0.25, 1)
-        love.graphics.rectangle("fill", sx, sy, SLOT_SIZE * 1.5, SLOT_SIZE * 1.5, 4, 4)
+        love.graphics.rectangle("fill", sx, sy, ss * 1.5, ss * 1.5, 4 * s, 4 * s)
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
-        love.graphics.rectangle("line", sx, sy, SLOT_SIZE * 1.5, SLOT_SIZE * 1.5, 4, 4)
+        love.graphics.rectangle("line", sx, sy, ss * 1.5, ss * 1.5, 4 * s, 4 * s)
 
+        local labelFont = love.graphics.newFont(math.floor(8 * s))
+        love.graphics.setFont(labelFont)
         love.graphics.setColor(0.6, 0.6, 0.6, 1)
-        love.graphics.printf(EQUIP_LABELS[slot], sx, sy + SLOT_SIZE * 1.5 + 2, SLOT_SIZE * 1.5, "center")
+        love.graphics.printf(EQUIP_LABELS[slot], sx, sy + ss * 1.5 + 2 * s, ss * 1.5, "center")
+        love.graphics.setFont(love.graphics.newFont())
 
         local itemKey = equipComp.slots[slot]
         if itemKey and itemKey ~= self.heldItemKey then
@@ -221,47 +262,54 @@ function InventoryUI:_drawEquipment(eqX, eqY, invComp, equipComp)
                 if itemDef then
                     local c = ITEM_COLORS[itemDef.type] or {0.5, 0.5, 0.5}
                     love.graphics.setColor(c[1], c[2], c[3], 0.85)
-                    love.graphics.rectangle("fill", sx + 2, sy + 2, SLOT_SIZE * 1.5 - 4, SLOT_SIZE * 1.5 - 4, 3, 3)
+                    love.graphics.rectangle("fill", sx + 2, sy + 2, ss * 1.5 - 4, ss * 1.5 - 4, 3 * s, 3 * s)
+                    local smallFont = getScaledSmallFont(s)
+                    love.graphics.setFont(smallFont)
                     love.graphics.setColor(1, 1, 1, 0.95)
-                    love.graphics.printf(self:_shortName(itemDef.name), sx + 2, sy + SLOT_SIZE * 0.5, SLOT_SIZE * 1.5 - 4, "center")
+                    love.graphics.printf(self:_shortName(itemDef.name), sx + 2, sy + ss * 0.5, ss * 1.5 - 4, "center")
+                    love.graphics.setFont(love.graphics.newFont())
                 end
             end
         end
     end
 end
 
-function InventoryUI:_drawTooltip(panelX, panelY, invComp, equipComp, playerId)
+function InventoryUI:_drawTooltip(panelX, panelY, invComp, equipComp, playerId, s)
     local mx, my = love.mouse.getPosition()
+    local ss = SLOT_SIZE * s
+    local sg = SLOT_GAP * s
+    local sp = PANEL_PAD * s
+    local st = TITLE_H * s
 
     -- Check grid hover
-    local gx = gridX(panelX)
-    local gy = gridY(panelY)
-    if mx >= gx and my >= gy and mx < gx + GRID_COLS * (SLOT_SIZE + SLOT_GAP) and my < gy + GRID_ROWS * (SLOT_SIZE + SLOT_GAP) then
-        local col = math.floor((mx - gx) / (SLOT_SIZE + SLOT_GAP)) + 1
-        local row = math.floor((my - gy) / (SLOT_SIZE + SLOT_GAP)) + 1
+    local gx = gridX(panelX, s)
+    local gy = gridY(panelY, s)
+    if mx >= gx and my >= gy and mx < gx + GRID_COLS * (ss + sg) and my < gy + GRID_ROWS * (ss + sg) then
+        local col = math.floor((mx - gx) / (ss + sg)) + 1
+        local row = math.floor((my - gy) / (ss + sg)) + 1
         if col >= 1 and col <= GRID_COLS and row >= 1 and row <= GRID_ROWS then
             if invComp.slots[row] and invComp.slots[row][col] then
                 local key = invComp.slots[row][col]
                 local item = invComp.items[key]
                 if item and key ~= self.heldItemKey then
-                    self:_showTooltip(item.itemId, mx, my)
+                    self:_showTooltip(item.itemId, mx, my, s)
                 end
             end
         end
     end
 
     -- Check equipment hover
-    local eqX = equipPanelX(panelX)
+    local eqX = equipPanelX(panelX, s)
     if equipComp and mx >= eqX then
-        local slotY = panelY + PANEL_PAD + TITLE_H
+        local slotY = panelY + sp + st
         for i, slot in ipairs(EQUIP_SLOTS) do
-            local y = slotY + (i - 1) * (SLOT_SIZE * 2 + 8)
-            if my >= y and my < y + SLOT_SIZE * 1.5 and mx >= eqX + PANEL_PAD and mx < eqX + PANEL_PAD + SLOT_SIZE * 1.5 then
+            local y = slotY + (i - 1) * (ss * 2 + 8 * s)
+            if my >= y and my < y + ss * 1.5 and mx >= eqX + sp and mx < eqX + sp + ss * 1.5 then
                 local itemKey = equipComp.slots[slot]
                 if itemKey and itemKey ~= self.heldItemKey then
                     local item = invComp.items[itemKey]
                     if item then
-                        self:_showTooltip(item.itemId, mx, my)
+                        self:_showTooltip(item.itemId, mx, my, s)
                     end
                 end
                 return
@@ -270,7 +318,7 @@ function InventoryUI:_drawTooltip(panelX, panelY, invComp, equipComp, playerId)
     end
 end
 
-function InventoryUI:_showTooltip(itemId, mx, my)
+function InventoryUI:_showTooltip(itemId, mx, my, s)
     local itemDef = ItemDef.builtin[itemId]
     if not itemDef then return end
 
@@ -291,30 +339,33 @@ function InventoryUI:_showTooltip(itemId, mx, my)
         table.insert(lines, "Rarity: " .. itemDef.rarity)
     end
 
-    local lineH = 14
-    local pad = 6
+    local lineH = 14 * s
+    local pad = 6 * s
+    local tooltipFont = love.graphics.newFont(math.floor(10 * s))
     local maxW = 0
     for _, line in ipairs(lines) do
-        local w = love.graphics.getFont():getWidth(line)
+        local w = tooltipFont:getWidth(line)
         if w > maxW then maxW = w end
     end
     local tw = maxW + pad * 2
     local th = #lines * lineH + pad * 2
-    local tx = mx + 12
-    local ty = my - th - 4
+    local tx = mx + 12 * s
+    local ty = my - th - 4 * s
     if tx + tw > love.graphics.getWidth() then
-        tx = mx - tw - 12
+        tx = mx - tw - 12 * s
     end
 
     love.graphics.setColor(0.05, 0.05, 0.08, 0.92)
-    love.graphics.rectangle("fill", tx, ty, tw, th, 4, 4)
+    love.graphics.rectangle("fill", tx, ty, tw, th, 4 * s, 4 * s)
     love.graphics.setColor(0.5, 0.5, 0.6, 1)
-    love.graphics.rectangle("line", tx, ty, tw, th, 4, 4)
+    love.graphics.rectangle("line", tx, ty, tw, th, 4 * s, 4 * s)
 
+    love.graphics.setFont(tooltipFont)
     love.graphics.setColor(1, 1, 1, 1)
     for i, line in ipairs(lines) do
         love.graphics.print(line, tx + pad, ty + pad + (i - 1) * lineH)
     end
+    love.graphics.setFont(love.graphics.newFont())
 end
 
 -- Keyboard handling
@@ -551,19 +602,23 @@ end
 -- Helpers
 
 function InventoryUI:_gridPosAt(mx, my, inv)
-    local panelW = gridPanelWidth()
-    local eqPanelW = equipPanelWidth()
-    local totalW = panelW + eqPanelW + 16
-    local totalH = gridPanelHeight()
+    local s = getScale()
+    local ss = SLOT_SIZE * s
+    local sg = SLOT_GAP * s
+
+    local panelW = gridPanelWidth(s)
+    local eqPanelW = equipPanelWidth(s)
+    local totalW = panelW + eqPanelW + 16 * s
+    local totalH = gridPanelHeight(s)
     local startX = (love.graphics.getWidth() - totalW) / 2
     local startY = (love.graphics.getHeight() - totalH) / 2
 
-    local gx = gridX(startX)
-    local gy = gridY(startY)
+    local gx = gridX(startX, s)
+    local gy = gridY(startY, s)
     if mx < gx or my < gy then return nil, nil end
 
-    local col = math.floor((mx - gx) / (SLOT_SIZE + SLOT_GAP)) + 1
-    local row = math.floor((my - gy) / (SLOT_SIZE + SLOT_GAP)) + 1
+    local col = math.floor((mx - gx) / (ss + sg)) + 1
+    local row = math.floor((my - gy) / (ss + sg)) + 1
     if col < 1 or col > inv.gridCols or row < 1 or row > inv.gridRows then
         return nil, nil
     end
@@ -571,20 +626,25 @@ function InventoryUI:_gridPosAt(mx, my, inv)
 end
 
 function InventoryUI:_getEquipSlotAt(mx, my, equip)
-    local panelW = gridPanelWidth()
-    local eqPanelW = equipPanelWidth()
-    local totalW = panelW + eqPanelW + 16
-    local totalH = gridPanelHeight()
+    local s = getScale()
+    local ss = SLOT_SIZE * s
+    local sp = PANEL_PAD * s
+    local st = TITLE_H * s
+
+    local panelW = gridPanelWidth(s)
+    local eqPanelW = equipPanelWidth(s)
+    local totalW = panelW + eqPanelW + 16 * s
+    local totalH = gridPanelHeight(s)
     local startX = (love.graphics.getWidth() - totalW) / 2
     local startY = (love.graphics.getHeight() - totalH) / 2
 
-    local eqX = equipPanelX(startX)
-    if mx < eqX + PANEL_PAD or mx > eqX + PANEL_PAD + SLOT_SIZE * 1.5 then return nil end
+    local eqX = equipPanelX(startX, s)
+    if mx < eqX + sp or mx > eqX + sp + ss * 1.5 then return nil end
 
-    local slotY = startY + PANEL_PAD + TITLE_H
+    local slotY = startY + sp + st
     for i, slot in ipairs(EQUIP_SLOTS) do
-        local y = slotY + (i - 1) * (SLOT_SIZE * 2 + 8)
-        if my >= y and my < y + SLOT_SIZE * 1.5 then
+        local y = slotY + (i - 1) * (ss * 2 + 8 * s)
+        if my >= y and my < y + ss * 1.5 then
             return slot
         end
     end
