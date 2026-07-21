@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - `MapRenderer` 新增 `getTreePositions()` 返回视口内树位置列表，`drawSingleTree(tree, alpha)` 支持透明度参数
 - `RenderSystem` 新增 `getEntityPositions(world)` 返回实体位置列表（含 `logicY` 字段），`drawSingleEntity(entity, offsetX, offsetY)` 绘制单个实体
 - 透视效果：玩家与树视觉重叠且玩家 y < 树 y 时，树透明度降至 30%
+- 鼠标悬停透明：鼠标在树的整个绘制区域内时，树透明度降至 30%，显示树后敌人
 
 ### TileSet 导出器支持 Scene Tiles
 

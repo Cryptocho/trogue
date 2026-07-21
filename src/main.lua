@@ -180,6 +180,11 @@ function love.draw()
             local trees = mapRenderer:getTreePositions(cameraX, cameraY)
             local entities = renderSystem:getEntityPositions(game.world)
             
+            -- Get mouse screen position for hover transparency
+            local mx, my = love.mouse.getPosition()
+            mx = mx / Config.SCALE
+            my = my / Config.SCALE
+            
             -- Group by y: trees[y] and ents[y]
             local treesByY = {}
             local entsByY = {}
@@ -228,6 +233,13 @@ function love.draw()
                                 end
                             end
                         end
+                        
+                        -- Mouse hover transparency (check entire tree draw area)
+                        if mx >= tree.drawX and mx <= tree.drawX + mapRenderer.treeRegionW and
+                           my >= tree.drawY and my <= tree.drawY + mapRenderer.treeRegionH then
+                            alpha = 0.3
+                        end
+                        
                         mapRenderer:drawSingleTree(tree, alpha)
                     end
                 end
