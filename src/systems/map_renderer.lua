@@ -124,7 +124,7 @@ function MapRenderer:isSolid(x, y)
     return self.tiles[y][x] == TILE_WALL or self.tiles[y][x] == TILE_TREE
 end
 
-function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
+function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY, fogOfWar)
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
 
@@ -155,6 +155,16 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
                     local quad = self.quads[tileIndex]
                     if quad then
                         love.graphics.draw(self.tileset, quad, screenX, screenY)
+                    end
+                end
+
+                -- Draw fog overlay
+                if fogOfWar then
+                    local fogAlpha = fogOfWar:getFogAlpha(x, y)
+                    if fogAlpha > 0 then
+                        love.graphics.setColor(0, 0, 0, fogAlpha)
+                        love.graphics.rectangle("fill", screenX, screenY, Config.TILE_SIZE, Config.TILE_SIZE)
+                        love.graphics.setColor(1, 1, 1, 1)
                     end
                 end
             end

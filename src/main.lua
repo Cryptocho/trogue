@@ -15,6 +15,7 @@ local InventorySystemModule = require("src.systems.inventory_system")
 local MapGenerator = require("src.utils.map_generator")
 local TweenSystem = require("src.systems.tween_system")
 local InventoryUI = require("src.systems.inventory_ui")
+local FogOfWar = require("src.systems.fog_of_war")
 
 -- Load configuration
 local Config = require("src.config")
@@ -170,8 +171,9 @@ function love.draw()
         
         -- Draw map tiles
         local mapRenderer = game:getSystem("MapRenderer")
+        local fogOfWar = game:getSystem("FogOfWar")
         if mapRenderer then
-            mapRenderer:draw(cameraX, cameraY, offsetX, offsetY)
+            mapRenderer:draw(cameraX, cameraY, offsetX, offsetY, fogOfWar)
         end
         
         -- Draw trees and entities sorted by y coordinate
@@ -212,35 +214,44 @@ function love.draw()
                 local treeGroup = treesByY[y]
                 if treeGroup then
                     for _, tree in ipairs(treeGroup) do
-                        -- Check if player is behind this tree
-                        local alpha = 1.0
-                        for _, entity in ipairs(entities) do
-                            if entity.isPlayer then
-                                local treeScreenX = tree.drawX
-                                local treeScreenY = tree.drawY
-                                local playerWx, playerWy = Coordinates.tileToWorld(entity.renderX, entity.renderY)
-                                local playerScreenX = playerWx + offsetX
-                                local playerScreenY = playerWy + offsetY
-                                
-                                if playerScreenX + Config.TILE_SIZE > treeScreenX and
-                                   playerScreenX < treeScreenX + mapRenderer.treeRegionW and
-                                   playerScreenY + Config.TILE_SIZE > treeScreenY and
-                                   playerScreenY < treeScreenY + mapRenderer.treeRegionH then
-                                    if entity.logicY < y then
-                                        alpha = 0.3
-                                        break
+                        -- Skip trees in unexplored areas
+                        local treeFogAlpha = fogOfWar and fogOfWar:getFogAlpha(tree.x, tree.y) or 0
+                        if treeFogAlpha < 1.0 then
+                            -- Check if player is behind this tree
+                            local alpha = 1.0
+                            for _, entity in ipairs(entities) do
+                                if entity.isPlayer then
+                                    local treeScreenX = tree.drawX
+                                    local treeScreenY = tree.drawY
+                                    local playerWx, playerWy = Coordinates.tileToWorld(entity.renderX, entity.renderY)
+                                    local playerScreenX = playerWx + offsetX
+                                    local playerScreenY = playerWy + offsetY
+                                    
+                                    if playerScreenX + Config.TILE_SIZE > treeScreenX and
+                                       playerScreenX < treeScreenX + mapRenderer.treeRegionW and
+                                       playerScreenY + Config.TILE_SIZE > treeScreenY and
+                                       playerScreenY < treeScreenY + mapRenderer.treeRegionH then
+                                            if entity.logicY < y then
+                                                alpha = 0.3
+                                                break
+                                            end
                                     end
                                 end
                             end
+                            
+                            -- Mouse hover transparency (check entire tree draw area)
+                            if mx >= tree.drawX and mx <= tree.drawX + mapRenderer.treeRegionW and
+                               my >= tree.drawY and my <= tree.drawY + mapRenderer.treeRegionH then
+                                alpha = 0.3
+                            end
+
+                            -- Apply fog dimming for explored but not visible
+                            if treeFogAlpha > 0 then
+                                alpha = math.min(alpha, 1 - treeFogAlpha)
+                            end
+                            
+                            mapRenderer:drawSingleTree(tree, alpha)
                         end
-                        
-                        -- Mouse hover transparency (check entire tree draw area)
-                        if mx >= tree.drawX and mx <= tree.drawX + mapRenderer.treeRegionW and
-                           my >= tree.drawY and my <= tree.drawY + mapRenderer.treeRegionH then
-                            alpha = 0.3
-                        end
-                        
-                        mapRenderer:drawSingleTree(tree, alpha)
                     end
                 end
                 
@@ -248,14 +259,14 @@ function love.draw()
                 local entGroup = entsByY[y]
                 if entGroup then
                     for _, entity in ipairs(entGroup) do
-                        renderSystem:drawSingleEntity(entity, offsetX, offsetY)
+                        renderSystem:drawSingleEntity(entity, offsetX, offsetY, fogOfWar)
                     end
                 end
             end
         end
         
         if renderSystem then
-            renderSystem:drawHealthBars(game.world, offsetX, offsetY)
+            renderSystem:drawHealthBars(game.world, offsetX, offsetY, fogOfWar)
             renderSystem:drawAimPreview(offsetX, offsetY, cameraX, cameraY)
         end
         
@@ -457,6 +468,7 @@ function initGameWorld()
     
     -- Add systems (by priority)
     game.world:addSystem(MapRenderer)
+    game.world:addSystem(FogOfWar)
     game.world:addSystem(TurnSystem)
     game.world:addSystem(InventorySystemModule)
     game.world:addSystem(TweenSystem)
@@ -471,6 +483,12 @@ function initGameWorld()
     local mapRenderer = game:getSystem("MapRenderer")
     if mapRenderer then
         mapRenderer:loadMap(mapData)
+    end
+
+    -- Initialize FogOfWar with map dimensions
+    local fogOfWar = game:getSystem("FogOfWar")
+    if fogOfWar and mapRenderer then
+        fogOfWar:loadMap(mapRenderer.width, mapRenderer.height)
     end
     
     -- Store system references and set up inter-system dependencies

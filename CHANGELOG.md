@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 战争迷雾系统
+
+- 影响的文件: `src/systems/fog_of_war.lua` (新建), `src/systems/map_renderer.lua`, `src/systems/render.lua`, `src/main.lua`
+- 新建 `FogOfWar` 系统，管理地图可见性和探索状态
+- 视野范围：7格（chebyshevDistance ≤ 7，15×15 方格）
+- 三种可见性状态：视野内（完全可见）、已探索（半透明迷雾）、未探索（完全黑色）
+- `MapRenderer:draw()` 新增 `fogOfWar` 参数，绘制迷雾覆盖层
+- `RenderSystem:drawSingleEntity()` 和 `drawHealthBars()` 新增可见性检查，视野外敌人不绘制
+- 树精灵渲染支持迷雾效果，已探索区域的树自动变暗
+- Bug 修复：`getEntityPositions()` 中 `result.entityId` 修正为 `result.id`
+
 ### 敌人 AI 视觉系统
 
 - 影响的文件: `src/components/ai_state.lua` (新建), `src/systems/ai.lua` (重写), `src/systems/render.lua`, `src/data/prototypes/entities.lua`

@@ -124,7 +124,7 @@ function RenderSystem:getEntityPositions(world)
             local aiState = result.components.AIState
             local isAlerted = aiState and (aiState.state == "alerted" or aiState.state == "chasing")
             table.insert(entityList, {
-                entityId = result.entityId,
+                entityId = result.id,
                 renderX = renderX,
                 renderY = renderY,
                 logicY = pos.y,
@@ -138,7 +138,15 @@ function RenderSystem:getEntityPositions(world)
     return entityList
 end
 
-function RenderSystem:drawSingleEntity(entity, offsetX, offsetY)
+function RenderSystem:drawSingleEntity(entity, offsetX, offsetY, fogOfWar)
+    -- Skip entities outside visible area (except player)
+    if fogOfWar and not entity.isPlayer then
+        if not entity.renderX or not entity.renderY then return end
+        if not fogOfWar:isVisible(entity.renderX, entity.renderY) then
+            return
+        end
+    end
+
     local wx, wy = Coordinates.tileToWorld(entity.renderX, entity.renderY)
     local x = wx + offsetX
     local y = wy + offsetY
@@ -182,7 +190,7 @@ function RenderSystem:_drawAlert(x, y)
     love.graphics.print(text, centerX - tw / 2, topY - 5)
 end
 
-function RenderSystem:drawHealthBars(world, offsetX, offsetY)
+function RenderSystem:drawHealthBars(world, offsetX, offsetY, fogOfWar)
     local entities = world:query({"Position", "Stats", "Renderable"})
 
     for _, result in ipairs(entities) do
@@ -191,6 +199,13 @@ function RenderSystem:drawHealthBars(world, offsetX, offsetY)
         local tween = result.components.PositionTween
 
         if (result.components.Player or result.components.Actor) and pos and stats then
+            -- Skip health bars for entities outside visible area (except player)
+            if fogOfWar and not result.components.Player then
+                if not pos.x or not pos.y or not fogOfWar:isVisible(pos.x, pos.y) then
+                    goto continue
+                end
+            end
+
             local renderX, renderY = pos.x, pos.y
             if tween and tween.active then
                 renderX, renderY = tween.visualX, tween.visualY
@@ -214,6 +229,7 @@ function RenderSystem:drawHealthBars(world, offsetX, offsetY)
             end
             love.graphics.rectangle("fill", x, y, Config.TILE_SIZE * healthPercent, 3)
         end
+        ::continue::
     end
 end
 
