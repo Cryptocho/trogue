@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 敌人 AI 视觉系统
+
+- 影响的文件: `src/components/ai_state.lua` (新建), `src/systems/ai.lua` (重写), `src/systems/render.lua`, `src/data/prototypes/entities.lua`
+- 新增 `AIState` 组件，追踪敌人行为状态：`idle` / `alerted` / `chasing`
+- `AISystem` 重写为三状态状态机：
+  - `idle`：随机移动，每帧检测视野（11×11 格，切比雪夫距离 5）
+  - `alerted`：发现玩家后进入，头顶显示红色感叹号，等待 1 回合
+  - `chasing`：使用 A* 寻路靠近玩家，相邻时释放技能攻击
+  - 视线检测使用 Bresenham 算法，被墙壁遮挡不触发发现
+  - 失去玩家视野且到达最后已知位置后回到 `idle`
+- `RenderSystem` 新增 `_drawAlert(x, y)` 函数，在敌人头顶绘制红色圆形 + 白色 "!"
+- `getEntityPositions()` 返回值新增 `isAlerted` 字段
+- 敌人原型（goblin/rat/orc）新增 `AIState` 组件
+
 ### 背包 UI 自适应缩放
 
 - 影响的文件: `src/systems/inventory_ui.lua`

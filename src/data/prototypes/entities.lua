@@ -52,6 +52,7 @@ return {
     goblin = {
         Renderable = {tileIndex = 3},
         Actor = {},
+        AIState = {state = "idle", alertedTurn = 0, targetX = nil, targetY = nil},
         Weapon = {weaponId = "shortsword"},
         Stats = {
             base = {strength = 8, agility = 6, sensing = 3, spirit = 4, magic = 3, tenacity = 0},
@@ -94,6 +95,7 @@ return {
     rat = {
         Renderable = {tileIndex = 4},
         Actor = {},
+        AIState = {state = "idle", alertedTurn = 0, targetX = nil, targetY = nil},
         Weapon = {weaponId = "fangs"},
         Stats = {
             base = {strength = 4, agility = 8, sensing = 2, spirit = 2, magic = 2, tenacity = 0},
@@ -136,6 +138,7 @@ return {
     orc = {
         Renderable = {tileIndex = 5},
         Actor = {},
+        AIState = {state = "idle", alertedTurn = 0, targetX = nil, targetY = nil},
         Weapon = {weaponId = "battle_axe"},
         Stats = {
             base = {strength = 12, agility = 3, sensing = 2, spirit = 5, magic = 2, tenacity = 0},

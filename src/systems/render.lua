@@ -87,6 +87,12 @@ function RenderSystem:drawEntities(world, offsetX, offsetY)
                     love.graphics.rectangle("fill", x + 1, y + 1, Config.TILE_SIZE - 2, Config.TILE_SIZE - 2)
                     love.graphics.setColor(1, 1, 1, 1)
                 end
+
+                -- Draw alert indicator
+                local aiState = result.components.AIState
+                if aiState and (aiState.state == "alerted" or aiState.state == "chasing") then
+                    self:_drawAlert(x, y)
+                end
             end
         elseif result.components.InventoryItem and pos then
             local wx, wy = Coordinates.tileToWorld(pos.x, pos.y)
@@ -115,13 +121,16 @@ function RenderSystem:getEntityPositions(world)
             else
                 renderX, renderY = pos.x, pos.y
             end
+            local aiState = result.components.AIState
+            local isAlerted = aiState and (aiState.state == "alerted" or aiState.state == "chasing")
             table.insert(entityList, {
                 entityId = result.entityId,
                 renderX = renderX,
                 renderY = renderY,
-                logicY = pos.y,  -- Use logic position for sorting
+                logicY = pos.y,
                 isPlayer = result.components.Player ~= nil,
-                tileIndex = renderable.tileIndex
+                tileIndex = renderable.tileIndex,
+                isAlerted = isAlerted,
             })
         end
     end
@@ -150,7 +159,27 @@ function RenderSystem:drawSingleEntity(entity, offsetX, offsetY)
             love.graphics.rectangle("fill", x + 1, y + 1, Config.TILE_SIZE - 2, Config.TILE_SIZE - 2)
             love.graphics.setColor(1, 1, 1, 1)
         end
+
+        if entity.isAlerted then
+            self:_drawAlert(x, y)
+        end
     end
+end
+
+function RenderSystem:_drawAlert(x, y)
+    local centerX = x + Config.TILE_SIZE / 2
+    local topY = y - 8
+
+    -- Red circle background
+    love.graphics.setColor(0.9, 0.15, 0.15, 1)
+    love.graphics.circle("fill", centerX, topY, 5)
+
+    -- White "!"
+    love.graphics.setColor(1, 1, 1, 1)
+    local font = love.graphics.getFont()
+    local text = "!"
+    local tw = font:getWidth(text)
+    love.graphics.print(text, centerX - tw / 2, topY - 5)
 end
 
 function RenderSystem:drawHealthBars(world, offsetX, offsetY)
