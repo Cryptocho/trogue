@@ -1,0 +1,14 @@
+# 构建产物
+build/
+build-release/
+
+# 运行期生成的截图
+screenshot_*.png
+
+# 原始项目只读参考副本（自带 .git，勿并入本仓库）
+trogue-orign/
+
+# agent 工具状态
+.mimocode/
+
+compile_commands.json
