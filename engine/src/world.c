@@ -10,13 +10,10 @@
 
 static unsigned char g_default_entity_color[4] = { 255, 255, 255, 255 };
 
+// 语义：仅在解析成功时写 out；失败保持调用方预填的默认值（如 spawn 的白色）
 bool tg_parse_hex_color(const char *hex, unsigned char out[4])
 {
-    out[0] = out[1] = out[2] = 0;
-    out[3] = 255;
-    if (!hex)
-        return false;
-    if (hex[0] != '#')
+    if (!hex || hex[0] != '#')
         return false;
     size_t len = strlen(hex);
     if (len != 7 && len != 9)
@@ -51,7 +48,8 @@ void tg_world_destroy(TgWorld *w)
 {
     if (!w)
         return;
-    tg_tileset_destroy(w->tileset);
+    for (int i = 0; i < w->tileset_count; i++)
+        tg_tileset_destroy(w->tilesets[i]);
     for (int i = 0; i < w->layer_count; i++)
         free(w->layers[i].tiles);
     free(w);
@@ -165,6 +163,14 @@ bool tg_world_is_solid_at(TgWorld *w, float px, float py)
     for (int i = 0; i < w->layer_count; i++)
         if (w->layers[i].solid && layer_tile_is_solid(w, &w->layers[i], px, py))
             return true;
+    // 与 rect 查询保持一致：solid 实体同样阻挡
+    for (int i = 0; i < w->entity_count; i++) {
+        const TgEntity *e = &w->entities[i];
+        if (!e->active || !e->solid)
+            continue;
+        if (px >= e->x && px < e->x + e->w && py >= e->y && py < e->y + e->h)
+            return true;
+    }
     return false;
 }
 
@@ -188,6 +194,14 @@ bool tg_world_rect_hits_solid(TgWorld *w, float x, float y, float w_, float h_)
                     return true;
             }
         }
+    }
+    // solid 实体同样阻挡（场景 tile 转出的实体如树，碰撞足印 = 实体 w/h）
+    for (int i = 0; i < w->entity_count; i++) {
+        const TgEntity *e = &w->entities[i];
+        if (!e->active || !e->solid)
+            continue;
+        if (x < e->x + e->w && x + w_ > e->x && y < e->y + e->h && y + h_ > e->y)
+            return true;
     }
     return false;
 }

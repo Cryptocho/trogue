@@ -5,8 +5,10 @@
 
 #include "config.h"
 
-// tro-tileset v1：图集 + tile id → 图集区域映射。
-// 场景级共享（tro-scene v1.1 限定单 tileset）；path 相对 assets/ 目录。
+// tro-tileset v2：图集 + tile id → 图集区域映射。
+// 每个文件单贴图；一个场景的多张贴图由 tro-scene v2 的 tilesets 数组组合。
+// terrain_sets/peering_bits/custom_data 为透传字段，引擎忽略（autotile 阶段消费）。
+// path 相对 assets/ 目录。
 
 typedef struct TgTileset {
     Texture2D texture;

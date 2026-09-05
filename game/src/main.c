@@ -125,6 +125,7 @@ int main(int argc, char **argv)
     tg_ipc_destroy(ipc);
     tg_watcher_destroy(watcher);
     tg_world_destroy(world);
+    tg_render_shutdown(); // 释放实体独立贴图缓存（tileset 纹理已随 world 释放）
     CloseWindow();
     return 0;
 }

@@ -1,5 +1,1294 @@
 {
-	"entities": [],
+	"entities": [
+		{
+			"h": 16.0,
+			"id": "tree_1",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 64.0,
+			"y": 48.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_2",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 192.0,
+			"y": 48.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_3",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 208.0,
+			"y": 48.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_4",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 176.0,
+			"y": 64.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_5",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 192.0,
+			"y": 64.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_6",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 224.0,
+			"y": 64.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_7",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 240.0,
+			"y": 64.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_8",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 176.0,
+			"y": 80.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_9",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 256.0,
+			"y": 80.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_10",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 160.0,
+			"y": 96.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_11",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 288.0,
+			"y": 96.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_12",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 160.0,
+			"y": 112.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_13",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 288.0,
+			"y": 112.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_14",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 160.0,
+			"y": 128.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_15",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 288.0,
+			"y": 128.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_16",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 304.0,
+			"y": 128.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_17",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -16.0,
+			"y": 144.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_18",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 0.0,
+			"y": 144.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_19",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 16.0,
+			"y": 144.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_20",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 288.0,
+			"y": 144.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_21",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 304.0,
+			"y": 144.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_22",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -48.0,
+			"y": 160.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_23",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -32.0,
+			"y": 160.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_24",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 16.0,
+			"y": 160.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_25",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 288.0,
+			"y": 160.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_26",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -48.0,
+			"y": 176.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_27",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 272.0,
+			"y": 176.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_28",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 288.0,
+			"y": 176.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_29",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -48.0,
+			"y": 192.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_30",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -48.0,
+			"y": 208.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_31",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -32.0,
+			"y": 208.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_32",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -32.0,
+			"y": 224.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_33",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": -16.0,
+			"y": 224.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_34",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 160.0,
+			"y": 224.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_35",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 0.0,
+			"y": 240.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_36",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 16.0,
+			"y": 240.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_37",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 32.0,
+			"y": 240.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_38",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 176.0,
+			"y": 240.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_39",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 448.0,
+			"y": 240.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_40",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 160.0,
+			"y": 256.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_41",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 176.0,
+			"y": 256.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_42",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 192.0,
+			"y": 272.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_43",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 192.0,
+			"y": 288.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_44",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 224.0,
+			"y": 288.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_45",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 208.0,
+			"y": 304.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_46",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 256.0,
+			"y": 304.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_47",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 208.0,
+			"y": 320.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_48",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 224.0,
+			"y": 320.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_49",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 256.0,
+			"y": 320.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_50",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 224.0,
+			"y": 336.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_51",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 272.0,
+			"y": 336.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_52",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 240.0,
+			"y": 352.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_53",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 272.0,
+			"y": 352.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_54",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 256.0,
+			"y": 368.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_55",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 288.0,
+			"y": 368.0,
+			"z": 0
+		},
+		{
+			"h": 16.0,
+			"id": "tree_56",
+			"solid": true,
+			"sprite": {
+				"offset": [
+					-27.0,
+					-79.0
+				],
+				"region": [
+					11.0,
+					143.0,
+					70.0,
+					98.0
+				],
+				"texture": "textures/Decorations.png"
+			},
+			"type": "tree",
+			"w": 16.0,
+			"x": 272.0,
+			"y": 384.0,
+			"z": 0
+		}
+	],
 	"format": "tro-scene",
 	"meta": {
 		"background": "#101018",
@@ -809,12 +2098,18 @@
 					-1,
 					-1
 				],
+				"tileset": "tile_set",
 				"width": 33
 			}
 		],
 		"tile_height": 16,
 		"tile_width": 16,
-		"tileset": "tilesets/tile_set.json"
+		"tilesets": [
+			{
+				"name": "tile_set",
+				"path": "tilesets/tile_set.json"
+			}
+		]
 	},
-	"version": 1
+	"version": 2
 }

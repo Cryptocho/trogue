@@ -15,6 +15,9 @@
 #define TROGUE_NAME_MAX 64
 #define TROGUE_PATH_MAX 512
 
+// 实体独立贴图缓存上限（render 模块懒加载，路径去重）
+#define TROGUE_MAX_SPRITE_TEXTURES 16
+
 // ── IPC（tro-ipc v1）──
 #define TROGUE_IPC_PORT_DEFAULT 48764
 #define TROGUE_IPC_MAX_CLIENTS  8

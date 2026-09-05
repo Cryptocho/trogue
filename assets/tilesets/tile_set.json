@@ -2,6 +2,17 @@
 	"columns": 16,
 	"format": "tro-tileset",
 	"rows": 16,
+	"terrain_sets": [
+		{
+			"mode": "corners",
+			"terrains": [
+				{
+					"color": "#ffdb00",
+					"name": "Terrain 0"
+				}
+			]
+		}
+	],
 	"texture": "textures/Tile Set.png",
 	"tile_height": 16,
 	"tile_width": 16,
@@ -167,5 +178,5 @@
 			"terrain_set": 0
 		}
 	],
-	"version": 1
+	"version": 2
 }

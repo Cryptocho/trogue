@@ -28,8 +28,8 @@ TgTileset *tg_tileset_load(const char *path)
         TraceLog(LOG_ERROR, "[tileset] format 必须是 \"tro-tileset\"");
         goto out;
     }
-    if (!json_is_integer(ver) || json_integer_value(ver) != 1) {
-        TraceLog(LOG_ERROR, "[tileset] 不支持的 schema version（仅支持 1）");
+    if (!json_is_integer(ver) || json_integer_value(ver) != 2) {
+        TraceLog(LOG_ERROR, "[tileset] 不支持的 schema version（仅支持 2）");
         goto out;
     }
 
