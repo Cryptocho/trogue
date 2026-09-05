@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### tro-ipc v1.1 观测命令（面向非视觉 Agent）
+
+- 影响的文件: `engine/include/trogue/world.h`, `engine/src/world.c`, `engine/src/ipc.c`, `tools/ipc_smoke.py`
+
+#### Added
+- 新命令 `query_entities`（半径模式 x/y/radius 按实体中心距、矩形模式 rect:[x,y,w,h] 按 AABB 相交，同时提供时半径优先；可选 `type` 过滤）、`layers`（层信息 + tileset 名反查 + 非空 tile 数，palette 模式 tileset=null）、`solid_at`（像素坐标 solid 判定，solid 层与 solid 实体一并）、`get_tile`（像素坐标各层非空格值 + solid）
+- 实体快照条件输出新字段：`z`（≠0）、`solid`（true）、`sprite`（图集形态转 tileset 名 / 独立贴图含 region/offset）、`v`（速度数组，非零时）；既有字段与响应包络不变，向后兼容
+- `tg_world_tile_at()`：像素→tile 换算的公共查询 API（world.c 碰撞与 IPC get_tile 共用同一实现）
+- 冒烟测试新增 8 项断言（query/layers/solid_at/get_tile），基线 15 → 23
+
+#### Bug Fixes
+- 冒烟测试玩家中心计算改为从实体快照取 w/h，消除 16×16 硬编码假设
+
 ### tro-scene / tro-tileset v2 资产格式与导出器升级
 
 - 影响的文件: `engine/include/trogue/config.h`, `engine/include/trogue/world.h`, `engine/include/trogue/tileset.h`, `engine/include/trogue/render.h`, `engine/src/world.c`, `engine/src/scene.c`, `engine/src/render.c`, `engine/src/tileset.c`, `game/src/main.c`, `editor/addons/scene_exporter/tro_schema.gd`, `editor/addons/scene_exporter/headless_export.gd`, `assets/scenes/demo.json`, `assets/scenes/test.json`, `assets/scenes/tile_map_layer.json`, `assets/tilesets/tile_set.json`, `assets/textures/Decorations.png`

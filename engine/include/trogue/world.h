@@ -83,9 +83,11 @@ bool tg_world_despawn(TgWorld *w, const char *id);
 // "#rrggbb" / "#rrggbbaa" → RGBA（alpha 缺省 255）。hex 为 NULL 或非法时返回 false。
 bool tg_parse_hex_color(const char *hex, unsigned char out_rgba[4]);
 
-// 像素坐标处是否有 solid tile（层矩形之外 = 该层无数据 = 不阻挡）
+// 像素坐标处是否有 solid tile（层矩形之外 = 该层无数据 = 不阻挡；solid 实体一并判定）
 bool tg_world_is_solid_at(TgWorld *w, float px, float py);
-// AABB 是否与任何 solid tile 重叠
+// AABB 是否与任何 solid tile 重叠（solid 实体 AABB 一并判定）
 bool tg_world_rect_hits_solid(TgWorld *w, float x, float y, float rw, float rh);
+// 像素坐标处该层的 tile 值（层矩形之外或空格返回 -1）；像素→tile 换算的唯一实现
+int tg_world_tile_at(const TgWorld *w, const TgTileLayer *l, float px, float py);
 
 #endif // TROGUE_WORLD_H

@@ -9,6 +9,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <signal.h>
@@ -78,18 +79,43 @@ static int count_active_entities(const TgWorld *w)
     return n;
 }
 
-static json_t *entity_to_json(const TgEntity *e)
+// 实体快照：v1 字段之外，z/solid/sprite/vx/vy 仅在有意义时出现（v1.1 只增不改，老客户端忽略未知字段）
+static json_t *entity_to_json(const TgWorld *w, const TgEntity *e)
 {
     char col[10];
     if (e->a == 255)
         snprintf(col, sizeof(col), "#%02x%02x%02x", e->r, e->g, e->b);
     else
         snprintf(col, sizeof(col), "#%02x%02x%02x%02x", e->r, e->g, e->b, e->a);
-    return json_pack("{s:s,s:s,s:f,s:f,s:f,s:f,s:s}",
-                     "id", e->id, "type", e->type,
-                     "x", (double)e->x, "y", (double)e->y,
-                     "w", (double)e->w, "h", (double)e->h,
-                     "color", col);
+    json_t *obj = json_pack("{s:s,s:s,s:f,s:f,s:f,s:f,s:s}",
+                            "id", e->id, "type", e->type,
+                            "x", (double)e->x, "y", (double)e->y,
+                            "w", (double)e->w, "h", (double)e->h,
+                            "color", col);
+    if (e->z != 0)
+        json_object_set_new(obj, "z", json_integer(e->z));
+    if (e->solid)
+        json_object_set_new(obj, "solid", json_true());
+    if (e->sprite.has) {
+        if (e->sprite.tileset >= 0 && e->sprite.tileset < w->tileset_count) {
+            json_object_set_new(obj, "sprite",
+                                json_pack("{s:s,s:i}", "tileset",
+                                          w->tileset_names[e->sprite.tileset], "tile", e->sprite.tile));
+        } else {
+            json_t *sp = json_pack("{s:s}", "texture", e->sprite.texture);
+            if (e->sprite.rw > 0 && e->sprite.rh > 0)
+                json_object_set_new(sp, "region",
+                                    json_pack("[f,f,f,f]", (double)e->sprite.rx, (double)e->sprite.ry,
+                                              (double)e->sprite.rw, (double)e->sprite.rh));
+            if (e->sprite.ox != 0.0f || e->sprite.oy != 0.0f)
+                json_object_set_new(sp, "offset",
+                                    json_pack("[f,f]", (double)e->sprite.ox, (double)e->sprite.oy));
+            json_object_set_new(obj, "sprite", sp);
+        }
+    }
+    if (e->vx != 0.0f || e->vy != 0.0f)
+        json_object_set_new(obj, "v", json_pack("[f,f]", (double)e->vx, (double)e->vy));
+    return obj;
 }
 
 // ── 命令处理：返回 data 对象（成功）或带 "error" 键的对象（失败） ──
@@ -103,7 +129,8 @@ static json_t *handle_command(TgIpc *ipc, const char *cmd, json_t *root)
 
     if (strcmp(cmd, "help") == 0) {
         static const char *cmds[] = { "ping", "status", "list_entities", "get_entity",
-                                      "set_entity", "spawn", "despawn", "reload",
+                                      "query_entities", "set_entity", "spawn", "despawn",
+                                      "layers", "solid_at", "get_tile", "reload",
                                       "screenshot", "log", "quit", "help" };
         json_t *arr = json_array();
         for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++)
@@ -124,7 +151,7 @@ static json_t *handle_command(TgIpc *ipc, const char *cmd, json_t *root)
         json_t *arr = json_array();
         for (int i = 0; i < w->entity_count; i++)
             if (w->entities[i].active)
-                json_array_append_new(arr, entity_to_json(&w->entities[i]));
+                json_array_append_new(arr, entity_to_json(w, &w->entities[i]));
         return json_pack("{s:o,s:i}", "entities", arr, "count", count_active_entities(w));
     }
 
@@ -135,7 +162,7 @@ static json_t *handle_command(TgIpc *ipc, const char *cmd, json_t *root)
         TgEntity *e = tg_world_find_entity(w, json_string_value(jid));
         if (!e)
             return err_json("实体不存在");
-        return json_pack("{s:o}", "entity", entity_to_json(e));
+        return json_pack("{s:o}", "entity", entity_to_json(w, e));
     }
 
     if (strcmp(cmd, "set_entity") == 0) {
@@ -169,7 +196,7 @@ static json_t *handle_command(TgIpc *ipc, const char *cmd, json_t *root)
             e->b = rgba[2];
             e->a = rgba[3];
         }
-        return json_pack("{s:o}", "entity", entity_to_json(e));
+        return json_pack("{s:o}", "entity", entity_to_json(w, e));
     }
 
     if (strcmp(cmd, "spawn") == 0) {
@@ -191,7 +218,7 @@ static json_t *handle_command(TgIpc *ipc, const char *cmd, json_t *root)
                                      json_is_string(jcolor) ? json_string_value(jcolor) : NULL);
         if (!e)
             return err_json("spawn 失败（池满）");
-        return json_pack("{s:o}", "entity", entity_to_json(e));
+        return json_pack("{s:o}", "entity", entity_to_json(w, e));
     }
 
     if (strcmp(cmd, "despawn") == 0) {
@@ -201,6 +228,111 @@ static json_t *handle_command(TgIpc *ipc, const char *cmd, json_t *root)
         if (!tg_world_despawn(w, json_string_value(jid)))
             return err_json("实体不存在");
         return json_pack("{s:b}", "despawned", 1);
+    }
+
+    if (strcmp(cmd, "query_entities") == 0) {
+        // 半径模式（x/y/radius）或矩形模式（rect）；type 过滤可选。
+        // radius 用「实体中心距查询点」比 AABB 相交更符合「附近有什么」的直觉。
+        json_t *jx = json_object_get(root, "x");
+        json_t *jy = json_object_get(root, "y");
+        json_t *jr = json_object_get(root, "radius");
+        json_t *jrect = json_object_get(root, "rect");
+        bool radius_mode = jx != NULL || jy != NULL || jr != NULL;
+        if (radius_mode) {
+            if (!json_is_number(jx) || !json_is_number(jy) || !json_is_number(jr))
+                return err_json("半径模式需要数字参数 x/y/radius");
+            if (json_number_value(jr) < 0)
+                return err_json("radius 不能为负");
+        } else if (json_is_array(jrect) && json_array_size(jrect) == 4) {
+            for (int i = 0; i < 4; i++)
+                if (!json_is_number(json_array_get(jrect, i)))
+                    return err_json("rect 元素必须是数字");
+            if (json_number_value(json_array_get(jrect, 2)) < 0 ||
+                json_number_value(json_array_get(jrect, 3)) < 0)
+                return err_json("rect 的 w/h 不能为负");
+        } else {
+            return err_json("需要 x/y/radius（半径模式）或 rect:[x,y,w,h]（矩形模式）");
+        }
+        json_t *jtype = json_object_get(root, "type");
+        const char *type = json_is_string(jtype) ? json_string_value(jtype) : NULL;
+        json_t *arr = json_array();
+        int count = 0;
+        for (int i = 0; i < w->entity_count; i++) {
+            TgEntity *e = &w->entities[i];
+            if (!e->active)
+                continue;
+            if (type && strcmp(e->type, type) != 0)
+                continue;
+            bool hit;
+            if (radius_mode) {
+                float dx = (e->x + e->w * 0.5f) - (float)json_number_value(jx);
+                float dy = (e->y + e->h * 0.5f) - (float)json_number_value(jy);
+                float r = (float)json_number_value(jr);
+                hit = dx * dx + dy * dy <= r * r;
+            } else {
+                float rx = (float)json_number_value(json_array_get(jrect, 0));
+                float ry = (float)json_number_value(json_array_get(jrect, 1));
+                float rw = (float)json_number_value(json_array_get(jrect, 2));
+                float rh = (float)json_number_value(json_array_get(jrect, 3));
+                hit = e->x < rx + rw && e->x + e->w > rx && e->y < ry + rh && e->y + e->h > ry;
+            }
+            if (hit) {
+                json_array_append_new(arr, entity_to_json(w, e));
+                count++;
+            }
+        }
+        return json_pack("{s:o,s:i}", "entities", arr, "count", count);
+    }
+
+    if (strcmp(cmd, "layers") == 0) {
+        json_t *arr = json_array();
+        for (int i = 0; i < w->layer_count; i++) {
+            TgTileLayer *l = &w->layers[i];
+            int used = 0;
+            for (int k = 0; k < l->width * l->height; k++)
+                if (l->tiles[k] >= 0)
+                    used++;
+            // 层只持指针，名字反查 world.tilesets（palette 模式为 null）
+            const char *ts_name = NULL;
+            for (int k = 0; k < w->tileset_count; k++)
+                if (w->tilesets[k] == l->tileset)
+                    ts_name = w->tileset_names[k];
+            json_t *lo = json_pack("{s:s,s:i,s:i,s:b,s:[i,i],s:i}",
+                                   "name", l->name, "width", l->width, "height", l->height,
+                                   "solid", l->solid ? 1 : 0,
+                                   "origin", l->origin_x, l->origin_y, "tiles", used);
+            json_object_set_new(lo, "tileset", ts_name ? json_string(ts_name) : json_null());
+            json_array_append_new(arr, lo);
+        }
+        return json_pack("{s:o,s:i}", "layers", arr, "count", w->layer_count);
+    }
+
+    if (strcmp(cmd, "solid_at") == 0) {
+        json_t *jx = json_object_get(root, "x");
+        json_t *jy = json_object_get(root, "y");
+        if (!json_is_number(jx) || !json_is_number(jy))
+            return err_json("需要数字参数 x 和 y");
+        return json_pack("{s:b}", "solid",
+                         tg_world_is_solid_at(w, (float)json_number_value(jx),
+                                              (float)json_number_value(jy)) ? 1 : 0);
+    }
+
+    if (strcmp(cmd, "get_tile") == 0) {
+        json_t *jx = json_object_get(root, "x");
+        json_t *jy = json_object_get(root, "y");
+        if (!json_is_number(jx) || !json_is_number(jy))
+            return err_json("需要数字参数 x 和 y");
+        float px = (float)json_number_value(jx);
+        float py = (float)json_number_value(jy);
+        json_t *arr = json_array();
+        for (int i = 0; i < w->layer_count; i++) {
+            TgTileLayer *l = &w->layers[i];
+            int v = tg_world_tile_at(w, l, px, py);
+            if (v >= 0)
+                json_array_append_new(arr, json_pack("{s:s,s:i}", "layer", l->name, "value", v));
+        }
+        return json_pack("{s:o,s:b}", "tiles", arr, "solid",
+                         tg_world_is_solid_at(w, px, py) ? 1 : 0);
     }
 
     if (strcmp(cmd, "reload") == 0) {

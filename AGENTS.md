@@ -61,7 +61,7 @@ trogue/
 ├── editor/                # Godot 4.7 编辑器项目（画关卡；.godot/ 缓存已忽略）
 │   └── addons/scene_exporter/  # 导出插件 v3（菜单 + headless，v2 schema）
 ├── tools/
-│   └── ipc_smoke.py       # IPC 冒烟测试（15 项断言）
+│   └── ipc_smoke.py       # IPC 冒烟测试（23 项断言）
 ├── build/  build-release/ # 构建产物（gitignore）
 └── trogue-orign/          # 只读参考（gitignore）
 ```
@@ -179,7 +179,9 @@ python3 tools/ipc_smoke.py
 - **失败安全**：解析失败保留旧场景，错误进 TraceLog 与 `tg_scene_last_error()`。
 - 手动触发：应用内 F5 键或 IPC `reload` 命令。
 
-## IPC 协议：tro-ipc v1（仅 DEBUG 构建）
+## IPC 协议：tro-ipc v1.1（仅 DEBUG 构建）
+
+> v1.1 在 v1 基础上**只增不改**：新增观测命令（query_entities/layers/solid_at/get_tile）与实体快照字段（z/solid/sprite/v）；包络、传输、既有命令语义不变，协议版本号仍为 1（老客户端不受影响）。设计目标：非视觉 Agent 不看截图也能摸清实体与地形。
 
 - TCP `127.0.0.1:48764`（`--port` 可改），仅本机可达。
 - JSON-lines：每行一个请求对象，每行一个响应。
@@ -195,15 +197,21 @@ python3 tools/ipc_smoke.py
 | `ping` | — | `{pong:true, version}` |
 | `help` | — | `{commands:[...]}` |
 | `status` | — | `{scene, reloads, entities, fps, uptime_s, port}` |
-| `list_entities` | — | `{entities:[{id,type,x,y,w,h,color}], count}` |
-| `get_entity` | `id` | `{entity:{...}}` |
+| `list_entities` | — | `{entities:[{id,type,x,y,w,h,color, z?, solid?, sprite?, v?:[vx,vy]}], count}` |
+| `get_entity` | `id` | `{entity:{...}}`（字段同 list_entities） |
+| `query_entities` | 半径模式 `x` `y` `radius` 必填；或矩形模式 `rect:[x,y,w,h]`（同时提供时**半径模式优先**）；可选 `type` 过滤 | `{entities:[...], count}`；radius 按实体中心距查询点距离 ≤ radius，rect 按 AABB 相交 |
 | `set_entity` | `id`，`x?` `y?` `color?` | `{entity:{...}}`（改后快照） |
 | `spawn` | `x` `y` 必填；`id?` `type?` `w?` `h?` `color?` | `{entity:{...}}` |
 | `despawn` | `id` | `{despawned:true}` |
+| `layers` | — | `{layers:[{name,width,height,solid,origin,tileset,tiles}], count}`（tileset=null 表 palette 模式；tiles=非空 tile 数） |
+| `solid_at` | `x` `y`（像素） | `{solid}`（solid 层与 solid 实体一并判定） |
+| `get_tile` | `x` `y`（像素） | `{tiles:[{layer,value}]（仅非空格）, solid}` |
 | `reload` | — | `{reloaded:true, reloads:N}` |
 | `screenshot` | `path?`（缺省 `screenshot_<时间戳>.png`） | `{path}`；文件在下一帧绘制后写出 |
 | `log` | `msg` | `{logged:true}`（打印进引擎日志） |
 | `quit` | — | `{bye:true}`（引擎退出主循环） |
+
+实体快照字段说明：`z`/`solid`/`sprite`/`v` 仅在有意义时出现（z≠0、solid=true、有贴图、速度非零）；`sprite` 图集形态为 `{tileset:<名字>,tile:<id>}`，独立贴图形态为 `{texture, region?, offset?}`；`v` 为速度数组 `[vx,vy]`。
 
 ### 使用示例
 
@@ -224,7 +232,7 @@ python3 tools/ipc_smoke.py
 ## AI Agent 调试工作流
 
 1. 起服：`cmake --build build && (./build/trogue > /tmp/trogue_run.log 2>&1 &)`
-2. 冒烟：`python3 tools/ipc_smoke.py`（15 项断言全过为基线）
+2. 冒烟：`python3 tools/ipc_smoke.py`（23 项断言全过为基线）
 3. 调试循环：`status`/`list_entities` 观测 → 改 `assets/scenes/*.json` → 0.5s 后 `status.reloads` 自增即为生效 → `screenshot` 拿画面 → `set_entity`/`spawn` 做运行时实验
 4. 收尾：`{"cmd":"quit"}` 让引擎干净退出
 5. 日志在 stdout（TraceLog 格式），解析失败原因可在其中检索 `[scene]`

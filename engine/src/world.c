@@ -149,11 +149,16 @@ bool tg_world_despawn(TgWorld *w, const char *id)
 // 地图边界由关卡自身绘制的边墙表达（Godot 导出的层矩形只覆盖已绘制区域）。
 static bool layer_tile_is_solid(TgWorld *w, TgTileLayer *l, float px, float py)
 {
+    return tg_world_tile_at(w, l, px, py) >= 0;
+}
+
+int tg_world_tile_at(const TgWorld *w, const TgTileLayer *l, float px, float py)
+{
     int tx = (int)floorf((px - (float)l->origin_x) / (float)w->tile_w);
     int ty = (int)floorf((py - (float)l->origin_y) / (float)w->tile_h);
     if (tx < 0 || ty < 0 || tx >= l->width || ty >= l->height)
-        return false; // 层外无数据
-    return l->tiles[ty * l->width + tx] >= 0;
+        return -1; // 层外无数据
+    return l->tiles[ty * l->width + tx];
 }
 
 bool tg_world_is_solid_at(TgWorld *w, float px, float py)
