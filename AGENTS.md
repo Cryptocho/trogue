@@ -58,7 +58,7 @@ trogue/
 │   ├── scenes/            # demo.json（手写示例）+ test.json/tile_map_layer.json（Godot 导出）
 │   ├── tilesets/          # tro-tileset 导出产物
 │   └── textures/          # 导出时自动拷贝的贴图
-├── editor/                # Godot 4.7 编辑器项目（画关卡；.godot/ 缓存已忽略）
+├── editor/                # Godot 4.7 编辑器项目（画关卡；使用指南见 editor/README.md）
 │   └── addons/scene_exporter/  # 导出插件 v3（菜单 + headless，v2 schema）
 ├── tools/
 │   └── ipc_smoke.py       # IPC 冒烟测试（23 项断言）
