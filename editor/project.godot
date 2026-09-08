@@ -24,7 +24,7 @@ project/assembly_name="trogue-editor"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/tileset_exporter/plugin.cfg", "res://addons/scene_exporter/plugin.cfg")
+enabled=PackedStringArray("res://addons/scene_exporter/plugin.cfg")
 
 [physics]
 

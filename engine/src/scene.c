@@ -54,7 +54,7 @@ static bool parse_tilesets(json_t *tm, TgWorld *w)
     if (arr == NULL)
         return true; // palette 模式
     if (!json_is_array(arr) || json_array_size(arr) == 0) {
-        set_error("tilesets 必须是非空数组（palette 模式请直接省略该字段）");
+        set_error("tilesets 必须是非空数组（palette/bare 模式请直接省略该字段）");
         return false;
     }
     if ((int)json_array_size(arr) > TROGUE_MAX_TILESETS) {
@@ -278,7 +278,12 @@ static bool scene_parse(TgWorld *w, const char *path)
     if (!parse_tilesets(tm, w))
         goto out;
     json_t *palette = json_object_get(tm, "palette");
-    if (json_is_array(palette)) {
+    bool has_palette = json_is_array(palette);
+    if (palette != NULL && !has_palette) {
+        set_error("palette 必须是数组（#rrggbb 字符串列表）");
+        goto out;
+    }
+    if (has_palette) {
         if (w->tileset_count > 0) {
             set_error("tilesets 与 palette 互斥，只能选一种模式");
             goto out;
@@ -296,17 +301,23 @@ static bool scene_parse(TgWorld *w, const char *path)
             }
         }
         w->palette_count = n;
-    } else if (w->tileset_count == 0) {
-        set_error("缺少 tilesets（图集模式）或 palette（色块模式）");
-        goto out;
     }
+    // 三态（v2.1）：图集 / palette 之外，允许 bare 纯实体场景
+    // （无 tilesets 且无 palette，0 个 tile 层）；空/缺省 layers 见下
+    bool is_bare = (w->tileset_count == 0 && !has_palette);
 
     json_t *layers = json_object_get(tm, "layers");
-    if (!json_is_array(layers)) {
+    if (is_bare) {
+        // bare 场景：layers 允许缺省或空数组；无 tilesets/palette 却想画层 → 拒绝
+        if (layers != NULL && (!json_is_array(layers) || json_array_size(layers) > 0)) {
+            set_error("bare 场景（无 tilesets/palette）不允许 tile 层，需要层请提供 tilesets 或 palette");
+            goto out;
+        }
+    } else if (!json_is_array(layers)) {
         set_error("缺少 tilemap.layers 数组");
         goto out;
     }
-    int layer_n = (int)json_array_size(layers);
+    int layer_n = json_is_array(layers) ? (int)json_array_size(layers) : 0;
     if (layer_n > TROGUE_MAX_LAYERS) {
         set_error("layers 最多 %d 个", TROGUE_MAX_LAYERS);
         goto out;

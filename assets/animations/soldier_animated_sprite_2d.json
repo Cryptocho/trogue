@@ -1,0 +1,451 @@
+{
+	"animations": [
+		{
+			"fps": 6.0,
+			"frames": [
+				{
+					"region": [
+						0.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 0
+				},
+				{
+					"region": [
+						100.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 0
+				},
+				{
+					"region": [
+						200.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 0
+				},
+				{
+					"region": [
+						300.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 0
+				},
+				{
+					"region": [
+						400.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 0
+				},
+				{
+					"region": [
+						500.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 0
+				}
+			],
+			"loop": true,
+			"name": "attack01"
+		},
+		{
+			"fps": 6.0,
+			"frames": [
+				{
+					"region": [
+						0.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 1
+				},
+				{
+					"region": [
+						100.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 1
+				},
+				{
+					"region": [
+						200.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 1
+				},
+				{
+					"region": [
+						300.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 1
+				},
+				{
+					"region": [
+						400.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 1
+				},
+				{
+					"region": [
+						500.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 1
+				}
+			],
+			"loop": true,
+			"name": "attack02"
+		},
+		{
+			"fps": 7.0,
+			"frames": [
+				{
+					"region": [
+						0.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						100.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						200.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						300.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						400.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						500.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						600.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						700.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				},
+				{
+					"region": [
+						800.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 2
+				}
+			],
+			"loop": true,
+			"name": "attack03"
+		},
+		{
+			"fps": 4.0,
+			"frames": [
+				{
+					"region": [
+						0.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 3
+				},
+				{
+					"region": [
+						100.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 3
+				},
+				{
+					"region": [
+						200.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 3
+				},
+				{
+					"region": [
+						300.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 3
+				}
+			],
+			"loop": true,
+			"name": "death"
+		},
+		{
+			"fps": 5.0,
+			"frames": [
+				{
+					"region": [
+						0.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 4
+				},
+				{
+					"region": [
+						100.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 4
+				},
+				{
+					"region": [
+						200.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 4
+				},
+				{
+					"region": [
+						300.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 4
+				}
+			],
+			"loop": true,
+			"name": "hurt"
+		},
+		{
+			"fps": 5.0,
+			"frames": [
+				{
+					"region": [
+						0.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 5
+				},
+				{
+					"region": [
+						100.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 5
+				},
+				{
+					"region": [
+						200.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 5
+				},
+				{
+					"region": [
+						300.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 5
+				},
+				{
+					"region": [
+						400.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 5
+				},
+				{
+					"region": [
+						500.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 5
+				}
+			],
+			"loop": true,
+			"name": "idle"
+		},
+		{
+			"fps": 7.0,
+			"frames": [
+				{
+					"region": [
+						0.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				},
+				{
+					"region": [
+						100.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				},
+				{
+					"region": [
+						200.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				},
+				{
+					"region": [
+						300.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				},
+				{
+					"region": [
+						400.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				},
+				{
+					"region": [
+						500.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				},
+				{
+					"region": [
+						600.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				},
+				{
+					"region": [
+						700.0,
+						0.0,
+						100.0,
+						100.0
+					],
+					"texture": 6
+				}
+			],
+			"loop": true,
+			"name": "walk"
+		}
+	],
+	"format": "tro-animations",
+	"textures": [
+		"textures/Soldier_Attack01.png",
+		"textures/Soldier_Attack02.png",
+		"textures/Soldier_Attack03.png",
+		"textures/Soldier_Death.png",
+		"textures/Soldier_Hurt.png",
+		"textures/Soldier_Idle.png",
+		"textures/Soldier_Walk.png"
+	],
+	"version": 1
+}

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cd08ryb8iqvbp"
-path="res://.godot/imported/Tileset.png-8357b5d8a5c4813438aa7187a7fecf4c.ctex"
+uid="uid://dyin2awfx4jj0"
+path="res://.godot/imported/Soldier_Attack02.png-d0c9272d133e0f94976f76502f691bf3.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/Tileset.png"
-dest_files=["res://.godot/imported/Tileset.png-8357b5d8a5c4813438aa7187a7fecf4c.ctex"]
+source_file="res://assets/Soldier with shadows/Soldier_Attack02.png"
+dest_files=["res://.godot/imported/Soldier_Attack02.png-d0c9272d133e0f94976f76502f691bf3.ctex"]
 
 [params]
 

@@ -1,16 +1,18 @@
 class_name TroSchema
 extends RefCounted
 
-# trogue 资产序列化核心 v3（tro-scene / tro-tileset v2）。
+# trogue 资产序列化核心 v4（tro-scene v2.1 / tro-tileset v2 / tro-animations v1）。
 # 编辑器菜单（scene_exporter.gd）与 headless 导出（headless_export.gd）共用本文件的全部逻辑。
 #
 # 产物（相对引擎仓库根 trogue/）：
-#   assets/tilesets/<name>.json   tro-tileset v2（每贴图一个）
-#   assets/scenes/<name>.json     tro-scene v2
-#   assets/textures/<name>.png    贴图（自动拷贝）
+#   assets/tilesets/<name>.json     tro-tileset v2（每贴图一个）
+#   assets/scenes/<name>.json       tro-scene v2（含 bare 纯实体场景）
+#   assets/animations/<name>.json   tro-animations v1（独立动画帧表）
+#   assets/textures/<name>.png      贴图（自动拷贝）
 #
-# v3 能力：多 TileSet/多贴图（tilemap.tilesets + 层级引用）、实体 sprite
-# （实体 Sprite2D 或场景 tile 自动转实体）、peering_bits 透传、实体 z/solid。
+# v4 能力：v3 全部（多 TileSet、实体 sprite、场景 tile → 实体、peering_bits、z/solid）
+# + AnimatedSprite2D（sprite=默认动画首帧 + animations=完整帧表）、纯实体场景
+# （bare：无 tilesets/palette/层）、独立 tro-animations 导出。
 #
 # 坐标约定：Godot 与 tro-scene 一致（原点左上、y 向下、cell(0,0)=像素(0,0)），零换算。
 
@@ -18,6 +20,8 @@ const SCENE_FORMAT := "tro-scene"
 const SCENE_VERSION := 2
 const TILESET_FORMAT := "tro-tileset"
 const TILESET_VERSION := 2
+const ANIM_FORMAT := "tro-animations"
+const ANIM_VERSION := 1
 
 const DEFAULT_BACKGROUND := "#101018"
 const DEFAULT_COLOR := "#ffffff"
@@ -71,12 +75,8 @@ static func export_scene_from_file(scene_path: String, tree_root: Node) -> Dicti
 	tree_root.add_child(inst)  # 入树才能取 global_position
 
 	# 第一遍：收集 TileSet 资源，构建分组（确定场景内 tileset 占位符与 tile 索引）
+	# 纯实体场景（无 TileMapLayer）→ ts_res_paths 为空，直接按 bare 构建
 	var ts_res_paths := _collect_tileset_paths(inst)
-	if ts_res_paths.is_empty():
-		tree_root.remove_child(inst)
-		inst.free()
-		return _fail("场景没有任何设置 tile_set 的 TileMapLayer")
-
 	var ts_groups := {}      # TileSet 资源路径 → build_tileset_groups 结果
 	var tex_srcs := {}       # 独立贴图 rel 路径 → 编辑器源路径（build_scene 收集）
 	var group_total := 0
@@ -91,10 +91,6 @@ static func export_scene_from_file(scene_path: String, tree_root: Node) -> Dicti
 		ts_groups[p] = built
 		warnings.append_array(built.warnings)
 		group_total += built.groups.size()
-	if group_total == 0:
-		tree_root.remove_child(inst)
-		inst.free()
-		return _fail("场景没有任何可导出的图集 tile（tro-scene v2 需要 tilesets，palette 模式仅限手写场景）")
 	if group_total > MAX_TILESETS:
 		tree_root.remove_child(inst)
 		inst.free()
@@ -148,7 +144,11 @@ static func export_scene_from_file(scene_path: String, tree_root: Node) -> Dicti
 		if name == "":
 			return _fail("内部错误：tileset 占位符 %s 未解析" % ref)
 		resolved.append({"name": name, "path": "tilesets/%s.json" % name})
-	data.tilemap.tilesets = resolved
+	if not resolved.is_empty():
+		data.tilemap.tilesets = resolved
+	elif data.tilemap.layers.is_empty():
+		# bare 纯实体场景：无 tilesets/palette/层（引擎三态判定），去掉空 tilesets 字段
+		data.tilemap.erase("tilesets")
 	for layer_data in data.tilemap.layers:
 		layer_data["tileset"] = group_names[layer_data["_tileset_ref"]]
 		layer_data.erase("_tileset_ref")
@@ -162,8 +162,86 @@ static func export_scene_from_file(scene_path: String, tree_root: Node) -> Dicti
 		return _fail("无法写出: %s" % out_path)
 
 	log.append("tro-scene → %s (%d layers, %d entities, %d tilesets)" % [
-		out_path, data.tilemap.layers.size(), data.entities.size(), data.tilemap.tilesets.size()])
+		out_path, data.tilemap.layers.size(), data.entities.size(),
+		data.tilemap.get("tilesets", []).size()])
 	log.append_array(warnings)
+	return {"ok": true, "log": log}
+
+
+# 导出动画素材场景 → tro-animations v1 JSON（AnimatedSprite2D 全帧表，
+# textures 去重索引 + fps/loop 透传）；无 AnimatedSprite2D 时兜底 Sprite2D → 单帧动画。
+static func export_animations_from_file(scene_path: String) -> Dictionary:
+	var ps := ResourceLoader.load(scene_path)
+	if ps == null:
+		return _fail("无法加载场景: %s" % scene_path)
+	if not (ps is PackedScene):
+		return _fail("不是 PackedScene: %s" % scene_path)
+
+	var inst: Node = (ps as PackedScene).instantiate()
+	var warnings: Array[String] = []
+	var tex_srcs := {}
+	var data := {}
+
+	var animated := _find_animated_sprite2d(inst)
+	if animated != null and animated.sprite_frames != null:
+		var build := _animations_from_frames(animated.sprite_frames, animated.animation, tex_srcs, warnings)
+		if not build.ok:
+			inst.free()
+			return _fail(build.error)
+		data = build.data
+	else:
+		# 无 AnimatedSprite2D：flat Sprite2D → 1 动画 1 帧（单帧动画资产）
+		var spr := _find_sprite2d(inst)
+		if spr != null and spr.texture != null:
+			var info := _frame_texture_info(spr.texture)
+			if info.ok:
+				var region: Rect2 = info.region
+				data = {
+					"textures": [info.rel],
+					"animations": [{
+						"name": "default", "fps": 1, "loop": false,
+						"frames": [{
+							"texture": 0,
+							"region": [region.position.x, region.position.y, region.size.x, region.size.y],
+						}],
+					}],
+				}
+				tex_srcs[info.rel] = info.src
+		else:
+			warnings.append("场景没有 AnimatedSprite2D 或贴图 Sprite2D，无法导出动画")
+	if data.is_empty():
+		inst.free()
+		return _fail("场景没有可导出的动画（需要 AnimatedSprite2D 或贴图 Sprite2D）: " + scene_path)
+
+	# 拷贝全部帧贴图（textures 已去重；同名异文件检测同场景导出）
+	var seen_tex := {}
+	for rel in tex_srcs:
+		var src: String = tex_srcs[rel]
+		var base := src.get_file()
+		if seen_tex.has(base) and seen_tex[base] != src:
+			warnings.append("独立贴图重名：%s 与 %s 同名，后者未拷贝，请改名" % [seen_tex[base], src])
+			continue
+		seen_tex[base] = src
+		var err := _copy_texture(src)
+		if err != "":
+			warnings.append(err)
+
+	var frame_total := 0
+	for a in data.animations:
+		frame_total += a.frames.size()
+	var out := {"format": ANIM_FORMAT, "version": ANIM_VERSION,
+			"textures": data.textures, "animations": data.animations}
+	var base := scene_path.get_file().get_basename()
+	var out_path := _assets_dir().path_join("animations/%s.json" % base)
+	if not _write_json(out_path, out):
+		inst.free()
+		return _fail("无法写出: %s" % out_path)
+	inst.free()
+
+	var log: Array[String] = ["tro-animations → %s (%d 动画, %d 帧)" % [
+		out_path, data.animations.size(), frame_total]]
+	for w in warnings:
+		log.append("警告: " + w)
 	return {"ok": true, "log": log}
 
 
@@ -399,17 +477,23 @@ static func build_scene(root: Node, ts_groups: Dictionary, tex_srcs: Dictionary)
 				if not ent.is_empty():
 					scene_entities.append(ent)
 
-		elif node != root and node.has_meta("type"):
+		# 实体节点（root 也可：单节点素材场景如 AnimatedSprite2D 根；根是 TileMapLayer 时仍走层）
+		elif node.has_meta("type"):
 			var ent := _build_entity(node, used_ids, ts_groups, tex_srcs, warnings)
 			if not ent.ok:
 				return _fail(ent.error)
 			normal_entities.append(ent.data)
 
-	if not data.tilemap.has("tile_width"):
-		return _fail("场景没有任何 TileMapLayer；tro-scene v2 需要至少一个 tile 层")
-	data.tilemap["tilesets"] = scene_tileset_refs.duplicate()
 	data.tilemap["layers"] = layers
 	data["entities"] = scene_entities + normal_entities
+	if layers.is_empty():
+		# bare 纯实体场景：无 tile 层 → 去掉 tilesets/tile 尺寸（引擎三态判定：
+		# 无 tilesets 且无 palette 且 layers 空/缺省才合法）。实体尺寸用各自 w/h。
+		data.tilemap.erase("tilesets")
+		data.tilemap.erase("tile_width")
+		data.tilemap.erase("tile_height")
+	else:
+		data.tilemap["tilesets"] = scene_tileset_refs.duplicate()
 	return {"ok": true, "data": data, "warnings": warnings, "tex_srcs": tex_srcs}
 
 
@@ -632,6 +716,90 @@ static func _find_sprite2d(root: Node) -> Sprite2D:
 	return null
 
 
+static func _find_animated_sprite2d(root: Node) -> AnimatedSprite2D:
+	if root is AnimatedSprite2D:
+		return root
+	for child in root.get_children():
+		var found := _find_animated_sprite2d(child)
+		if found != null:
+			return found
+	return null
+
+
+# 单帧贴图 → {ok, rel, src, region}；非磁盘贴图 ok=false（调用方决定告警）。
+# AtlasTexture 取其 atlas 贴图 + region；普通贴图整图。
+static func _frame_texture_info(tex: Texture2D) -> Dictionary:
+	if tex is AtlasTexture:
+		var at := tex as AtlasTexture
+		if at.atlas == null or at.atlas.resource_path == "":
+			return {"ok": false}
+		return {"ok": true, "rel": _texture_rel(at.atlas.resource_path),
+				"src": at.atlas.resource_path, "region": at.region}
+	if tex.resource_path == "":
+		return {"ok": false}
+	return {"ok": true, "rel": _texture_rel(tex.resource_path),
+			"src": tex.resource_path, "region": Rect2(Vector2.ZERO, tex.get_size())}
+
+
+# SpriteFrames 的 loop 读取 API 在不同 Godot 版本命名不一，运行期探测（未知时保守取 true）
+static func _anim_loop(sf: SpriteFrames, anim: StringName) -> bool:
+	if sf.has_method("get_animation_loop"):
+		return sf.get_animation_loop(anim)
+	for m in ["get_animation_loop_mode", "is_animation_looping"]:
+		if sf.has_method(m):
+			return sf.call(m, anim)
+	return true
+
+
+# SpriteFrames → tro-animations 数据 {textures, animations}；同时给出默认动画首帧
+# 的 {rel, region} 供导出静态 sprite。textures 为 rel 路径去重索引表，帧经索引引用。
+static func _animations_from_frames(sf: SpriteFrames, default_anim: StringName,
+		tex_srcs: Dictionary, warnings: Array[String]) -> Dictionary:
+	var textures: Array = []
+	var tex_index := {}
+	var animations: Array = []
+	var first := {}
+
+	for a in sf.get_animation_names():
+		var n := sf.get_frame_count(a)
+		var frames: Array = []
+		for fi in range(n):
+			var info := _frame_texture_info(sf.get_frame_texture(a, fi))
+			if not info.ok:
+				warnings.append("动画 '%s' 第 %d 帧不是磁盘贴图，跳过该帧" % [a, fi])
+				continue
+			if not tex_index.has(info.rel):
+				tex_index[info.rel] = textures.size()
+				textures.append(info.rel)
+				tex_srcs[info.rel] = info.src
+			var region: Rect2 = info.region
+			frames.append({
+				"texture": tex_index[info.rel],
+				"region": [region.position.x, region.position.y, region.size.x, region.size.y],
+			})
+		if frames.is_empty():
+			warnings.append("动画 '%s' 没有任何可导出帧，跳过" % a)
+			continue
+		animations.append({
+			"name": a, "fps": sf.get_animation_speed(a),
+			"loop": _anim_loop(sf, a), "frames": frames,
+		})
+
+	# 默认动画首帧（sprite 静态兜底）：优先 animation 属性，其次第一个动画
+	var pick := default_anim
+	if pick == "" or not sf.has_animation(pick):
+		pick = sf.get_animation_names()[0] if sf.get_animation_names().size() > 0 else ""
+	if pick != "" and sf.get_frame_count(pick) > 0:
+		var info := _frame_texture_info(sf.get_frame_texture(pick, 0))
+		if info.ok:
+			first = {"rel": info.rel, "region": info.region}
+
+	if animations.is_empty():
+		return {"ok": false, "error": "SpriteFrames 没有任何可导出的动画帧"}
+
+	return {"ok": true, "data": {"textures": textures, "animations": animations}, "first": first}
+
+
 static func _find_rect_shape(root: Node) -> RectangleShape2D:
 	var stack: Array[Node] = [root]
 	while not stack.is_empty():
@@ -687,8 +855,10 @@ static func _build_entity(node: Node, used_ids: Dictionary, ts_groups: Dictionar
 	if bool(node.get_meta("solid", false)):
 		ent["solid"] = true
 
-	# 实体 Sprite2D → sprite 字段（节点自身或子树中第一个）
+	# 实体 Sprite2D → sprite 字段（节点自身或子树中第一个）；无 Sprite2D 时
+	# 认 AnimatedSprite2D（sprite = 默认动画首帧 + animations = 完整帧表）
 	var spr := _find_sprite2d(node)
+	var animated := _find_animated_sprite2d(node)
 	if spr != null and spr.texture != null:
 		var tex_path: String
 		var region: Rect2
@@ -725,6 +895,30 @@ static func _build_entity(node: Node, used_ids: Dictionary, ts_groups: Dictionar
 				if off != Vector2.ZERO:
 					sprite["offset"] = [off.x, off.y]
 				ent["sprite"] = sprite
+	elif animated != null and animated.sprite_frames != null:
+		# AnimatedSprite2D：完整帧表 + 默认动画首帧作静态 sprite
+		var sf: SpriteFrames = animated.sprite_frames
+		var build := _animations_from_frames(sf, animated.animation, tex_srcs, warnings)
+		if build.ok:
+			ent["animations"] = build.data
+			var fi: Dictionary = build.first
+			if not fi.is_empty():
+				var centered := true
+				if "centered" in animated:
+					centered = bool(animated.get("centered"))
+				var half: Vector2 = fi.region.size / 2.0 if centered else Vector2.ZERO
+				# 首帧贴图左上角世界坐标 = 节点位置 + offset − (centered ? 尺寸/2 : 0)
+				var tl: Vector2 = animated.global_position + animated.offset - half
+				var sprite := {
+					"texture": fi.rel,
+					"region": [fi.region.position.x, fi.region.position.y, fi.region.size.x, fi.region.size.y],
+				}
+				var off := tl - pos
+				if off != Vector2.ZERO:
+					sprite["offset"] = [off.x, off.y]
+				ent["sprite"] = sprite
+			if animated.flip_h or animated.flip_v:
+				warnings.append("实体 '%s' 的 AnimatedSprite2D 带翻转，v4 忽略" % id)
 
 	# 其余 metadata → props（引擎不读取，玩法移植预留）
 	var props := {}

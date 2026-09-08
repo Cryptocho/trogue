@@ -59,7 +59,8 @@ trogue/
 │   ├── tilesets/          # tro-tileset 导出产物
 │   └── textures/          # 导出时自动拷贝的贴图
 ├── editor/                # Godot 4.7 编辑器项目（画关卡；使用指南见 editor/README.md）
-│   └── addons/scene_exporter/  # 导出插件 v3（菜单 + headless，v2 schema）
+│   └── addons/scene_exporter/  # 导出插件 v4（菜单 + headless，v2.1 schema + 动画）
+├── docs/                  # 里程碑计划书（plan-<M>.md，开工前闭环送审，见开发流程）
 ├── tools/
 │   └── ipc_smoke.py       # IPC 冒烟测试（23 项断言）
 ├── build/  build-release/ # 构建产物（gitignore）
@@ -90,9 +91,11 @@ python3 tools/ipc_smoke.py
 | jansson | 2.14 | JSON 解析（资产 + IPC） |
 | inotify | 内核 | 热重载文件监听，无额外依赖 |
 
-## 资产规范：tro-scene v2
+## 资产规范：tro-scene v2.1
 
-场景文件放在 `assets/scenes/*.json`。手写示例（palette 模式）见 `assets/scenes/demo.json`；Godot 导出示例（图集模式）见 `assets/scenes/test.json`。
+> v2.1 相对 v2 **只增可选字段，格式 `version` 仍为 2**（向后兼容，v2 资产零迁移）：新增实体 `animations`（动画帧表，引擎暂不消费）、bare 纯实体场景、独立 tro-animations v1 资产、sprite 查找扩展到 AnimatedSprite2D。权威模式定义见下方「字段与语义规则（权威）」。
+
+场景文件放在 `assets/scenes/*.json`。手写示例（palette 模式）见 `assets/scenes/demo.json`；Godot 导出示例（图集模式）见 `assets/scenes/test.json`；动画素材导出产物见下方「tro-animations v1」。
 
 ```json
 {
@@ -126,7 +129,7 @@ python3 tools/ipc_smoke.py
 |------|------|
 | 版本 | format 必须为 "tro-scene" 且 version 必须为 2；其他值拒绝载入（v2 为破坏性升级，不读 v1） |
 | 坐标系 | 像素，原点 = tilemap 左上角，y 向下；实体 x/y 为**左上角** |
-| 双模式 | `tilesets` 存在 → 图集模式；不存在 → palette 模式（tiles = 调色板索引，语义同 v1）。**两者互斥**，同时出现拒绝载入 |
+| 三态模式 | ① `tilesets` 存在 → 图集模式；② 有 `palette` 无 `tilesets` → palette 模式（tiles = 调色板索引，语义同 v1）；③ 两者皆无（且 `tilesets` 未写）→ **bare 纯实体场景**，仅当 `layers` 为空 `[]` 或缺省（三个条件同时成立）才合法。图集与 palette **互斥**，同时出现拒绝载入；「无 tilesets/palette 但有层」「有 palette 又有 tilesets」拒绝载入 |
 | tilesets | 1..8 项 `{name, path}`，path 相对 assets/；name 场景内唯一；每个 tileset 的 tile 尺寸必须与场景 tile_width/height 一致 |
 | 层 tileset | tilesets 非空时每层必填 `tileset`（引用 name）；palette 模式下层不得携带该字段 |
 | tiles | 行主序一维数组，长度必须 = width×height；`-1`=空；图集模式值域 `[0, 所引 tileset.count)`，palette 模式 `[0, palette_count)` |
@@ -137,9 +140,10 @@ python3 tools/ipc_smoke.py
 | 实体 z | 可选 number（缺省 0，浮点取整）：渲染排序键之一，见渲染顺序 |
 | 实体 solid | 可选 bool（缺省 false）：true 时实体 AABB 参与 solid 碰撞（LÖVE Solid 组件的对应物；场景 tile 转出的覆盖物如树靠它阻挡）。仅 `true` 字面量生效，其余值按缺省 false 处理 |
 | 实体 sprite | 可选对象，两种形态互斥：图集形态 `{"tileset": name, "tile": id}`（name 必须在场景 tilesets 中；不接受 region/offset，写了被忽略）或独立贴图形态 `{"texture": "textures/x.png", "region": [x,y,w,h]?, "offset": [ox,oy]?}`；region 缺省整图，offset 缺省 `[0,0]`；绘制锚点 = 实体 x/y + offset，贴图按原始像素尺寸绘制（不缩放） |
+| 实体 animations | 可选对象（v2.1）：动画帧表 `{"textures": [贴图路径索引表], "animations": [{"name": ..., "fps": N, "loop": bool, "frames": [{"texture": 索引, "region": [x,y,w,h]?, "offset": [ox,oy]?}]}]}`；`textures` 路径相对 assets/ 且去重，帧经索引引用；region 缺省整图，offset 缺省 `[0,0]`；结构同「tro-animations v1」。**引擎暂不消费（透传保留）**，静态画面靠 `sprite`（= 默认动画首帧）渲染；动画播放属玩法移植阶段 |
 | color | `#rrggbb` 或 `#rrggbbaa`，缺省白色；有 sprite 时作染色 tint（缺省白 = 原样绘制），无 sprite 时为色块颜色 |
 | 渲染顺序 | 先全部 tile 层（层间按数组序），后实体；实体按 **(y 升序, z 升序) 稳定排序**，完全并列时保持资产数组序（导出器把场景 tile 实体排在数组前部，复刻 LÖVE「同行树先画、人后画」） |
-| 校验 | format/version 不符、tiles 长度或值域不对、tileset 引用不存在、尺寸不一致 → 拒绝载入并保留旧场景 |
+| 校验 | format/version 不符、tiles 长度或值域不对、tileset 引用不存在、尺寸不一致、三态组合不合法（图集+palette 同现、无 tilesets/palette 但有层）→ 拒绝载入并保留旧场景 |
 | 限额 | layers ≤4，tilesets ≤8，palette ≤32，实体池 256，实体名 63 字节 |
 
 ### tro-tileset v2
@@ -164,10 +168,29 @@ python3 tools/ipc_smoke.py
 - `terrain_sets`：Godot terrain set 透传（`mode`: sides / corners / corners_and_sides）；`peering_bits` 仅导出该 mode 用到的邻位、值 = terrain 序号（未连接的邻位省略）。引擎 v2 忽略，autotile 阶段消费。
 - `custom_data` 透传，引擎忽略。
 
+### tro-animations v1
+
+独立动画资产（`assets/animations/*.json`），结构 = 实体 `animations` 字段（见「字段与语义规则」），供动画素材脱离场景独立复用：
+
+```json
+{
+  "format": "tro-animations", "version": 1,
+  "textures": ["textures/Soldier_Attack01.png", "..."],
+  "animations": [
+    { "name": "attack01", "fps": 6, "loop": false,
+      "frames": [ { "texture": 0, "region": [0, 0, 100, 100] } ] }
+  ]
+}
+```
+
+- 由 scene_exporter v4 从 AnimatedSprite2D 导出（菜单「Export tro-animations...」/ headless `animations=`）；flat 单帧贴图（无动画节点）也可导出为 1 动画 1 帧。
+- 引擎 v2.1 **不消费**（透传持有）；播放属玩法移植阶段。
+
 ### v1 → v2 迁移（破坏性）
 
 - 手写场景：`version` 改 2；用了 v1.1 tileset 单字段的改写为 `tilesets` 数组 + 层引用；palette 场景仅改 version。
 - Godot 导出场景：全部由 scene_exporter v3 重导出，无需手改。
+- **v2 → v2.1 零迁移**：v2.1 只增可选字段与 bare 形态，v2 资产原样可读（`version` 仍为 2）。
 
 ## 热重载规范
 
@@ -247,6 +270,15 @@ python3 tools/ipc_smoke.py
 - 注释中文，解释"为什么"而非"是什么"。
 
 ## 开发流程（沿用 trogue-orign 流程，用户 2025-09-01 拍板）
+
+**里程碑开工门禁（用户 2026-09-07 拍板）**：每个里程碑正式开工前必须走完闭环——
+
+1. ① 写计划书 `docs/plan-<M>.md`（含目的/范围/步骤/验证/遗留）
+2. ② 交 subagent 审查
+3. ③ 停下等待审查结果（不得并行开工）
+4. ④ PASS 才开工；不 PASS 则按审查意见修改后重新送审，循环至 PASS
+
+> 门禁与下方步骤 1 的关系：门禁看「计划书经 subagent 审查通过」，步骤 1 的「给出计划等待批准」指用户对计划书的拍板；两者都通过才进入实现（步骤 2）。
 
 1. 给出计划等待批准（项目未正式发布，可大胆提议架构级改动）
 2. 实现计划
@@ -382,6 +414,7 @@ assets/textures/*.png    (导出时自动从 editor/assets 拷贝)
 - [x] Godot 导出插件 v2：TileMapLayer → tro-scene 场景导出（含 headless runner）
 - [x] 纹理/图集支持：tro-tileset v1 + 图集渲染（palette 双轨兼容）
 - [x] tro-scene/tro-tileset v2：多 tileset + 实体 sprite/z/solid + 场景 tile → 实体（导出插件 v3）
+- [x] 动画资产与插件统一：tro-scene v2.1（实体 animations + bare 三态）+ tro-animations v1 + 插件 v4（AnimatedSprite2D 导出/纯实体场景/独立动画导出）+ 删 tileset_exporter
 - [ ] autotile/bitmask 渲染（tileset v2 的 peering_bits 已透传）
 - [ ] 移植 trogue-origin：移动+碰撞+回合制最小闭环（InputSystem/MovementSystem/TurnSystem 对应物）+ IPC 回合命令
 - [ ] RuleEngine 事件管线 C 化
@@ -410,3 +443,12 @@ assets/textures/*.png    (导出时自动从 editor/assets 拷贝)
   - 端到端：headless 导出 test.tscn → 56 棵树实体化 → 引擎加载 + 截图；连续 6 次 reload 实体稳定；demo.json 回归 15/15；Debug/Release 双构建零警告；评审 subagent 另行 valgrind 验证 3 次热重载零泄漏。
   - 评审修复：set_error 自重叠 UB；实体图集 sprite 引用的未注册 tileset 组未写入 tilemap.tilesets；tg_parse_hex_color 提前清零默认色；z 放宽为 number、solid 仅 true 字面量（语义已入文档）。
   - 已知 v2 限制：一层一贴图（混用需拆 TileMapLayer）；tileset/纹理变更不热重载（重启或重导出）；场景 tile z_index 忽略（用 metadata z 微调）；独立贴图重名会覆盖。
+
+- **2026-09-07 里程碑 4：动画资产与插件统一（已端到端验证）**：
+  - 计划书 `docs/plan-4.md` 走完开工门禁（subagent 审查 PASS + 用户批准）后开工。
+  - schema v2.1（权威定义见「资产规范」）：实体 `animations` 完整帧表（textures 索引 + name/fps/loop/frames），引擎透传不消费、静态画面靠默认动画首帧 `sprite`；tro-scene 三态模式（图集/palette/bare 纯实体场景）；独立 tro-animations v1 资产。
+  - 导出插件 v4：AnimatedSprite2D → sprite 首帧 + animations 全帧表（AtlasTexture 取 atlas+region，fps/loop 透传）；纯实体场景导出（bare：无 tilesets/palette/层）；headless `animations=` 通道 + 菜单「Export tro-animations...」（撤「Export tro-scene...」菜单，headless scene= 保留）；root 单节点素材可直接作实体导出。
+  - 引擎：scene.c 三态判定（bare 合法需无 tilesets/palette 且层空/缺失），demo/test 场景零回归。
+  - 插件统一：删 `tileset_exporter`，仅启用 `scene_exporter`。
+  - 端到端：soldier 导出 tro-animations 7 动画 43 帧逐项一致（attack01/02/03/death/hurt/idle/walk，fps/帧数/region 100×100）；bare 场景引擎加载 + IPC 可见 + 贴图加载成功；冒烟 23/23；Release 构建通过。
+  - 评审修复：AGENTS.md 示例路径与 `_texture_rel` 平铺输出一致；SpriteFrames 空帧降级 warning 不炸整个场景导出；headless `animations=` 前缀连写兼容；错误提示覆盖 bare。

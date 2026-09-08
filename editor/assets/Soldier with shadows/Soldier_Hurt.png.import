@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cp0lsx37g68cr"
-path="res://.godot/imported/Tile Set.png-2272803304649e9fd1aef69e8b27c8fe.ctex"
+uid="uid://bmwsk3a30vwwb"
+path="res://.godot/imported/Soldier_Hurt.png-a48fbb891d73b9ca13038d31fb19983e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/Tile Set.png"
-dest_files=["res://.godot/imported/Tile Set.png-2272803304649e9fd1aef69e8b27c8fe.ctex"]
+source_file="res://assets/Soldier with shadows/Soldier_Hurt.png"
+dest_files=["res://.godot/imported/Soldier_Hurt.png-a48fbb891d73b9ca13038d31fb19983e.ctex"]
 
 [params]
 

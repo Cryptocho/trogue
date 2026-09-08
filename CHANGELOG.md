@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### 动画资产与插件统一（tro-scene v2.1 / tro-animations v1 / 插件 v4）
+
+- 影响的文件: `AGENTS.md`, `docs/plan-4.md`, `engine/src/scene.c`, `editor/addons/scene_exporter/tro_schema.gd`, `editor/addons/scene_exporter/headless_export.gd`, `editor/addons/scene_exporter/scene_exporter.gd`, `editor/project.godot`, `editor/README.md`, `editor/assets/soldier_animated_sprite_2d.tscn`, `editor/assets/Soldier with shadows/*.png`, `assets/animations/soldier_animated_sprite_2d.json`, `assets/textures/Soldier_*.png`（删除 `editor/addons/tileset_exporter/` 与旧素材）
+
+#### Added
+- 实体 `animations` 字段（v2.1）：完整动画帧表 `{textures 索引表, animations:[{name, fps, loop, frames:[{texture, region?, offset?}]}]}`，贴图路径去重入索引；引擎暂不消费（透传保留），静态画面靠默认动画首帧 `sprite` 渲染
+- 独立 tro-animations v1 资产（`assets/animations/*.json`）：由 AnimatedSprite2D 导出（菜单「Export tro-animations...」与 headless `animations=` 双通道），fps/loop 透传、AtlasTexture 取 atlas+region；无 AnimatedSprite2D 时 flat Sprite2D 兜底为单帧动画
+- bare 纯实体场景：tro-scene v2 三态模式（图集 / palette / bare），无 tilesets/palette 且层空或缺失才合法；引擎与导出器均支持（单节点动画素材场景可直接导出为 bare）
+- 导出器 v4：sprite 查找扩展到 AnimatedSprite2D（实体导出首帧 + animations 全帧表）；纯实体场景不再拒绝；root 节点（单节点素材场景）可作为实体导出；SpriteFrames 无可导出帧时降级为 warning 而非失败
+- 插件统一：删除遗留 `tileset_exporter`，`project.godot` 仅启用 `scene_exporter`
+
+#### Refactored
+- 「Export tro-scene...」菜单项移除（headless `scene=` 保留，自动化通道不变；场景导出 UI 另行规划）
+- 三插件文件头注释与产物清单统一为 v4（补 `assets/animations/`）
+
+#### Bug Fixes
+- headless `animations=` 参数支持 `animations=a,animations=b` 连写（与 `scene=` 对称）
+
 ### tro-ipc v1.1 观测命令（面向非视觉 Agent）
 
 - 影响的文件: `engine/include/trogue/world.h`, `engine/src/world.c`, `engine/src/ipc.c`, `tools/ipc_smoke.py`
