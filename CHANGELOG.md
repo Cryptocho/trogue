@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+### C++ 引擎里程碑（C++20 引擎 + 模型无关边界 + 通用表现原语）
+
+- 影响的文件: `engine/include/trogue/*.hpp`（config/types/scene/render/animation/tween/hotreload/ipc/coro/trogue 伞，新增；删除旧 `.h`）、`engine/src/**`（`*.cpp` 替换 `*.c`）、`game/src/main.cpp`（替换 `main.c`）、`tools/CMakeLists.txt`、`tools/tests/*.cpp`（5 个单测 + 2 个 consumer smoke）、`tools/ipc_smoke.py`、顶层/`engine`/`game` 的 `CMakeLists.txt`、`AGENTS.md`、`docs/plan-5*.md`（`docs/plan-5.old-c11.md` 归档）、`.gitignore`、`CHANGELOG.md`
+
+#### Added
+- 引擎整体迁到 C++20，公共 API 纯 C++：`namespace tg`、自由函数优先、值类型（public 字段纯数据）+ RAII 资源类、无继承/虚函数；对外只暴露 `trogue/*.hpp`，不泄漏 raylib/nlohmann 类型
+- `tg::SceneAsset` 只读 RAII 场景资产（`load()` 返回 `tg::expected`，失败不产生半成品）：tile 层、tileset 图集、palette、场景 descriptor 快照（`SceneEntity`/`LayerInfo`）、内嵌动画帧表
+- tile-only 查询自由函数：`is_solid_at`/`rect_hits_solid`/`tile_at`（只查 solid 层；层矩形外 = 无数据 = 不阻挡；descriptor `solid` 永不参与）
+- 显式渲染原语：`render_scene`/`render_sprite`/`draw_rect`/`shutdown_render`（不隐式遍历 game 对象；无窗口调用安全返回 `WindowUnavailable`）
+- 通用表现原语（engine 内置，game 决定触发）：`AnimationSet`（只读集视图）+ `AnimationPlayer`（play/stop/seek/速度/loop、帧事件/完成回调、`co_await` 完成）；`TweenManager`（float/Vec2/Color 补间、缓动/延迟/循环、`wait()` 协程等待）
+- 自研最小协程原语 `trogue/coro.hpp`（`tg::task`/`tg::generator`/`single_consumer_event`，header-only，零第三方协程依赖）
+- `tg::Ipc`（JSON-lines 传输 + game handler 回调分发；engine 不拥有命令语义，唯一例外传输层内置 ping）与 `tg::Watcher`（150ms 防抖尾沿补触发，只报告合法 `.json` basename）；`TROGUE_DEBUG=OFF` 编译为 API 形状不变的桩
+- C++ game demo（`game/src/main.cpp`）：窗口/相机/渲染、WASD 移动 + 静态碰撞、动画/Tween 示范（idle/walk 切换 + 位移补间）、热重载（Watcher + F5 + IPC reload，candidate load → 帧外 swap，失败保留旧资产）、全部 IPC 命令由 game handler 实现——证明命令是 app policy 而非 engine contract
+- 测试体系：无窗口单测 5 个（schema 拒绝全集/查询边界/render 三段计数/动画 Tween 虚拟时钟/Watcher 分类 + Ipc 集成）、consumer smoke 2 个（OOP 风格与极简 ECS 各自消费同一套公共 API，证引擎与使用者对象模型无关）、`tools/ipc_smoke.py` 23 项断言全通过；测试库 seam 白名单（`render_test_*`×2 + `asset_test_*`×3）与生产库严格隔离，符号差集审计干净
+- CMake：依赖改为系统包（raylib 6.0 / nlohmann_json / tl::expected，不再 vendored 第三方库）；`TROGUE_DEBUG`/`TROGUE_BUILD_CONSUMER_SMOKES` option；`-Wall -Wextra -Wpedantic` 零告警基线
+
+#### Refactored
+- 删除全部历史 C11 API：`TgWorld`/`TgEntity`/`tg_world_*`/`tg_scene_*`/`tg_tileset_*`/`tg_ipc_*`/`tg_watcher_*` 与 `world.h` 等旧公共头；资产格式（`tro-*`）不变，旧场景 JSON 零迁移
+- 渲染/碰撞语义重构到新边界：不再有 engine 运行时实体池、引擎 y-sort、`type=="player"` reload 分支；热重载由 game candidate load/swap，`type`/`solid` 只作 descriptor 导入提示
+
+#### Bug Fixes
+- `AnimationPlayer` 空帧 clip 播放永不结束、`done()` 协程永久挂起（空 `frames` 的 clip 视为即时完成，`advance()` 首拍置停并触发 on_finish/done）
+- `TweenManager::tick` 回调内再入 `add_*`/`cancel_all` 令正在迭代的 map 迭代器失效（UB）——tick 改两阶段：先推进/擦除、后统一触发回调
+- `TweenManager` update 采样回调随首 tick 被 `std::move` 出槽导致后续 tick 不再采样——改拷贝进 deferred，每 tick 可用
+- tile 查询对「极大但有限」坐标的 float→int 转换 UB（`rect_hits_solid` 先剔除完全层外 + clamp 到层尺寸后再转换；补回归测试）
+- 图集 tile 矩形映射与 tro-tileset 契约不符：曾按 `id % columns` 顺序推断，而 `tiles[].col/row` 决定实际矩形（真实资产 id=0 为 col=1,row=3 会被错位）——load 期解析 col/row 建 id→Rect 表，渲染查表
+- Ipc handler 抛异常/读坏类型请求会杀进程（nlohmann assert/异常穿透主循环）——engine 侧 try/catch 兜底回 `internal error`，demo handler 改类型安全读取（缺失键/类型错返回错误而非 panic）
+- `draw_rect` 忽略 `color` 参数恒画白（改用传入色填充）
+- `LayerInfo.nonempty` 解析时计数但从未写入快照，`layers` 命令的非空 tile 数恒为 0
+- `AnimationPlayer` 非 loop clip 播完后 `frame_index()` 回卷首帧——改为停在末帧（视觉语义正确）
+- nlohmann_json 曾 PRIVATE 链接但公共伞头直接 include——改 PUBLIC（consumer 编译不再依赖系统默认 include 路径）
+
+#### Breaking Changes
+- 引擎公共 API 从 C11 整体替换为 C++20（`tg::` 命名空间）；原 C API 全部删除，无兼容层
+
 ### 动画资产与插件统一（tro-scene v2.1 / tro-animations v1 / 插件 v4）
 
 - 影响的文件: `AGENTS.md`, `docs/plan-4.md`, `engine/src/scene.c`, `editor/addons/scene_exporter/tro_schema.gd`, `editor/addons/scene_exporter/headless_export.gd`, `editor/addons/scene_exporter/scene_exporter.gd`, `editor/project.godot`, `editor/README.md`, `editor/assets/soldier_animated_sprite_2d.tscn`, `editor/assets/Soldier with shadows/*.png`, `assets/animations/soldier_animated_sprite_2d.json`, `assets/textures/Soldier_*.png`（删除 `editor/addons/tileset_exporter/` 与旧素材）

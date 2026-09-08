@@ -12,3 +12,4 @@ trogue-orign/
 .mimocode/
 
 compile_commands.json
+build-asan/

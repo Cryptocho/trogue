@@ -4,5 +4,5 @@
 # 可执行文件统一输出到 build/bin/（否则会散落在 build/game/）
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_executable(trogue src/main.c)
+add_executable(trogue src/main.cpp)
 target_link_libraries(trogue PRIVATE trogue_engine)
