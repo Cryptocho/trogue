@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 渲染：独立贴图缓存 RAII
+
+- 影响的文件: `engine/src/render.cpp`
+
+#### Bug Fixes
+- 修复独立贴图 sprite 全部隐形（`render_sprite` 返回 Drawn、无任何日志，但画面无像素）：`SharedTexture` 未禁拷贝，`make_shared<const SharedTexture>(SharedTexture{tex})` 的临时副本析构时把刚加载的 GPU 纹理 `UnloadTexture`，缓存留下悬空 `tex.id` 的僵尸条目，此后每帧采样已删除纹理得全透明；补上 plan-5.3 §2 设计要求的非拷贝约束（`=delete` 拷贝/移动）、`tex{}` 全成员零初始化（`id==0 ⇔ 无纹理` 判据可靠）、调用点改为以 `Texture2D` 直接构造堆对象（不经临时副本）；像素级截图比对验证（soldier 预期区域 652 像素精确命中源贴图 region 特征色）+ IPC 冒烟 44/44 回归
+
 ### tro-tileset 多格 tile 与纹理原点（size_in_atlas / texture_origin / y_sort_origin）
 
 - 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`engine/include/trogue/config.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`assets/scenes/test.json`、`assets/tilesets/test.json`（新增）、`assets/tilesets/test_1.json`（新增）、`assets/textures/Soldier.png`（新增）、`editor/assets/test.tscn`（新增）、`editor/assets/Decorations.png`（新增）、`editor/assets/Tile Set.png`（新增）、`editor/assets/Soldier with shadows/soldier.tres`（新增）、`docs/plan-8.md`（新增）、`AGENTS.md`

@@ -43,9 +43,20 @@ std::string assets_path(std::string_view rel) {
 }
 
 // ── 独立贴图共享懒缓存（path → shared_ptr<Texture2D> 包装） ──
+// RAII 语义：析构 = UnloadTexture（GPU 卸载职责独占）→ **禁止拷贝/移动**。
+// 教训（2026-09-09，test.json soldier 不可见 bug）：曾允许隐式拷贝，配合
+// make_shared<SharedTexture>(SharedTexture{tex}) 的临时副本模式，临时对象
+// 析构时把刚加载的 GPU 纹理立刻卸载，缓存里留下悬空 tex.id 的僵尸条目——
+// 绘制"成功"返回 Drawn、无任何日志，但采样已删除纹理全透明（plan-5.3 §2
+// 设计约束「非拷贝」被实现遗漏，本次补上并在编译期封死）。
 struct SharedTexture {
-    Texture2D tex;
+    Texture2D tex{};  // 全成员零初始化（id=0 视为无纹理）
+    explicit SharedTexture(Texture2D t) : tex(t) {}
     ~SharedTexture() { if (tex.id != 0) UnloadTexture(tex); }
+    SharedTexture(const SharedTexture&) = delete;
+    SharedTexture& operator=(const SharedTexture&) = delete;
+    SharedTexture(SharedTexture&&) = delete;
+    SharedTexture& operator=(SharedTexture&&) = delete;
 };
 
 std::unordered_map<std::string, std::shared_ptr<const SharedTexture>> g_texture_cache;
@@ -68,7 +79,9 @@ std::shared_ptr<const SharedTexture> get_or_load_texture(const std::string& path
         return {};
     }
     SetTextureFilter(tex, TEXTURE_FILTER_POINT);  // 像素风（沿用 C 版）
-    auto sp = std::make_shared<const SharedTexture>(SharedTexture{tex});
+    // 以 Texture2D（POD）直接构造堆对象：绝不经过 SharedTexture 临时副本
+    // （RAII 临时析构会误卸载 GPU 纹理——见 struct 注释中的教训）。
+    auto sp = std::make_shared<const SharedTexture>(tex);
     g_texture_cache.emplace(path, sp);
     return sp;
 }
