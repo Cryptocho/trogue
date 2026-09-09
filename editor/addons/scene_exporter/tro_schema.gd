@@ -270,6 +270,10 @@ static func build_tileset_groups(ts: TileSet, base_name: String) -> Dictionary:
 		if tex_path == "":
 			warnings.append("TileSet '%s': source %d 的贴图未保存到磁盘，跳过" % [base_name, sid])
 			continue
+		# 明确损失：引擎 col/row→像素映射不含 margins/separation 偏移（plan-8 §3.2），
+		# 非零时导出的 tile 矩形会错位，必须警告而不是静默产出
+		if atlas.margins != Vector2i.ZERO or atlas.separation != Vector2i.ZERO:
+			warnings.append("TileSet '%s': source %d 图集 margins/separation 非 0，引擎映射不含该偏移，导出可能有损" % [base_name, sid])
 
 		if not by_texture.has(tex_path):
 			var g := {
@@ -293,7 +297,18 @@ static func build_tileset_groups(ts: TileSet, base_name: String) -> Dictionary:
 			var td := atlas.get_tile_data(coords, 0)
 			var id: int = group.data.tiles.size()
 			var entry := {"id": id, "col": coords.x, "row": coords.y}
+			# 多格 tile / 纹理原点 / Y 排序原点透传（tro-tileset v2 只增可选字段，
+			# plan-8 §3.2）：非缺省才写，单格 tile 导出零 diff（与 peering_bits 省略风格一致）
+			var size_in_atlas: Vector2i = atlas.get_tile_size_in_atlas(coords)
+			if size_in_atlas != Vector2i.ONE:
+				entry["size_in_atlas"] = [size_in_atlas.x, size_in_atlas.y]
 			if td != null:
+				var t_origin: Vector2i = td.get_texture_origin()
+				if t_origin != Vector2i.ZERO:
+					entry["texture_origin"] = [t_origin.x, t_origin.y]
+				var yso: int = td.get_y_sort_origin()
+				if yso != 0:
+					entry["y_sort_origin"] = yso
 				entry["terrain_set"] = td.get_terrain_set()
 				entry["terrain"] = td.get_terrain()
 				_append_peering_bits(entry, ts, td)
@@ -457,9 +472,10 @@ static func build_scene(root: Node, ts_groups: Dictionary, tex_srcs: Dictionary)
 			if not layer_data.ok:
 				return _fail(layer_data.error)
 			warnings.append_array(layer_data.warnings)
-			if layer_data.data.width > 0:
-				layers.append(layer_data.data)
-			elif layer_data.scene_cells.is_empty():
+			for ld in layer_data.layers:
+				if ld.width > 0:
+					layers.append(ld)
+			if layer_data.layers.is_empty() and layer_data.scene_cells.is_empty():
 				warnings.append("跳过空层 '%s'" % layer.name)
 
 			# 场景 tile cell → 实体（按 (y,x) 排序，保证稳定输出）
@@ -497,8 +513,9 @@ static func build_scene(root: Node, ts_groups: Dictionary, tex_srcs: Dictionary)
 	return {"ok": true, "data": data, "warnings": warnings, "tex_srcs": tex_srcs}
 
 
-# 单个 TileMapLayer → 层数据 + 场景 tile cell 列表。
-# 图集 cell → 所在贴图组（一层限一个贴图组，混用即报错）；场景 tile cell → scene_cells。
+# 单个 TileMapLayer → 输出层列表 + 场景 tile cell 列表。
+# 图集 cell 按所在贴图组归类：一层混用多个贴图组时自动拆分为多个输出层（每组一层，
+# 首组沿用层名、其余组加 "_组序号" 后缀）；场景 tile cell → scene_cells。
 static func _build_layer(layer: TileMapLayer, ts: TileSet, ts_path: String,
 		ts_groups: Dictionary, scene_tileset_refs: Array[String],
 		warnings: Array[String]) -> Dictionary:
@@ -507,29 +524,12 @@ static func _build_layer(layer: TileMapLayer, ts: TileSet, ts_path: String,
 
 	var cells := layer.get_used_cells()
 	if cells.is_empty():
-		return {"ok": true, "data": {
-				"name": str(layer.name), "width": 0, "height": 0,
-				"solid": false, "origin": [0, 0], "tiles": []},
-			"scene_cells": [], "warnings": []}
+		return {"ok": true, "layers": [], "scene_cells": [], "warnings": []}
 
 	var tile_size := ts.get_tile_size()
-	var min_x := cells[0].x
-	var min_y := cells[0].y
-	var max_x := cells[0].x
-	var max_y := cells[0].y
-	for c in cells:
-		min_x = min(min_x, c.x)
-		min_y = min(min_y, c.y)
-		max_x = max(max_x, c.x)
-		max_y = max(max_y, c.y)
-	var width := max_x - min_x + 1
-	var height := max_y - min_y + 1
 
-	var tiles := PackedInt32Array()
-	tiles.resize(width * height)
-	tiles.fill(-1)
-
-	var layer_gi := -1      # 本层使用的贴图组（一层限一个）
+	# 第一遍：cell 按贴图组归类，收集各组的 cell 与包围盒
+	var per_group := {}   # gi -> {min_x, min_y, max_x, max_y, cells}
 	var scene_cells: Array = []
 	var skipped := 0
 	var alt_warned := false
@@ -541,15 +541,18 @@ static func _build_layer(layer: TileMapLayer, ts: TileSet, ts_path: String,
 		var key := "%d:%d:%d" % [sid, coords.x, coords.y]
 		var hit := _find_cell_in_groups(groups, key)
 		if hit.gi >= 0:
-			if layer_gi == -1:
-				layer_gi = hit.gi
-			elif layer_gi != hit.gi:
-				return _fail("层 '%s' 混用多个贴图组（'%s' + '%s'）。v2 限定一层一张贴图，请在 Godot 里按贴图拆分 TileMapLayer" % [
-					layer.name, groups[layer_gi].name, groups[hit.gi].name])
+			if not per_group.has(hit.gi):
+				per_group[hit.gi] = {"min_x": c.x, "min_y": c.y,
+						"max_x": c.x, "max_y": c.y, "cells": []}
+			var g: Dictionary = per_group[hit.gi]
+			g.min_x = min(g.min_x, c.x)
+			g.min_y = min(g.min_y, c.y)
+			g.max_x = max(g.max_x, c.x)
+			g.max_y = max(g.max_y, c.y)
+			g.cells.append(c)
 			if alt != 0 and not alt_warned:
 				warnings.append("层 '%s' 使用了 alternative tile，v2 忽略其变体" % layer.name)
 				alt_warned = true
-			tiles[(c.y - min_y) * width + (c.x - min_x)] = hit.tile_id
 		elif ts.get_source(sid) is TileSetScenesCollectionSource:
 			scene_cells.append({"cell": c, "sid": sid, "scene_id": alt})
 		else:
@@ -558,27 +561,39 @@ static func _build_layer(layer: TileMapLayer, ts: TileSet, ts_path: String,
 	if skipped > 0:
 		warnings.append("层 '%s': %d 个 cell 未收录进 tileset，已置空" % [layer.name, skipped])
 
-	# 层没有图集 tile（全是场景 tile 或全部未收录）→ v2 视为空层，不导出（场景 tile 仍转实体）
-	if layer_gi < 0:
-		return {"ok": true, "data": {
-				"name": str(layer.name), "width": 0, "height": 0,
-				"solid": false, "origin": [0, 0], "tiles": []},
-			"scene_cells": scene_cells, "warnings": []}
-
-	var gp: Vector2 = layer.global_position
-	var data := {
-		"name": str(layer.name),
-		"width": width, "height": height,
-		"solid": bool(layer.get_meta("solid", false)),
-		"origin": [roundi(gp.x) + min_x * tile_size.x, roundi(gp.y) + min_y * tile_size.y],
-		"tiles": Array(tiles),
-	}
-	if layer_gi >= 0:
-		var ref := "%s#%d" % [ts_path, layer_gi]
-		data["_tileset_ref"] = ref
+	# 第二遍：每组一个输出层（gi 升序，稳定输出）
+	var gis: Array = per_group.keys()
+	gis.sort()
+	var out_layers: Array = []
+	for gi in gis:
+		var g: Dictionary = per_group[gi]
+		var width: int = g.max_x - g.min_x + 1
+		var height: int = g.max_y - g.min_y + 1
+		var tiles := PackedInt32Array()
+		tiles.resize(width * height)
+		tiles.fill(-1)
+		for c in g.cells:
+			var sid2 := layer.get_cell_source_id(c)
+			var coords2 := layer.get_cell_atlas_coords(c)
+			var key2 := "%d:%d:%d" % [sid2, coords2.x, coords2.y]
+			var hit2 := _find_cell_in_groups(groups, key2)
+			tiles[(c.y - g.min_y) * width + (c.x - g.min_x)] = hit2.tile_id
+		var gp: Vector2 = layer.global_position
+		var ld := {
+			"name": str(layer.name) if out_layers.is_empty() else "%s_%d" % [layer.name, gi],
+			"width": width, "height": height,
+			"solid": bool(layer.get_meta("solid", false)),
+			"origin": [roundi(gp.x) + g.min_x * tile_size.x,
+					roundi(gp.y) + g.min_y * tile_size.y],
+			"tiles": Array(tiles),
+		}
+		var ref := "%s#%d" % [ts_path, gi]
+		ld["_tileset_ref"] = ref
 		if not scene_tileset_refs.has(ref):
 			scene_tileset_refs.append(ref)
-	return {"ok": true, "data": data, "scene_cells": scene_cells, "warnings": []}
+		out_layers.append(ld)
+
+	return {"ok": true, "layers": out_layers, "scene_cells": scene_cells, "warnings": []}
 
 
 static func _find_cell_in_groups(groups: Array, key: String) -> Dictionary:

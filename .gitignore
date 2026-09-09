@@ -8,6 +8,9 @@ screenshot_*.png
 # 原始项目只读参考副本（自带 .git，勿并入本仓库）
 trogue-orign/
 
+# Godot 引擎源码参考副本（只读查证用，不入仓库）
+reference/
+
 # agent 工具状态
 .mimocode/
 

@@ -1,0 +1,134 @@
+{
+	"columns": 16,
+	"format": "tro-tileset",
+	"rows": 16,
+	"terrain_sets": [
+		{
+			"mode": "corners",
+			"terrains": [
+				{
+					"color": "#d2bc00",
+					"name": "ground"
+				}
+			]
+		}
+	],
+	"texture": "textures/Tile Set.png",
+	"tile_height": 16,
+	"tile_width": 16,
+	"tiles": [
+		{
+			"col": 1,
+			"id": 0,
+			"row": 3,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 1,
+			"id": 1,
+			"row": 4,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 1,
+			"id": 2,
+			"row": 5,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 1,
+			"id": 3,
+			"row": 6,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 2,
+			"id": 4,
+			"row": 3,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 2,
+			"id": 5,
+			"row": 4,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 2,
+			"id": 6,
+			"row": 5,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 2,
+			"id": 7,
+			"row": 6,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 3,
+			"id": 8,
+			"row": 3,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 3,
+			"id": 9,
+			"row": 4,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 3,
+			"id": 10,
+			"row": 5,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 3,
+			"id": 11,
+			"row": 6,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 4,
+			"id": 12,
+			"row": 3,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 4,
+			"id": 13,
+			"row": 4,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 4,
+			"id": 14,
+			"row": 5,
+			"terrain": 0,
+			"terrain_set": 0
+		},
+		{
+			"col": 4,
+			"id": 15,
+			"row": 6,
+			"terrain": 0,
+			"terrain_set": 0
+		}
+	],
+	"version": 2
+}

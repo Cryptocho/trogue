@@ -242,9 +242,10 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
     }
     m.columns = cols->get<int>();
     // 逐一解析 tiles[]：数组顺序即 id；每个 tile 自带 col/row（图集内坐标），
-    // 建 id → Rect 表供渲染（C 版 tileset.c 同款语义；不允许按 id 推公式——
-    // Godot 导出的 col/row 可能非顺序排列）。
-    m.tile_rects.reserve(static_cast<std::size_t>(count));
+    // 建 id → TileVisual 表供渲染（不允许按 id 推公式——Godot 导出的 col/row
+    // 可能非顺序排列）。size_in_atlas/texture_origin/y_sort_origin 为 tro-tileset
+    // v2 只增可选字段（plan-8 §3.1），缺省 = 单格 1×1 / 原点 0。
+    m.tile_visuals.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i) {
         const json& t = (*tiles)[static_cast<std::size_t>(i)];
         if (!t.is_object()) return tl::unexpected(err(
@@ -268,9 +269,74 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
                                    + "] 缺少合法的 col/row（非负 int）")));
         }
         const int col = col_it->get<int>(), row = row_it->get<int>();
-        m.tile_rects.push_back(Rect{
-            static_cast<float>(col * tw_v), static_cast<float>(row * th_v),
-            static_cast<float>(tw_v), static_cast<float>(th_v)});
+        // size_in_atlas：可选 [w,h]，各 ∈ [1,4096]——tile 覆盖的图集格子数，缺省 1×1。
+        // region 越界（col+sw > columns / 超出贴图）不在 load 期校验：与 col/row 同
+        // （load 不读纹理文件），绘制期采样行为由 raylib 兜底（plan-8 §3.1）。
+        int sw = 1, sh = 1;
+        if (auto sz = t.find("size_in_atlas"); sz != t.end()) {
+            const std::string where =
+                "tiles[" + std::to_string(i) + "].size_in_atlas";
+            if (!sz->is_array() || sz->size() != 2 ||
+                !(*sz)[0].is_number_integer() || !(*sz)[1].is_number_integer()) {
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(rel_path, where + " 必须为 [w,h] int 数组")));
+            }
+            sw = (*sz)[0].get<int>();
+            sh = (*sz)[1].get<int>();
+            if (sw < 1 || sw > kTileSizeInAtlasMax || sh < 1 ||
+                sh > kTileSizeInAtlasMax) {
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(rel_path, where + " 元素必须为 1.."
+                                       + std::to_string(kTileSizeInAtlasMax))));
+            }
+        }
+        // texture_origin：可选 [x,y] int（可负），|v| ≤ kTileOriginMax——Godot
+        // 纹理原点，绘制偏移 = −origin（plan-8 §2.2）；缺省 (0,0)。
+        Vec2 t_origin{0.0f, 0.0f};
+        if (auto to = t.find("texture_origin"); to != t.end()) {
+            const std::string where =
+                "tiles[" + std::to_string(i) + "].texture_origin";
+            if (!to->is_array() || to->size() != 2 ||
+                !(*to)[0].is_number_integer() || !(*to)[1].is_number_integer()) {
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(rel_path, where + " 必须为 [x,y] int 数组")));
+            }
+            const int ox = (*to)[0].get<int>(), oy = (*to)[1].get<int>();
+            if (ox > kTileOriginMax || ox < -kTileOriginMax ||
+                oy > kTileOriginMax || oy < -kTileOriginMax) {
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(rel_path, where + " 绝对值超限")));
+            }
+            t_origin = Vec2{static_cast<float>(ox), static_cast<float>(oy)};
+        }
+        // y_sort_origin：可选 int，|v| ≤ kTileOriginMax——Godot y-sort 排序键偏移
+        // 透传存储，引擎暂不消费（无逐 tile y-sort，plan-8 §3.3）；缺省 0。
+        int yso = 0;
+        if (auto ys = t.find("y_sort_origin"); ys != t.end()) {
+            const std::string where =
+                "tiles[" + std::to_string(i) + "].y_sort_origin";
+            if (!ys->is_number_integer()) {
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(rel_path, where + " 必须为 int")));
+            }
+            yso = ys->get<int>();
+            if (yso > kTileOriginMax || yso < -kTileOriginMax) {
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(rel_path, where + " 绝对值超限")));
+            }
+        }
+        detail::SceneImpl::TilesetMeta::TileVisual tv;
+        tv.region = Rect{static_cast<float>(col * tw_v), static_cast<float>(row * th_v),
+                         static_cast<float>(sw * tw_v), static_cast<float>(sh * th_v)};
+        tv.texture_origin = t_origin;
+        tv.y_sort_origin = yso;
+        m.tile_visuals.push_back(tv);
     }
     out.tilesets.push_back(std::move(m));
     out.atlas_textures.emplace_back();  // 图集贴图懒加载槽与 tilesets 对齐

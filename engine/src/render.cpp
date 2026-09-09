@@ -78,14 +78,16 @@ std::shared_ptr<const SharedTexture> get_or_load_texture(const std::string& path
     return ::Color{c.r, c.g, c.b, c.a};
 }
 
-// 图集 tile 矩形（tileset 元数据 + tile id → 贴图子矩形）。
-// 查 load 期建的 id → Rect 表（tiles[].col/row 决定，见 scene_impl.hpp）；
-// 越界/表缺失 → 空矩形（调用方约定 w/h==0 = 无绘制，防御畸形资产）。
-Rect atlas_tile_rect(const detail::SceneImpl::TilesetMeta& ts, int tile_id) {
+// 图集 tile 视觉描述（tileset 元数据 + tile id）。
+// 查 load 期建的 id → TileVisual 表（region 含 size_in_atlas 多格扩展、texture_origin
+// 为 Godot 纹理原点，见 scene_impl.hpp / plan-8 §3.3）；越界/表缺失 → 空描述
+// （region w/h==0 = 无绘制，防御畸形资产，契约与原 tile_rects 一致）。
+detail::SceneImpl::TilesetMeta::TileVisual atlas_tile_visual(
+    const detail::SceneImpl::TilesetMeta& ts, int tile_id) {
     if (tile_id < 0 ||
-        static_cast<std::size_t>(tile_id) >= ts.tile_rects.size())
-        return Rect{0, 0, 0, 0};
-    return ts.tile_rects[static_cast<std::size_t>(tile_id)];
+        static_cast<std::size_t>(tile_id) >= ts.tile_visuals.size())
+        return {};
+    return ts.tile_visuals[static_cast<std::size_t>(tile_id)];
 }
 
 detail::RenderStats g_render_stats;
@@ -154,9 +156,19 @@ RenderResult render_scene(const SceneAsset& asset) {
                     const int v =
                         tiles[static_cast<std::size_t>(ty) * info.width + tx];
                     if (v < 0) continue;
-                    const Rect r = atlas_tile_rect(tsm, v);
-                    const float wx = static_cast<float>(info.origin_x + tx * impl.tile_w);
-                    const float wy = static_cast<float>(info.origin_y + ty * impl.tile_h);
+                    const auto tv = atlas_tile_visual(tsm, v);
+                    const Rect r = tv.region;
+                    // Godot tile 绘制语义（plan-8 §2.2）：
+                    //   dest 左上 = cell 中心 − region.size/2 − texture_origin。
+                    // 1×1 且 origin=0 时精确退化为「格子左上角」（旧公式），既有
+                    // 资产零回归（整数量 + 二进制精确半值，float 逐位还原）。
+                    // y_sort_origin 透传不消费（引擎无逐 tile y-sort）。
+                    const float wx = static_cast<float>(info.origin_x + tx * impl.tile_w)
+                                   + impl.tile_w * 0.5f - r.w * 0.5f
+                                   - tv.texture_origin.x;
+                    const float wy = static_cast<float>(info.origin_y + ty * impl.tile_h)
+                                   + impl.tile_h * 0.5f - r.h * 0.5f
+                                   - tv.texture_origin.y;
                     DrawTextureRec(tex, ::Rectangle{r.x, r.y, r.w, r.h},
                                    ::Vector2{wx, wy}, ::Color{255, 255, 255, 255});
                 }
@@ -229,7 +241,11 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
             return RenderResult::TextureMissing;
         }
         Texture2D& tex = *static_cast<Texture2D*>(tp);
-        const Rect r = atlas_tile_rect(tsm, sprite.tile);
+        const auto tv = atlas_tile_visual(tsm, sprite.tile);
+        const Rect r = tv.region;
+        // 图集形态锚点语义不变：pos + offset = 纹理左上（region 自动含多格尺寸）。
+        // Godot 的 cell 中心对齐/texture_origin 是 tile 层语义；实体 sprite 的
+        // Godot 等效摆放由 game 经 SpriteDesc.offset 自行表达（plan-8 §3.3）。
         DrawTextureRec(tex, ::Rectangle{r.x, r.y, r.w, r.h},
                        ::Vector2{pos.x + sprite.offset.x, pos.y + sprite.offset.y},
                        to_raylib(tint));

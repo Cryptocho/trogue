@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### tro-tileset 多格 tile 与纹理原点（size_in_atlas / texture_origin / y_sort_origin）
+
+- 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`engine/include/trogue/config.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`assets/scenes/test.json`、`assets/tilesets/test.json`（新增）、`assets/tilesets/test_1.json`（新增）、`assets/textures/Soldier.png`（新增）、`editor/assets/test.tscn`（新增）、`editor/assets/Decorations.png`（新增）、`editor/assets/Tile Set.png`（新增）、`editor/assets/Soldier with shadows/soldier.tres`（新增）、`docs/plan-8.md`（新增）、`AGENTS.md`
+
+#### Added
+- tro-tileset v2 只增可选字段（`version` 仍为 2，旧资产零迁移）：`tiles[]` 新增 `size_in_atlas`（`[w,h]`，tile 覆盖的图集格子数，region = `(col*tw, row*th, sw*tw, sh*th)`）、`texture_origin`（Godot 纹理原点，可负）、`y_sort_origin`（Godot y-sort 排序键偏移；引擎解析存储、暂不消费——无逐 tile y-sort）；校验类型/长度/值域（size 各 ∈ [1,4096]，origin/sort 绝对值 ≤65536；region 越界与 col/row 同不在 load 期校验）
+- 导出插件导出三字段（headless 与菜单共用）：非缺省才写、单格 tile 导出零 diff；margins/separation 非 0 图集 warning（明确损失：引擎 col/row→像素映射不含该偏移）
+- 引擎 tile 绘制对齐 Godot 4.7.2 语义：dest 左上 = cell 中心 − region.size/2 − texture_origin（`TilesetMeta::tile_rects` 升级为 `tile_visuals`/`TileVisual{region, texture_origin, y_sort_origin}`）；1×1 且原点 0 时与旧公式逐位一致，既有资产零回归；`render_sprite` 图集形态 region 自动含多格尺寸、`pos+offset` 锚点语义不变
+- schema 单测 15 用例（旧格式全缺省/部分带/三字段全带/零原点正例 + 类型/长度/值域/防御上限反例逐项拒绝）接入 CTest
+
+#### Refactored
+- 导出插件解除 v2「一层一贴图」限制：TileMapLayer 混用多个贴图组时自动拆分为多个输出层（首组沿用层名、其余 `_组序号` 后缀，按组索引稳定排序），此前直接报错拒绝
+
+#### Bug Fixes
+- 修复多格 tile 显示错误：3×5 树（`size_in_atlas=[3,5]` + `texture_origin=[-2,30]`）此前被压成 16×16 单格且画在格子左上角；像素级截图比对验证（树位 1523/1523 不透明像素命中源贴图 region、旧公式位 0/1276 无命中、1×1 tile 256/256 回归命中）
+- 截图前强制 flush 渲染批（`rlDrawRenderBatchActive`）：不 flush 时 `LoadImageFromScreen` 经 glReadPixels 拍到尚未提交 GL 的残缺帧（曾致截图全黑/丢元素误诊）
+
 ### IPC 事件通道（tg::Ipc subscribe/publish/disconnect，inspector 式可观测）
 
 - 影响的文件: `engine/include/trogue/ipc.hpp`、`engine/src/ipc.cpp`、`tools/tests/ipc_test.cpp`（新增）、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/main.cpp`、`docs/plan-7.md`（新增）、`docs/history.md`（新增）、`AGENTS.md`

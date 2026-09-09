@@ -52,16 +52,26 @@ struct SceneImpl {
 
     // 图集元数据（atlas 模式）：name → (index, tile 尺寸, count, texture 路径)
     struct TilesetMeta {
+        // 单个 tile 的视觉描述（plan-8 §3.3）。
+        // region = (col*tw, row*th, sw*tw, sh*th)——sw/sh 为 Godot size_in_atlas
+        //（多格 tile，缺省 1×1）；texture_origin 为 Godot 纹理原点（绘制偏移 = −origin）；
+        // y_sort_origin 为 Godot y-sort 排序键偏移（透传存储，引擎暂不消费——
+        // 无逐 tile y-sort，未来按需消费/暴露）。
+        struct TileVisual {
+            Rect region{0, 0, 0, 0};   // 贴图子矩形（w/h==0 = 无绘制，防御畸形资产）
+            Vec2 texture_origin{0, 0};
+            int y_sort_origin = 0;
+        };
         std::string name;
         std::string path;                 // 原始引用路径（assets-relative）
         int tile_w = 0, tile_h = 0;
         int tile_count = 0;               // tiles 数组长度 = id 值域上限
         std::string texture;              // tro-tileset 的 texture（assets-relative）
         int columns = 0;                  // tro-tileset columns（图集每行 tile 数）
-        // id → 贴图子矩形（像素），与 tile_count 对齐；load 期由 tiles[].col/row 建表。
+        // id → TileVisual（像素），与 tile_count 对齐；load 期由 tiles[] 建表。
         // 契约：tiles[] 数组顺序即 id，每个 tile 自带 col/row（非顺序排列可能，
-        // 不能按 id 推公式）。矩形 = (col*tile_w, row*tile_h, tile_w, tile_h)。
-        std::vector<Rect> tile_rects;
+        // 不能按 id 推公式）。region 越界不在 load 期校验（load 不读纹理文件）。
+        std::vector<TileVisual> tile_visuals;
     };
     std::vector<TilesetMeta> tilesets;
     std::vector<Color> palette;

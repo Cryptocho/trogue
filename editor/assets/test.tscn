@@ -1,0 +1,113 @@
+[gd_scene format=4 uid="uid://dketk3i744hp6"]
+
+[ext_resource type="Texture2D" uid="uid://c4p4i70kng4qj" path="res://assets/Decorations.png" id="1_hqpx7"]
+[ext_resource type="Texture2D" uid="uid://cy0u78u6v5cgx" path="res://assets/Tile Set.png" id="2_6sy2s"]
+[ext_resource type="Texture2D" uid="uid://sytk0yi2ab43" path="res://assets/Soldier with shadows/soldier.tres" id="3_6sy2s"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_4k1sc"]
+texture = ExtResource("1_hqpx7")
+10:10/size_in_atlas = Vector2i(3, 5)
+10:10/0 = 0
+10:10/0/texture_origin = Vector2i(-2, 30)
+10:10/0/y_sort_origin = -4
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_brryb"]
+texture = ExtResource("2_6sy2s")
+1:3/0 = 0
+1:3/0/terrain_set = 0
+1:3/0/terrain = 0
+1:3/0/terrains_peering_bit/right_side = 0
+1:3/0/terrains_peering_bit/bottom_side = 0
+2:3/0 = 0
+2:3/0/terrain_set = 0
+2:3/0/terrain = 0
+2:3/0/terrains_peering_bit/right_side = 0
+2:3/0/terrains_peering_bit/bottom_side = 0
+2:3/0/terrains_peering_bit/left_side = 0
+3:3/0 = 0
+3:3/0/terrain_set = 0
+3:3/0/terrain = 0
+3:3/0/terrains_peering_bit/bottom_side = 0
+3:3/0/terrains_peering_bit/left_side = 0
+4:3/0 = 0
+4:3/0/terrain_set = 0
+4:3/0/terrain = 0
+4:3/0/terrains_peering_bit/bottom_side = 0
+4:4/0 = 0
+4:4/0/terrain_set = 0
+4:4/0/terrain = 0
+4:4/0/terrains_peering_bit/bottom_side = 0
+4:4/0/terrains_peering_bit/top_side = 0
+3:4/0 = 0
+3:4/0/terrain_set = 0
+3:4/0/terrain = 0
+3:4/0/terrains_peering_bit/bottom_side = 0
+3:4/0/terrains_peering_bit/left_side = 0
+3:4/0/terrains_peering_bit/top_side = 0
+2:4/0 = 0
+2:4/0/terrain_set = 0
+2:4/0/terrain = 0
+2:4/0/terrains_peering_bit/right_side = 0
+2:4/0/terrains_peering_bit/bottom_side = 0
+2:4/0/terrains_peering_bit/left_side = 0
+2:4/0/terrains_peering_bit/top_side = 0
+1:4/0 = 0
+1:4/0/terrain_set = 0
+1:4/0/terrain = 0
+1:4/0/terrains_peering_bit/right_side = 0
+1:4/0/terrains_peering_bit/bottom_side = 0
+1:4/0/terrains_peering_bit/top_side = 0
+1:5/0 = 0
+1:5/0/terrain_set = 0
+1:5/0/terrain = 0
+1:5/0/terrains_peering_bit/right_side = 0
+1:5/0/terrains_peering_bit/top_side = 0
+2:5/0 = 0
+2:5/0/terrain_set = 0
+2:5/0/terrain = 0
+2:5/0/terrains_peering_bit/right_side = 0
+2:5/0/terrains_peering_bit/left_side = 0
+2:5/0/terrains_peering_bit/top_side = 0
+3:5/0 = 0
+3:5/0/terrain_set = 0
+3:5/0/terrain = 0
+3:5/0/terrains_peering_bit/left_side = 0
+3:5/0/terrains_peering_bit/top_side = 0
+4:5/0 = 0
+4:5/0/terrain_set = 0
+4:5/0/terrain = 0
+4:5/0/terrains_peering_bit/top_side = 0
+4:6/0 = 0
+4:6/0/terrain_set = 0
+4:6/0/terrain = 0
+3:6/0 = 0
+3:6/0/terrain_set = 0
+3:6/0/terrain = 0
+3:6/0/terrains_peering_bit/left_side = 0
+2:6/0 = 0
+2:6/0/terrain_set = 0
+2:6/0/terrain = 0
+2:6/0/terrains_peering_bit/right_side = 0
+2:6/0/terrains_peering_bit/left_side = 0
+1:6/0 = 0
+1:6/0/terrain_set = 0
+1:6/0/terrain = 0
+1:6/0/terrains_peering_bit/right_side = 0
+
+[sub_resource type="TileSet" id="TileSet_0exuo"]
+terrain_set_0/mode = 0
+terrain_set_0/terrain_0/name = "ground"
+terrain_set_0/terrain_0/color = Color(0.8234407, 0.7356926, 3.85046e-07, 1)
+sources/0 = SubResource("TileSetAtlasSource_4k1sc")
+sources/1 = SubResource("TileSetAtlasSource_brryb")
+
+[node name="root" type="Node2D" unique_id=206429803]
+
+[node name="TileMapLayer" type="TileMapLayer" parent="." unique_id=1394846972]
+tile_map_data = PackedByteArray("AAABAAEAAAAKAAoAAAACAAEAAAAKAAoAAAADAAEAAAAKAAoAAAAEAAEAAAAKAAoAAAAFAAEAAAAKAAoAAAABAAMAAAAKAAoAAAACAAMAAAAKAAoAAAADAAMAAAAKAAoAAAAEAAMAAAAKAAoAAAAFAAMAAAAKAAoAAAABAAUAAAAKAAoAAAACAAUAAAAKAAoAAAADAAUAAAAKAAoAAAAEAAUAAAAKAAoAAAAFAAUAAAAKAAoAAAAJAAAAAQABAAMAAAAKAAAAAQACAAYAAAALAAAAAQACAAYAAAAMAAAAAQACAAYAAAANAAAAAQADAAMAAAANAAEAAQAEAAQAAAANAAIAAQAEAAQAAAANAAMAAQAEAAQAAAANAAQAAQAEAAQAAAANAAUAAQADAAUAAAAMAAUAAQACAAYAAAALAAUAAQACAAYAAAAKAAUAAQACAAYAAAAJAAUAAQABAAUAAAAJAAQAAQAEAAQAAAAJAAMAAQAEAAQAAAAJAAIAAQAEAAQAAAAJAAEAAQAEAAQAAAALAAIAAQAEAAMAAAALAAMAAQAEAAUAAAA=")
+tile_set = SubResource("TileSet_0exuo")
+
+[node name="soldier" type="Sprite2D" parent="." unique_id=1780354384]
+position = Vector2(-14, 47)
+texture = ExtResource("3_6sy2s")
+metadata/type = "soldier"

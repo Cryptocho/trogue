@@ -530,7 +530,7 @@ bool test_positive_regressions() {
                         return std::string((std::istreambuf_iterator<char>(in)),
                                            std::istreambuf_iterator<char>());
                     }());
-    ok &= expect_ok("test.json（图集模式，引真实 tile_set.json）",
+    ok &= expect_ok("test.json（图集模式，引真实 tilesets/test{,_1}.json）",
                     [] {
                         std::ifstream in("assets/scenes/test.json", std::ios::binary);
                         return std::string((std::istreambuf_iterator<char>(in)),
@@ -598,6 +598,75 @@ bool test_atlas_col_row_meta() {
     return ok;
 }
 
+// tro-tileset 只增可选字段（plan-8 §3.1）：size_in_atlas / texture_origin /
+// y_sort_origin。正例（全缺省=旧格式 / 部分带 / 全带）可载；非法类型/长度/值域
+// 逐项拒绝（每条校验规则一个反例，含防御性上限）。经公共 SceneAsset::load 完整
+// 路径；region/origin 数值正确性公共 API 不直读私有表，由运行期截图验收兜底。
+bool test_tileset_visual_fields() {
+    bool ok = true;
+    const auto write = [](const std::string& p, const std::string& content) {
+        std::ofstream f(p, std::ios::binary);
+        f << content;
+    };
+    const std::string ts_path = "assets/__tmp_vis_ts.json";
+    // 场景模板：引用 assets/__tmp_vis_ts.json 的 1×1 图集层（tileset 路径相对 assets/）
+    const std::string scene_json =
+        R"({"format":"tro-scene","version":2,"tilemap":{)"
+        R"("tile_width":16,"tile_height":16,)"
+        R"("tilesets":[{"name":"ts","path":"__tmp_vis_ts.json"}],)"
+        R"("layers":[{"name":"g","width":1,"height":1,"solid":false,)"
+        R"("tileset":"ts","tiles":[0]}]},"entities":[]})";
+    const auto tileset_with = [](const std::string& tile_obj) {
+        return R"({"format":"tro-tileset","version":2,)"
+               R"("texture":"textures/floor.png","tile_width":16,"tile_height":16,)"
+               R"("columns":16,"rows":16,"tiles":[)" + tile_obj + "]}";
+    };
+    struct Case {
+        const char* label;
+        const char* tile;  // tiles[0] JSON 片段
+        bool want_ok;
+    };
+    const Case cases[] = {
+        {"visual 旧格式全缺省", R"({"id":0,"col":10,"row":10})", true},
+        {"visual 三字段全带",
+         R"({"id":0,"col":10,"row":10,"size_in_atlas":[3,5],)"
+         R"("texture_origin":[-2,30],"y_sort_origin":-4})",
+         true},
+        {"visual 部分带 size_in_atlas",
+         R"({"id":0,"col":1,"row":1,"size_in_atlas":[2,2]})", true},
+        {"visual 零原点可写",
+         R"({"id":0,"col":1,"row":1,"texture_origin":[0,0]})", true},
+        {"visual size 非数组", R"({"id":0,"col":1,"row":1,"size_in_atlas":3})", false},
+        {"visual size 长度 1", R"({"id":0,"col":1,"row":1,"size_in_atlas":[3]})", false},
+        {"visual size 非 int",
+         R"({"id":0,"col":1,"row":1,"size_in_atlas":[2.5,1]})", false},
+        {"visual size 零", R"({"id":0,"col":1,"row":1,"size_in_atlas":[0,1]})", false},
+        {"visual size 超上限",
+         R"({"id":0,"col":1,"row":1,"size_in_atlas":[4097,1]})", false},
+        {"visual origin 非数组", R"({"id":0,"col":1,"row":1,"texture_origin":5})", false},
+        {"visual origin 非 int",
+         R"({"id":0,"col":1,"row":1,"texture_origin":[-2,3.5]})", false},
+        {"visual origin 正向超限",
+         R"({"id":0,"col":1,"row":1,"texture_origin":[70000,0]})", false},
+        {"visual origin 负向超限",
+         R"({"id":0,"col":1,"row":1,"texture_origin":[0,-70000]})", false},
+        {"visual ysort 非 int",
+         R"({"id":0,"col":1,"row":1,"y_sort_origin":"x"})", false},
+        {"visual ysort 超上限",
+         R"({"id":0,"col":1,"row":1,"y_sort_origin":70000})", false},
+    };
+    for (const auto& c : cases) {
+        write(ts_path, tileset_with(c.tile));
+        if (c.want_ok)
+            ok &= expect_ok(c.label, scene_json);
+        else
+            ok &= expect_reject(c.label, scene_json,
+                                tg::ErrorCode::kSchemaViolation);
+    }
+    std::remove(ts_path.c_str());
+    return ok;
+}
+
 }  // namespace
 
 // 注意：build/ 目录必须存在（写临时文件用）。ctest working dir = 项目根。
@@ -615,6 +684,7 @@ int main() {
     test_payload_limits();
     test_positive_regressions();
     test_atlas_col_row_meta();
+    test_tileset_visual_fields();
 
     std::printf("[schema test] checks=%d failures=%d\n", ::tg_test::g_checks,
                 ::tg_test::g_failures);

@@ -1,0 +1,38 @@
+{
+	"columns": 16,
+	"format": "tro-tileset",
+	"rows": 16,
+	"terrain_sets": [
+		{
+			"mode": "corners",
+			"terrains": [
+				{
+					"color": "#d2bc00",
+					"name": "ground"
+				}
+			]
+		}
+	],
+	"texture": "textures/Decorations.png",
+	"tile_height": 16,
+	"tile_width": 16,
+	"tiles": [
+		{
+			"col": 10,
+			"id": 0,
+			"row": 10,
+			"size_in_atlas": [
+				3,
+				5
+			],
+			"terrain": -1,
+			"terrain_set": -1,
+			"texture_origin": [
+				-2,
+				30
+			],
+			"y_sort_origin": -4
+		}
+	],
+	"version": 2
+}

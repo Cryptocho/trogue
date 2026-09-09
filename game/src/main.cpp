@@ -26,6 +26,7 @@
 #include <vector>
 
 #include <raylib.h>
+#include <rlgl.h>  // rlDrawRenderBatchActive（截图前强制 flush 渲染批）
 
 #include "trogue/trogue.hpp"
 #include "game_core.hpp"
@@ -779,6 +780,10 @@ int main(int argc, char** argv) {
         // 帧末截图（game 排队；帧后 ExportImage）
         if (d.shot_requested) {
             d.shot_requested = false;
+            // 先强制 flush 渲染批（raylib 的批顶点在 EndDrawing 才真正提交 GL；
+            // 不 flush 就 glReadPixels 会拍到未绘制的残缺帧——曾致 soldier 场景
+            // 截图全黑、forest 截图丢 HUD 的误诊）。
+            rlDrawRenderBatchActive();
             Image img = LoadImageFromScreen();
             if (!ExportImage(img, d.shot_path.c_str()))
                 TraceLog(LOG_WARNING, "[demo] 截图导出失败: %s",

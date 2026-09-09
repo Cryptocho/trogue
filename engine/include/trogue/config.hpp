@@ -35,6 +35,8 @@ inline constexpr int kTilesetMax = 8;             // tilemap.tilesets 1..8
 inline constexpr int kPaletteMax = 32;            // tilemap.palette 1..32
 inline constexpr int kTileDimMax = 256;           // tile_width/height ∈ [1,256]
 inline constexpr int kLayerDimMax = 4096;         // 层 width/height ∈ [1,4096]
+inline constexpr int kTileSizeInAtlasMax = 4096;  // tro-tileset size_in_atlas 元素 ∈ [1,4096]（plan-8 §3.1）
+inline constexpr int kTileOriginMax = 65536;      // tro-tileset texture_origin/y_sort_origin 绝对值上限（防御）
 
 // ── payload 限额（plan-5.2 §2.6，多级、一常量一语义） ──
 inline constexpr std::size_t kPayloadBytesMax = 256 * 1024;   // 单 payload 紧凑序列化字节

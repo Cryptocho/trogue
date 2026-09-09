@@ -168,6 +168,7 @@ trogue/
 │   ├── ipc_smoke.py       # IPC 冒烟测试（44 项断言）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── build/  build-release/ # 构建产物（gitignore）
+├── reference/             # Godot 引擎源码参考副本（gitignore；查证引擎行为用，见「依赖与环境」）
 └── trogue-orign/          # 只读参考（gitignore）
 ```
 
@@ -207,6 +208,8 @@ python3 tools/ipc_smoke.py
 | inotify | 内核 | 热重载文件监听，无额外依赖 |
 
 > **2026-09-07 环境事故记录**：构建曾因 raylib 被 `emerge --depclean` 清理（未加入 world 包集合）而整体失败，同时发现 glfw 缺 `X` USE flag。教训：依赖变化由用户维护（world 集合 + USE flags），Agent 只负责在 CMake 侧给出清晰的探测与报错。修复：用户将 raylib 加入 world 并安装；glfw 需加 `X` 后重编。
+
+> **Godot 行为查证约定（2026-09-09 拍板）**：需要确认 Godot 引擎行为语义（渲染公式、API 行为、编辑器数据模型等）时，**以本地源码为准**：Godot 4.7.2-stable 完整源码已下载至 `reference/godot-4.7.2-stable/`（gitignore，不入仓库；来源 `https://github.com/godotengine/godot/archive/refs/tags/4.7.2-stable.tar.gz`，与 editor/ 实际使用的 Godot 版本一致），直接 grep/阅读实现；官方文档用 browser-mcp 查看 `https://docs.godotengine.org/en/stable/`。不得凭记忆或旧版本资料推断 Godot 语义。
 
 ## 资产规范：tro-scene v2.1
 
@@ -250,7 +253,7 @@ python3 tools/ipc_smoke.py
 | 坐标系 | 像素，原点 = tilemap 左上角，y 向下；实体 x/y 为**左上角** |
 | 三态模式 | ① `tilesets` 存在 → 图集模式；② 有 `palette` 无 `tilesets` → palette 模式（tiles = 调色板索引，语义同 v1）；③ 两者皆无（且 `tilesets` 未写）→ **bare 纯实体场景**，仅当 `layers` 为空 `[]` 或缺省（三个条件同时成立）才合法。图集与 palette **互斥**，同时出现拒绝载入；「无 tilesets/palette 但有层」「有 palette 又有 tilesets」拒绝载入 |
 | tilesets | 1..8 项 `{name, path}`，path 相对 assets/；name 场景内唯一；每个 tileset 的 tile 尺寸必须与场景 tile_width/height 一致 |
-| 层 tileset | tilesets 非空时每层必填 `tileset`（引用 name）；palette 模式下层不得携带该字段 |
+| 层 tileset | tilesets 非空时每层必填 `tileset`（引用 name）；palette 模式下层不得携带该字段。Godot 一层混用多个贴图组时，导出插件自动拆为多个输出层（首组沿用层名、其余加 `_组序号` 后缀），不再要求一层一贴图 |
 | tiles | 行主序一维数组，长度必须 = width×height；`-1`=空；图集模式值域 `[0, 所引 tileset.count)`，palette 模式 `[0, palette_count)` |
 | solid 层 | 参与 engine 的 tile-only 查询（C++ API：`tg::is_solid_at` / `tg::rect_hits_solid`，见「引擎公共 API 边界」）；**层矩形之外 = 该层无数据 = 不阻挡**；地图边界由关卡自身绘制的边墙表达 |
 | origin | 可选 `[ox, oy]` 像素（可负）：层左上角的世界偏移，Godot 负坐标 cell 由它表达 |
@@ -283,6 +286,8 @@ python3 tools/ipc_smoke.py
 ```
 
 - **`tiles[]` 数组顺序即 tile id**（0..N-1），id 是 tro-scene tiles 引用的稳定键（TileSet 里增删 tile 会导致 id 漂移——重导出场景即可，约定单次编辑会话内 tileset+scene 成对重导）。
+- **多格 tile 与原点（只增可选字段，`version` 仍为 2，旧资产零迁移；2026-09-09）**：`tiles[]` 条目可选 `size_in_atlas: [w,h]`（各 ∈ [1,4096]，缺省 `[1,1]`——tile 覆盖的图集格子数，region = `(col*tw, row*th, sw*tw, sh*th)`）、`texture_origin: [x,y]`（int 可负，缺省 `[0,0]`——Godot 纹理原点透传）、`y_sort_origin: y`（int，缺省 `0`——Godot y-sort 排序键偏移透传）。校验：数组长度 2 且元素为 int，origin/sort 绝对值 ≤65536；region 越界不在 load 期校验（与 col/row 同——load 不读纹理文件）。导出插件非缺省才写（单格 tile 零 diff）；margins/separation 非 0 图集不支持，插件 warning（明确损失）。
+- **tile 绘制语义（对齐 Godot 4.7.2，绘制位置 dest 左上 = cell 中心 − region.size/2 − texture_origin）**：1×1 且 origin=0 时精确退化为「格子左上角」。多格 tile 逻辑上仍只占一个 cell（solid 查询/tile_at 语义不变）；同层多格 tile 重叠覆盖次序 = 行主序扫描序（Godot 关闭 y-sort 时也不逐 tile 保证次序）。`y_sort_origin` 引擎解析存储、**暂不消费**（无逐 tile y-sort，未来按需消费/暴露公共查询）；实体图集形态 sprite 的 Godot 居中摆放由 game 经 `SpriteDesc.offset` 自行表达。
 - texture 单贴图；**一个场景的多张贴图由 tro-scene v2 的 `tilesets` 数组表达**（每贴图一个 tro-tileset JSON）。
 - `terrain_sets`：Godot terrain set 透传（`mode`: sides / corners / corners_and_sides）；`peering_bits` 仅导出该 mode 用到的邻位、值 = terrain 序号（未连接的邻位省略）。引擎 v2 忽略，autotile 阶段消费。
 - `custom_data` 透传，引擎忽略。
@@ -402,6 +407,12 @@ python3 tools/ipc_smoke.py
 3. 调试循环：`status`/`list_entities` 观测 → 改 `assets/scenes/*.json` → 0.5s 后 `status.reloads` 自增即为生效 → `screenshot` 拿画面 → `set_entity`/`spawn` 做运行时实验
 4. 收尾：`{"cmd":"quit"}` 让引擎干净退出
 5. 日志在 stdout（TraceLog 格式），解析失败原因可在其中检索 `[scene]`
+
+> **截图视觉验收分工（2026-09-09 拍板）**：当前对话模型不支持图片输入时（`read_image`
+> 报 "does not declare image input"），Agent **不得假装已看图、也不得就此放弃视觉验收**
+> ——正确做法：① 把截图文件路径与**具体核对要点**（预期位置/尺寸/该看什么、什么不算 bug）
+> 明确交给用户目测确认；② 同时尽量辅以**数值自证**（Python 像素级比对截图与源贴图、
+> IPC 实体快照/transform 视图等），能机器判定的部分先机器判定；③ 用户反馈后再下结论继续。
 
 ## 编码规范
 
