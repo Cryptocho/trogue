@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+### IPC 事件通道（tg::Ipc subscribe/publish/disconnect，inspector 式可观测）
+
+- 影响的文件: `engine/include/trogue/ipc.hpp`、`engine/src/ipc.cpp`、`tools/tests/ipc_test.cpp`（新增）、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/main.cpp`、`docs/plan-7.md`（新增）、`docs/history.md`（新增）、`AGENTS.md`
+
+#### Added
+- `tg::Ipc` 事件通道（tro-ipc v1.2，只增不改，协议版本仍 1）：传输层保留命令 `subscribe`/`unsubscribe`/`connections`（ping 档，先于 game handler，无需 game handler 即可用；订阅表为传输层自有状态）；连接 id 自 accept 单调递增、断开不复用；`publish(event, data)` 非阻塞直写广播 `{"ok":true,"event":E,"data":D}` 事件行（判别式：响应永不含顶层 event 键）；`disconnect(conn_id)` game 层主动断开（自动清订阅）+ `connections()` 连接快照
+- **断开即订阅清零**：对端关闭/写失败/主动断开三条路径统一 `close_slot` 单点收口；慢消费者（停止读取）写遇 EAGAIN 即被断开（自愈，无出站队列，永不阻塞主循环）；**超限语义分叉**——响应行超限换兜底错误行、连接保持（现状），事件行超限无兜底行、直接断开该事件全部 filter 匹配订阅者（防判别式漏洞）
+- **subscribe 可选 filter（单实体观测）**：对事件 data 顶层字段做 JSON 等值匹配（多键 AND、缺键不匹配、数字按数值相等、空 object 恒真）；engine 不识任何键语义，可过滤字段由 game 在 `events` 注册表文档化
+- game `events` 目录命令（注册表当前为空，条目形态预留 `{name, when, data}`）；`help` 登记 subscribe/unsubscribe/connections/events
+- `tools/tests/ipc_test.cpp` 双分支单测（Debug 真实 loopback：订阅/退订全量集、参数校验、publish 分流、filter 匹配、handler 内 publish 先于响应、事件超限断开、慢消费者有界收敛、disconnect/conn_id 单调、无 handler 保留命令；Release 桩行为）接入 CTest（两配置各 9/9 对称）；`tools/ipc_smoke.py` 新增 12 项通道协议断言（44/44）
+
+#### Bug Fixes
+- 修正 `ipc.cpp` 两处过时注释（响应超限实为「换兜底错误行、连接保持」而非「关连接」）；`handle_line` fd 快照处钉死重入因果链（handler 内 publish 断开本连接 → 响应静默丢失、对端见事件行/残行+EOF，既有守卫已闭环）
+
+### 回合制最小闭环（移植 trogue-origin：移动 + 碰撞 + 回合制 + IPC 回合命令）
+
+- 影响的文件: `game/src/game_core.hpp`（新增）、`game/src/game_core.cpp`（新增）、`game/src/main.cpp`、`game/CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/tests/game_core_test.cpp`（新增）、`tools/ipc_smoke.py`、`assets/scenes/forest.json`（新增）、`docs/plan-6.md`（新增）、`AGENTS.md`
+
+#### Added
+- `game_core`（game 层纯逻辑，无 UI/无渲染依赖）：回合状态机（玩家回合 → 敌方回合 → 回合计数 +1）、单格 8 向移动裁决（tile solid + 实体互斥）、敌方回合（本里程碑为「静止」策略）、`GameState` 作为 actor 表 + 回合状态唯一所有权（`main.cpp` 只读快照渲染/IPC）
+- 移动碰撞对齐原版 roguelike：斜切仅当两个相邻正交格都被阻挡时禁止（贴墙/贴树可切角；目标格本身仍须可通行）；地形 solid 与越界视为阻挡；`(0,0)`/值域外/无玩家时拒绝且不消耗回合
+- 手写森林关卡 `assets/scenes/forest.json`（palette 模式：非 solid 地面 + solid 墙层外框/内部障碍，玩家 + 3 敌人）
+- IPC 回合命令（tro-ipc v1.1 只增不改，全部在 game handler）：`turn`（phase/turn_count/player/enemies）、`move`（`{dx,dy}` 整数各 -1..1，非整数直接报错不静默截断；`invalid`/`blocked` 返回成功包络 `data.result`，仅非玩家回合用 `ok:false+error`——当前同步结算不可达，为未来异步分支预留）、`wait`（玩家跳过行动直接结算敌方回合）；`help` 同步登记新命令
+- 键盘回合制输入：WASD/方向键 4 向 + Q/E/Z/C 斜向 + 空格等待；玩家移动带帧间平滑插值；相机跟随
+- **实体快照 inspector 式 transform 视图**（用户 2026-09-09 拍板）：`list_entities`/`get_entity`/`query_entities`/`turn` 的实体快照新增 `transform:{visual:[vx,vy], moving}`——`visual` 为当前绘制位置（玩家移动中为引擎 tween 插值浮点值，静止时精确等于逻辑格像素 x/y）、`moving` 是否在移动动画中。**game 层可扩展**：`Demo::extra_entity_fields`（`std::function`）可向快照追加任意字段（未来 ECS 组件观察走同一注入点，不改引擎与 wire 包络）。Agent 凭"静止时 visual==x/y"数值断言即可自动发现错位/抖动/逻辑-视觉失步
+- 无窗口单测 `game_core_test`（8 用例：导入/移动消耗回合/地形与实体阻挡不消耗/单侧堵可切角双侧堵禁止/等待推进/无玩家拒绝）+ 输入缓冲 5 用例接入 CTest（Debug/Release 各 8/8）；`tools/ipc_smoke.py` 新增回合断言 + transform 视图断言（32/32）
+
+#### Bug Fixes
+- 玩家视觉移动由**引擎 `tg::TweenManager::add_vec2` + `Easing::quad_out`（0.12s）**驱动（对齐原版 `tween_system.lua` 的 `easeOutQuad(t)=-t*(t-2)=2t-t²`），**不再自造 MoveAnim/manual lerp**（避免重复造轮子；引擎 quad_out 与原版公式一致，播完精确落格=目标整数像素）
+- 修复玩家与 tile 网格错位/像素抖动：原指数趋近 lerp 永不收敛（残差 ~1e-3px）再经 `DrawRectangle(int)` 截断 → 恒定错位 + 相机同源放大的帧间抖动。现静止时 view 恒等于逻辑格、无 tween 无残差；移动中实体用浮点 `DrawRectanglePro`（绕开引擎 `draw_rect` 的 int 截断），与 tile 层同相机变换严格对齐
+- 键盘移动与 `trogue-orign/src/systems/input.lua` 手感一致：4 向键入缓冲（0.18s 窗口 `InputBuffer`），窗口内第二正交键立即合成对角（各自 clamp [-1,1]，反向抵消回落第一键），斜向键（Q/E/Z/C）清缓冲立即走格，空格等待
+- `set_entity` 瞬移玩家后同步 snap 视觉位置（此前逻辑坐标已变、transform 视图暴露"视觉==欲望不一致"——正是 transform 视图设计要抓的问题，冒烟据此补断言）
+
+#### Refactored
+- `game/src/main.cpp` 从自由移动改为回合制：实体坐标统一 tile 网格（像素 = grid×16，spawn/set_entity 吸附网格）；渲染按 (y, z) 稳定排序显式绘制；热重载保留玩家位置与回合计数（失败安全保留旧资产旧状态）
+
 ### C++ 引擎里程碑（C++20 引擎 + 模型无关边界 + 通用表现原语）
 
 - 影响的文件: `engine/include/trogue/*.hpp`（config/types/scene/render/animation/tween/hotreload/ipc/coro/trogue 伞，新增；删除旧 `.h`）、`engine/src/**`（`*.cpp` 替换 `*.c`）、`game/src/main.cpp`（替换 `main.c`）、`tools/CMakeLists.txt`、`tools/tests/*.cpp`（5 个单测 + 2 个 consumer smoke）、`tools/ipc_smoke.py`、顶层/`engine`/`game` 的 `CMakeLists.txt`、`AGENTS.md`、`docs/plan-5*.md`（`docs/plan-5.old-c11.md` 归档）、`.gitignore`、`CHANGELOG.md`

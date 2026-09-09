@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tro-ipc v1.1 冒烟测试。
+"""tro-ipc v1.2 冒烟测试（v1.1 之上只增不改）。
 
 用法:
     python3 tools/ipc_smoke.py [--port 48764] [--scene assets/scenes/demo.json]
@@ -7,7 +7,8 @@
 前提: 引擎以 DEBUG 构建运行中 (./build/trogue)。
 覆盖: 握手/ping/status/list_entities/spawn/set_entity/get_entity/
       despawn/观测命令(query_entities/layers/solid_at/get_tile)/
-      screenshot/reload(位置保留)/quit。
+      screenshot/reload(位置保留)/回合命令(turn/move/wait)/
+      事件通道(subscribe/unsubscribe/connections/events 协议断言)/quit。
 """
 
 import argparse
@@ -80,7 +81,10 @@ def main():
     check("spawn", r.get("ok") and r["data"]["entity"]["id"] == "smoke_coin", r)
 
     r = rpc(cmd="get_entity", id="smoke_coin")
-    check("get_entity 新实体", r.get("ok") and abs(r["data"]["entity"]["x"] - 100) < 0.01, r)
+    # 回合制：实体坐标统一 tile 网格（像素 = grid*16），100 → grid 6 → 96px
+    grid_x = (100 // 16) * 16
+    check("get_entity 新实体（网格对齐）",
+          r.get("ok") and abs(r["data"]["entity"]["x"] - grid_x) < 0.01, r)
 
     r = rpc(cmd="set_entity", id="player", x=64, y=80)
     check("set_entity 移动玩家",
@@ -131,6 +135,18 @@ def main():
     r = rpc(cmd="get_entity", id="player")
     check("实体快照含 color（回归）", r.get("ok") and "color" in r["data"]["entity"], r)
 
+    # inspector transform 视图：静止时视觉位置 == 逻辑坐标（Agent 观测锚点；
+    # 若迁移/插值造成错位，此处即暴露——2026-09-09 用户拍板）
+    tf = r["data"]["entity"].get("transform")
+    tfv = tf and tf.get("visual")
+    check("实体快照含 transform 视图",
+          r.get("ok") and tf is not None and isinstance(tfv, list)
+          and isinstance(tf.get("moving"), bool), r)
+    check("静止时 visual == 逻辑坐标",
+          r.get("ok") and tfv is not None
+          and abs(tfv[0] - r["data"]["entity"]["x"]) < 1e-6
+          and abs(tfv[1] - r["data"]["entity"]["y"]) < 1e-6, r)
+
     print("== 截图 ==")
     shot = "/tmp/trogue_smoke.png"
     if os.path.exists(shot):
@@ -150,6 +166,105 @@ def main():
     px = r["data"]["entity"]["x"]
     check("重载后运行时位置保留 (x≈64)",
           r.get("ok") and abs(px - 64) < 0.01, f"x={px}")
+
+    print("== 回合命令（turn/move/wait，场景无关）==")
+    r = rpc(cmd="turn")
+    check("turn 返回结构",
+          r.get("ok") and r["data"].get("phase") in ("player", "enemy")
+          and isinstance(r["data"].get("turn_count"), int)
+          and r["data"].get("player") is not None
+          and isinstance(r["data"].get("enemies"), list), r)
+    tc0 = r["data"]["turn_count"]
+
+    # 尝试四个方向直到某个 move 成功（demo 墙很少，必然有一个方向可走）
+    moved = False
+    for dx, dy in ((1, 0), (0, 1), (0, -1), (-1, 0)):
+        r = rpc(cmd="move", dx=dx, dy=dy)
+        if r.get("ok") and r["data"].get("result") == "moved":
+            moved = True
+            break
+    check("move 于某方向成功", moved, r)
+    r = rpc(cmd="turn")
+    check("move 结算后回合 +1",
+          r.get("ok") and r["data"]["turn_count"] == tc0 + 1,
+          f"{tc0} → {r['data']['turn_count']}")
+
+    r = rpc(cmd="move", dx=0, dy=0)
+    check("move (0,0) 拒绝为 invalid",
+          r.get("ok") and r["data"].get("result") == "invalid", r)
+
+    r = rpc(cmd="move", dx=0.5, dy=0)
+    check("move 非整数 dx 报错（不静默截断）",
+          r.get("ok") is False and "integer" in r.get("error", ""), r)
+
+    r = rpc(cmd="wait")
+    check("wait 成功", r.get("ok") and r["data"].get("result") == "waited", r)
+    r = rpc(cmd="turn")
+    check("wait 后回合再 +1",
+          r.get("ok") and r["data"]["turn_count"] == tc0 + 2,
+          f"{tc0+1} → {r['data']['turn_count']}")
+
+    print("== 事件通道（tro-ipc v1.2 协议断言，无 game 事件）==")
+    # 事件目录：game 当前未注册事件（机制就位，注册表为空）
+    r = rpc(cmd="events")
+    check("events 目录（空注册表）",
+          r.get("ok") and r["data"].get("events") == [], r)
+
+    r = rpc(cmd="help")
+    cmds = r.get("data", {}).get("commands", [])
+    check("help 登记通道命令",
+          all(c in cmds for c in
+              ("subscribe", "unsubscribe", "connections", "events")), r)
+
+    # 独立长连接订阅（主 sock 保持短连接 RPC 语义，互不干扰）
+    ev_sock = socket.create_connection(("127.0.0.1", args.port), timeout=5)
+    ev_reader = LineReader(ev_sock)
+    hello2 = ev_reader.next_line()
+    check("长连接 hello 问候", hello2.get("event") == "hello", hello2)
+
+    def evrpc(**msg):
+        ev_sock.sendall((json.dumps(msg) + "\n").encode())
+        return ev_reader.next_line()
+
+    r = evrpc(cmd="subscribe", events=["X"], filter={"entity": "player"})
+    check("subscribe 回显全量集（含 filter）",
+          r.get("ok") and r["data"]["events"] ==
+          [{"event": "X", "filter": {"entity": "player"}}], r)
+
+    r = evrpc(cmd="connections")
+    subs = [c for c in r.get("data", {}).get("connections", []) if c.get("events")]
+    check("connections 列出订阅连接",
+          r.get("ok") and len(subs) == 1
+          and subs[0]["events"][0]["event"] == "X", r)
+
+    r = evrpc(cmd="subscribe", events=["hello"])
+    check("subscribe 保留名拒绝",
+          r.get("ok") is False and "reserved" in r.get("error", ""), r)
+
+    r = evrpc(cmd="subscribe", events=[])
+    check("subscribe 空数组报错", r.get("ok") is False, r)
+
+    r = evrpc(cmd="subscribe", events=["Y"], filter="bad")
+    check("subscribe filter 非 object 报错", r.get("ok") is False, r)
+
+    r = evrpc(cmd="unsubscribe", events=[])
+    check("unsubscribe 空数组 no-op 回显",
+          r.get("ok") and [e["event"] for e in r["data"]["events"]] == ["X"], r)
+
+    r = evrpc(cmd="unsubscribe", events=["X"])
+    check("unsubscribe 按名移除（含 filter 变体）",
+          r.get("ok") and r["data"]["events"] == [], r)
+
+    # 短连接 RPC 零干扰
+    r = rpc(cmd="ping")
+    check("短连接 RPC 零干扰", r.get("ok") and r["data"].get("pong") is True, r)
+
+    ev_sock.close()
+    time.sleep(0.3)  # 等 server poll 感知 EOF（断开即订阅清零）
+    r = rpc(cmd="connections")
+    check("断开即订阅清零（connections 回落）",
+          r.get("ok") and len(r["data"]["connections"]) == 1
+          and all(not c.get("events") for c in r["data"]["connections"]), r)
 
     print("== 退出 ==")
     r = rpc(cmd="quit")

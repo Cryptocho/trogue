@@ -69,6 +69,14 @@ add_test(NAME watcher_ipc_test COMMAND trogue_watcher_ipc_test)
 set_tests_properties(watcher_ipc_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── Ipc 事件通道单测（plan-7 §6；双分支同 watcher_ipc_test 先例） ──
+add_executable(trogue_ipc_test tests/ipc_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_ipc_test PRIVATE trogue_engine
+                                              ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME ipc_test COMMAND trogue_ipc_test)
+set_tests_properties(ipc_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── consumer smoke（plan-5.6 §2；无窗口、链接生产 trogue_engine） ──
 # 纯公共 API 面（trogue.hpp）的两种对象模型消费验证：证明引擎与使用者模型无关。
 add_executable(trogue_oop_client_smoke tests/oop_client_smoke.cpp tests/test_util.hpp)
@@ -83,4 +91,16 @@ target_link_libraries(trogue_ecs_client_smoke PRIVATE trogue_engine
                                                       ${TROGUE_TOOLS_NLOHMANN})
 add_test(NAME ecs_client_smoke COMMAND trogue_ecs_client_smoke)
 set_tests_properties(ecs_client_smoke PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# ── game_core 无窗口单测（plan-6 §4.d；回合制核心纯逻辑，引用 game 源码） ──
+# 直接编译 tools/tests/game_core_test.cpp + game/src/game_core.cpp；
+# 顶层顺序 engine → tools → game 不影响源路径解析；门控同既有工具测试。
+add_executable(trogue_game_core_test tests/game_core_test.cpp tests/test_util.hpp
+               ${CMAKE_SOURCE_DIR}/game/src/game_core.cpp)
+target_link_libraries(trogue_game_core_test PRIVATE trogue_engine
+                                                   ${TROGUE_TOOLS_NLOHMANN})
+target_include_directories(trogue_game_core_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/game/src)  # game_core.hpp 头
+add_test(NAME game_core_test COMMAND trogue_game_core_test)
+set_tests_properties(game_core_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

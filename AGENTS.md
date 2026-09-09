@@ -102,7 +102,7 @@
 │  animation   帧动画播放器（消费 tro-animations）│
 │  tween       数值/位置/颜色补间执行原语          │
 │  hotreload   文件变化通知（不自行替换游戏状态）   │
-│  ipc         JSON-lines 传输与 callback 分发      │
+│  ipc         JSON-lines 传输/事件推送/callback 分发│
 ├──────────────────────────────────────────────┤
 │      raylib 6.0（窗口/GLFW/OpenGL）+ nlohmann/json│
 └──────────────────────────────────────────────┘
@@ -128,7 +128,7 @@
 - 渲染：`tg::render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语，传入快照/变换/tint。对象排序、相机与 UI 属 game。
 - **动画**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer`（播放器）消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、帧事件与完成回调、`co_await` 完成；**它输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。实体 descriptor 的 `animations` 由 asset 解析为可查询的动画集；game 把播放器绑定到自己的对象并决定触发/切换。
 - **Tween**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。
-- `tg::Ipc` 不持有 scene/world 指针；只负责 JSON-lines 分帧、响应顺序、包络与 game callback。命令语义由 game 注册和实现。
+- `tg::Ipc` 不持有 scene/world 指针；只负责 JSON-lines 分帧、响应顺序、包络、**事件通道**（传输层保留命令 `subscribe`/`unsubscribe`/`connections` + `publish`/`disconnect`/`connections()` API，语义见「IPC 协议」）与 game callback。命令语义由 game 注册和实现；事件是纯传输——engine 不识事件名与 filter 键的任何语义。
 - `tg::Watcher` 只报告监听目录内安全的 `.json` basename 变化；game 决定何时加载新资产、是否 reconcile、如何保留或删除运行时状态。
 
 > `world.c`/`TgWorld`/`TgEntity`/`tg_*` 等历史 C API 已在 **里程碑 5（2026-09-07）** 整体删除/迁移到 `game/`（见「文档有效性与历史实现降级」），引擎不再拥有这些类型；不得再以兼容名义把它们引回 engine。
@@ -163,9 +163,9 @@ trogue/
 │   └── textures/          # 导出时自动拷贝的贴图
 ├── editor/                # Godot 4.7 可选视觉标注/预览项目（可由人或 Agent headless 使用）
 │   └── addons/scene_exporter/  # 导出插件 v4（菜单 + headless，v2.1 schema + 动画）
-├── docs/                  # 里程碑计划书（plan-<M>.md，开工前闭环送审，见开发流程）
+├── docs/                  # 里程碑计划书（plan-<M>.md，开工前闭环送审）+ 历史归档 history.md
 ├── tools/
-│   ├── ipc_smoke.py       # IPC 冒烟测试（23 项断言）
+│   ├── ipc_smoke.py       # IPC 冒烟测试（44 项断言）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── build/  build-release/ # 构建产物（gitignore）
 └── trogue-orign/          # 只读参考（gitignore）
@@ -320,11 +320,13 @@ python3 tools/ipc_smoke.py
 - **失败安全**：资产加载失败不修改旧 asset（C++ 用返回 `expected`/空 optional + 日志，历史 C 返回 NULL）；game candidate import/swap 失败也保留旧 asset 与旧 game state。
 - 手动触发：F5、watcher、IPC `reload` 的合并、节流和 candidate coordinator 属于 game。
 
-## IPC 协议：tro-ipc v1.1（仅 DEBUG 构建）
+## IPC 协议：tro-ipc v1.2（仅 DEBUG 构建）
 
 > **当前边界（里程碑 5 落地）**：本节命令表最初是历史 demo wire protocol，保留作兼容迁移参考；当前 engine 只提供无 world 的 JSON-lines transport/callback，命令语义、实体快照、截图和退出状态全部由 `game/src/main.cpp` 的 game handler 实现，engine 不再拥有或理解实体命令。
 
 > v1.1 在 v1 基础上**只增不改**：新增观测命令（query_entities/layers/solid_at/get_tile）与实体快照字段（z/solid/sprite/v）；包络、传输、既有命令语义不变，协议版本号仍为 1（老客户端不受影响）。设计目标：非视觉 Agent 不看截图也能摸清实体与地形。
+
+> v1.2 在 v1.1 基础上**只增不改**（2026-09-09，里程碑 7）：新增**事件通道**——传输层保留命令 `subscribe`/`unsubscribe`/`connections`、game 层 `events` 目录命令、engine `publish`/`disconnect`/`connections()` API；包络、传输、既有命令语义不变，协议版本号仍为 1（老客户端不受影响）。设计目标：Agent 免轮询的 inspector 式可观测（语义见「事件通道语义」）。
 
 - TCP `127.0.0.1:48764`（`--port` 可改），仅本机可达。
 - JSON-lines：每行一个请求对象，每行一个响应。
@@ -338,7 +340,11 @@ python3 tools/ipc_smoke.py
 | 命令 | 参数 | data |
 |------|------|------|
 | `ping` | — | `{pong:true, version}` |
+| `subscribe` | `events`（非空字符串数组）；可选 `filter`（object） | `{events:[{event, filter?}]}`（订阅后该连接的**全量订阅集**，对象数组；无 filter 者省略键）。保留名 `hello` 整条拒绝 |
+| `unsubscribe` | `events`（字符串数组；空数组 = no-op 回显；按名整体移除含全部 filter 变体） | `{events:[{event, filter?}]}`（回显当前订阅集） |
+| `connections` | — | `{connections:[{conn, events:[...]}], count}`（连接快照，含未订阅连接） |
 | `help` | — | `{commands:[...]}` |
+| `events` | — | `{events:[{name, when, data}]}`（game 事件注册表；当前为空——通道机制就位，game 注册事件后在此文档化可过滤字段） |
 | `status` | — | `{scene, reloads, entities, fps, uptime_s, port}` |
 | `list_entities` | — | `{entities:[{id,type,x,y,w,h,color, z?, solid?, sprite?, v?:[vx,vy]}], count}` |
 | `get_entity` | `id` | `{entity:{...}}`（字段同 list_entities） |
@@ -356,6 +362,21 @@ python3 tools/ipc_smoke.py
 
 实体快照字段说明：`z`/`solid`/`sprite`/`v` 仅在有意义时出现（z≠0、solid=true、有贴图、速度非零）；`sprite` 图集形态为 `{tileset:<名字>,tile:<id>}`，独立贴图形态为 `{texture, region?, offset?}`；`v` 为速度数组 `[vx,vy]`。
 
+> **transform 视图（2026-09-09 拍板，inspector 式可观测性）**：实体快照含 `transform: {visual:[vx,vy], moving}`——`visual` 为当前绘制位置（玩家移动中为引擎 tween 插值浮点值，静止时**精确等于**逻辑格像素 x/y；其余实体恒等于逻辑位置），`moving` 为是否在移动动画中。设计目的：非视觉 Agent 凭"静止时 visual==x/y"即可**数值发现**插值残差/截断/逻辑-视觉失步类渲染问题（实测：曾因指数趋近 lerp 残差 + `DrawRectangle(int)` 截断产生恒定错位与抖动，单测与冒烟均不暴露，人眼才发现）。**game 层可扩展**：`game/src/main.cpp` 的 `Demo::extra_entity_fields`（`std::function`）可在快照上追加任意字段——未来 ECS 组件观察（如组件列表/属性）走同一注入点，不修改引擎与 wire 包络。
+
+### 事件通道语义（v1.2，2026-09-09 里程碑 7）
+
+- **事件行**：`{"ok":true,"event":"<名>","data":{...}}`——与 hello 问候同构。**判别式（按顶层键）**：响应永远不含顶层 `event` 键；长连接读行时「有顶层 event 键 = 事件，否则 = 响应」（subscribe 回显元素内的嵌套 `event` 键不是事件行）。
+- **订阅模型**：订阅记录 = (事件名, filter) 二元组，按连接存储于 engine 传输层（保留命令，不经 game handler）；同名不同 filter 并存，同对去重幂等。filter 为纯 JSON **顶层字段等值匹配**（多键 AND、`data` 缺键不匹配、数字按数值相等 `1==1.0`、空 object `{}` 恒真）——engine 不理解任何键的语义，「事件 data 携带哪些可过滤字段（如 `entity`，建议字符串 id）」由 game 在 `events` 注册表文档化。
+- **publish / 断开**：game 在主线程任意点调 `tg::Ipc::publish(event, data)`（非阻塞直写，永不阻塞主循环）。**断开即订阅清零**：对端关闭、写失败、game 主动 `disconnect(conn)` 三条路径统一收口。慢消费者（订阅了但停止读取）写遇 EAGAIN 即被断开（自愈，无出站队列）。
+- **超限语义分叉**：响应行超限 = 换兜底错误行、连接保持；**事件行超限 = 无兜底行、直接断开该事件的全部 filter 匹配订阅者**（发无 event 键的兜底行会破坏判别式）。
+- **时序**：publish 在调用瞬间写出；game handler 执行期内发布的事件行**先于**该连接的响应行到达（单连接模式下先读到事件再读到响应，顺序符合直觉）。
+- **脚本约定**：
+  - 短连接 RPC → 零订阅零干扰（`echo '{"cmd":"turn"}' | nc -q1 127.0.0.1 48764`）；
+  - 长连接订阅 → 专脚本持续读行：顶层有 `event` 键 = 事件（hello 同形，未知事件名跳过），否则 = 响应；
+  - **单连接端到端模式**（推荐）：同一连接 `subscribe → 发命令 → 循环读行`，先订阅后触发无竞态；
+  - 监听脚本必须带 `--duration`/`--count` 出口（防残留连接占满 8 槽）；收窄过滤 = 整名退订再重订更窄 filter。
+
 ### 使用示例
 
 ```bash
@@ -371,11 +392,13 @@ python3 tools/ipc_smoke.py
 1. raylib 的 `TakeScreenshot()` 会给路径强拼 CWD 前缀，绝对路径会被破坏；本项目用 `LoadImageFromScreen()` + `ExportImage()` 替代（src/main.c）。
 2. 测试脚本必须按行解析 TCP 流（见上）。
 3. 遗留引擎进程会占用 IPC 端口导致新实例 bind 失败（日志有提示）；清理用 `pkill -x trogue`（`-f` 模式会误杀自身 shell）。
+4. 事件通道断开前，对端最后可能是**残缺行（无 `\n`）+ EOF**（部分写进内核后 EAGAIN 断开，已进内核字节不收回）；读端把残行丢弃、视作断开即可。
+5. 订阅连接与 RPC 连接共享 8 槽上限，残留监听器会挤占槽位——监听脚本必须带 duration/count 出口；game 层可用 `connections()`/`disconnect(conn)` 定点清场。
 
 ## AI Agent 调试工作流
 
 1. 起服：`cmake --build build && (./build/bin/trogue > /tmp/trogue_run.log 2>&1 &)`
-2. 冒烟：`python3 tools/ipc_smoke.py`（23 项断言全过为基线）
+2. 冒烟：`python3 tools/ipc_smoke.py`（44 项断言全过为基线）
 3. 调试循环：`status`/`list_entities` 观测 → 改 `assets/scenes/*.json` → 0.5s 后 `status.reloads` 自增即为生效 → `screenshot` 拿画面 → `set_entity`/`spawn` 做运行时实验
 4. 收尾：`{"cmd":"quit"}` 让引擎干净退出
 5. 日志在 stdout（TraceLog 格式），解析失败原因可在其中检索 `[scene]`
@@ -418,6 +441,10 @@ python3 tools/ipc_smoke.py
 
 > **子代理等待纪律（2026-09-07 拍板，反例教训）**：启动 subagent 时若**下一步动作依赖其结果**，一律用 `run_in_background: false` 阻塞等待，拿到结果再继续；不要开后台 subagent 后反复轮询（`list_agents`/`job_output` 空转、连续重复相同调用）空耗 token。若确实需要后台并行推进独立工作，启动后**继续做有用的独立准备**（只读核对、起草文档等），只在其真正完成的通知到达后收集结果；等待期间禁止重复无意义轮询。
 
+> **不重复造轮子（2026-09-09 拍板，反例教训）**：引擎已提供的通用能力（如 `tg::TweenManager` 的数值/位置/颜色补间、`tg::AnimationPlayer` 动画）**必须直接复用，不得在 game 层手写等价物**。本项目两次踩坑：① `MoveAnim`（手写 0.12s outQuad 移动插值）——后改为引擎 `add_vec2 + Easing::quad_out`（公式 `1-(1-t)²` 与原版 `-t*(t-2)` 完全一致，1:1 对齐手感）；② manual lerp（指数趋近，永不收敛 → 残差）。凡通用表现、算法、数据结构，先检索引擎 `trogue/*.hpp` 与既有代码有无现成实现；有则直接调用。game 层只写「引擎原语之上的决策/组合/编排」。
+
+> **数值精度纪律（2026-09-09 拍板，反例教训）**：涉及像素对齐/网格对齐的插值不得用指数趋近 lerp（float 永不收敛，残差 ~1e-3px 被 `DrawRectangle(int)` 截断 → 恒定错位 + 相机同源放大成帧间抖动）。正确做法：固定时长 tween（引擎 `TweenManager`），播完**精确 snap 到目标整数像素**；绘制用浮点原语（raylib `DrawRectanglePro`），勿经 `DrawRectangle(int)` 截断。本次 bug 教训：纯逻辑单测只覆盖逻辑坐标，发现不了渲染层截断/残差类问题（逻辑坐标全对、测试 8/8 全绿，人眼才发现错位抖动）——表现层可观测性由 IPC 实体快照的 transform 视图承担（见 IPC 命令表标注），Agent 凭"视觉位置 == 逻辑坐标"数值断言即可发现。
+
 ## CHANGELOG 格式规范
 
 在 `## [Unreleased]` 下按功能模块组织变更，每个模块使用 `### 功能描述` 标题。
@@ -438,101 +465,13 @@ python3 tools/ipc_smoke.py
 | custom_data `Ground` (bool) | 透传至 tileset `custom_data`（v1 引擎忽略） | solid 语义改由场景分层表达 |
 | RuleEngine 事件管线 | 待定（先移植移动/回合最小闭环） | 见 Roadmap |
 
-## 历史实现（非当前 API）：阶段 2 设计：Godot → tro-scene 资产管线（定稿）
+## 历史实现（非当前 API）：阶段 2 设计：Godot → tro-scene 资产管线（定稿，原文归档 docs/history.md）
 
-> **注（2025-09-05）**：本章 v1/v1.1 格式已被 tro-scene/tro-tileset **v2 取代**（单 tileset 限制、scene tiles 跳过等，见下方「阶段 3 设计」章节）；权威字段定义以「资产规范：tro-scene v2」为准。本章仅作设计沿革保留。
+> **注**：本章 v1/v1.1 格式已被 tro-scene/tro-tileset **v2 取代**（权威定义见「资产规范」）；**完整原文归档于 `docs/history.md`**。沿革要点：`editor/`（Godot 4.7 项目）+ scene_exporter 插件（编辑器菜单 + headless runner 双通道，产物直写 `../assets/`）；tro-tileset v1（`tiles[]` 数组顺序即 tile id、terrain_set/custom_data 透传、SceneCollection 场景 tile 跳过）；tro-scene v1.1（可选单 `tilemap.tileset` 引用——有则 tiles=id、无则 palette 索引；实体 `props` 透传；层 `origin`）；Godot 映射 = Node2D metadata 标注（`type` 必填、`w/h/color/solid` 可选，坐标系与 tro-scene 天然一致零换算）；引擎侧新增 tileset 模块（图集渲染 + 最近邻采样），solid 语义修正为「层矩形外 = 无数据 = 不阻挡」。
 
-### 目录与数据流
+## 历史实现（非当前 API）：阶段 3 设计：tro-scene/tro-tileset v2 与素材重整（定稿，2025-09-05，原文归档 docs/history.md）
 
-```
-editor/  (Godot 4.7 项目, 用户画关卡)
-   │  scene_exporter 插件: 编辑器菜单 或 headless CLI
-   ▼
-assets/scenes/*.json     (tro-scene v1.1, 引擎热重载监听)
-assets/tilesets/*.json   (tro-tileset v1)
-assets/textures/*.png    (导出时自动从 editor/assets 拷贝)
-```
-
-- 导出器以 `ProjectSettings.globalize_path("res://")` 定位并写入 `../assets/`。
-- `editor/` 由 `trogue-orign/tools/` 复制而来（保留原 .import/uid 引用），项目名 trogue-editor；原 `tileset_exporter` 插件保留可用。
-
-### tro-tileset v1（新资产类型）
-
-```json
-{
-  "format": "tro-tileset", "version": 1,
-  "texture": "textures/Tile Set.png",
-  "tile_width": 16, "tile_height": 16,
-  "columns": 5, "rows": 7,
-  "tiles": [
-    { "id": 0, "col": 1, "row": 3,
-      "terrain_set": 0, "terrain": 0, "custom_data": {"Ground": true} }
-  ]
-}
-```
-
-- **`tiles[]` 数组顺序即 tile id**（0..N-1），id 是 tro-scene tiles 引用的稳定键（TileSet 里增删 tile 会导致 id 漂移——重导出场景即可，约定单次编辑会话内 tileset+scene 成对重导）。
-- `terrain_set`/`terrain`/`custom_data` 为透传字段，v1 引擎忽略；autotile 所需的 bitmask/peering_bits 最终格式在 autotile 阶段定义。
-- `TileSetScenesCollectionSource`（如 tree.tscn）：v1 跳过 + warning，v1.1 映射为实体模板。
-
-### tro-scene v1.1（向后兼容变更）
-
-- `tilemap` 新增可选字段 `"tileset": "tilesets/xxx.json"`（相对 assets/）。
-  **有 tileset → tiles 值 = tile id；无 tileset → v1 的 palette 索引语义**（demo.json 零迁移）。渲染器按场景级 tileset 是否存在走图集或色块；v1 限定整个场景共享一个 tileset（多个 TileSet 资源后置）。
-- 实体新增可选 `"props": {...}` 自由对象：导出器把实体节点上除 type/w/h/color 外的全部 metadata 收进来；引擎暂不读取（schema 保留），为玩法移植预留。
-- 其余字段与语义规则不变。
-
-### Godot → tro-scene 映射规则（权威）
-
-| Godot | tro-scene |
-|---|---|
-| TileMapLayer 节点 | `tilemap.layers[]` 一项：`name`=节点名；`solid`=节点 metadata `solid`（bool，缺省 false）；tiles = 每个 used cell 的 atlas coords 查 tileset 得 id（未收录 tile → warning + 跳过） |
-| 实体节点 = 带 metadata `type` 的 Node2D 派生节点 | `entities[]` 一项：`id`=节点名（须唯一）；`x/y`=global_position（**Godot 与 tro-scene 坐标系天然一致：原点左上、y 向下、cell(0,0)=像素(0,0)，零换算**）；`w/h`=metadata（缺省 tile 尺寸）；`color`=metadata（缺省白）；其余 metadata → `props` |
-| TileSetAtlasSource + 贴图 | tro-tileset；贴图文件自动拷到 `../assets/textures/` |
-| TileSet custom_data | tileset `custom_data` 透传 |
-
-实体标注规范（给用户的操作指引）：给节点加 metadata（检查器 → Node → Metadata）：`type`（必填，如 "player"/"goblin"）、可选 `w`/`h`/`color`。
-
-### 导出插件 v2（scene_exporter，实现中）
-
-- 编辑器菜单：`Project > Tools > Export tro-tileset...` / `Export tro-scene...`
-- headless runner（Agent 自动化通道）：`godot --headless --path editor --script res://addons/scene_exporter/headless_export.gd -- scene=res://assets/test.tscn`
-- 产物直接写 `../assets/`，引擎侧即可热重载。
-
-### 引擎侧变更（B1，图集渲染）
-
-- 新模块 `tileset`：`tg_tileset_load(path)`（texture 路径相对 `assets/` 解析，`SetTextureFilter(TEXTURE_FILTER_POINT)` 保持像素风）。
-- `TgWorld` 增加场景级 tileset 引用；layer 渲染按 tileset 有无走 `DrawTextureRec` 图集区域或 palette 色块。
-- 热重载监听仍仅 `assets/scenes/`（tileset/纹理变更需重启或 IPC reload，已知限制）。
-
-## 历史实现（非当前 API）：阶段 3 设计：tro-scene/tro-tileset v2 与素材重整（定稿，2025-09-05）
-
-背景：用户大批更换素材并重新标注，借此窗口对资产格式做**破坏性升级**（v2 不兼容 v1，v1 资产全部重导出）。目标：消除「实体是色块」「整场景单 tileset」「树被跳过」三个复刻 LÖVE 版画面的最大障碍。
-
-### schema v2 要点（权威定义见「资产规范」章节）
-
-- tro-scene v2：`tilemap.tilesets[]`（多 tileset，名字引用）+ 层级 `tileset` 引用；palette 模式保留且与图集模式互斥；实体新增 `sprite`（图集形态 / 独立贴图形态）与 `z`（渲染排序键）；version 必须 = 2。
-- tro-tileset v2：新增 `terrain_sets`（mode + terrains 元数据）与 per-tile `peering_bits`（仅该 mode 用到的邻位）；其余同 v1（tiles[] 顺序即 id、texture 单贴图）。
-
-### 导出器 v3（scene_exporter）
-
-- **多 TileSet**：场景内每个 TileMapLayer 可引用不同 TileSet；每个含图集 tile 的 TileSet 导出为独立 tro-tileset（name = .tres 文件名，重名加 `_N` 后缀），层写 tileset 引用；所有 TileSet 的 tile 尺寸必须一致（v2 约束）。
-- **场景 tile → 实体**（TileSetScenesCollectionSource，如 tree.tscn）：实例化模板场景，读第一个 Sprite2D——贴图（AtlasTexture 取其 atlas + region）、`offset`、`centered`；足印 w/h 取模板根 metadata `w`/`h`，否则第一个 RectangleShape2D 的 size，否则 tile 尺寸；`type` 取根 metadata `type`，否则场景文件名。模板根无 `solid` metadata 时**缺省导出为 solid:true**（树类覆盖物需要阻挡；普通实体仍缺省 false），可显式加 metadata `solid: false` 关闭。层内每个场景 tile cell 生成实体 `{id: <type>_N, x/y = cell 左上角, sprite = 独立贴图形态}`；贴图偏移统一换算为「sprite 左上角世界坐标 = 贴图节点全局位置 + Sprite2D.offset − (centered ? 贴图尺寸/2 : 0)」，相对 cell/实体左上角即得 `sprite.offset`（如 tree.tscn：cell 左上 + (tw/2 − rw/2 + 0, th/2 − rh/2 − 38)）。场景 tile 的 Godot `z_index` 忽略——层级由引擎 y-sort 表达，需要微调时给实体节点加 metadata `z`。
-- **实体 Sprite2D**：实体节点自身或其子树的第一个 Sprite2D → `sprite` 字段；region 恰好等于某 tileset 的 tile 矩形 → 图集形态，否则独立贴图形态；centered 居中换算同上（相对实体节点位置）；flip 忽略并警告。
-- **peering_bits 导出**：按 terrain set 的 mode 决定导出哪些邻位（sides → 4 边；corners → 4 角；corners_and_sides → 8 邻位），值 = terrain 序号，未连接的邻位省略。
-- 保留行为：metadata `type` 必填、`w`/`h`/`color`/`solid`/`background` 为保留名、其余 metadata → `props`、空层跳过、alternative tile 忽略 + warning。
-
-### 引擎侧 v2
-
-- `TgWorld` 持有 tilesets 数组（≤8，含 name）；`TgTileLayer` 增加本层 tileset 指针；`TgEntity` 增加 `sprite`（TgSprite：tileset 索引 + tile id 或独立贴图路径 + region + offset）与 `z`。
-- 渲染：层按各自 tileset 走图集或 palette 色块；实体有 sprite → 画贴图（tint = color），无 sprite → 色块 + 描边；实体绘制前按 (y, z) 稳定排序；独立贴图经 render 模块的路径缓存懒加载（`tg_render_shutdown()` 统一释放）。
-- 热重载监听仍仅 `assets/scenes/`（tileset/纹理变更需重启或 IPC reload，已知限制）。
-
-### v2 范围外（后续阶段）
-
-- 迷雾/视野、移动 tween 动画：游戏层数据 + 表现层，待玩法移植时做。
-- 运行时 autotile：静态关卡由 Godot 地形画笔烘好变体，引擎消费 peering_bits 仅在动态改图时需要。
-- peering_bits/props/custom_data 引擎消费。
+> **注**：v2 权威字段定义已并入「资产规范：tro-scene v2 / tro-tileset v2」，**完整原文归档于 `docs/history.md`**。沿革要点：v2 破坏性升级——多 tileset（`tilesets[]` + 层引用，palette 与图集互斥）、实体 `sprite`（图集/独立贴图双形态）+ `z` + `solid`、tileset v2 增 `terrain_sets`/`peering_bits`；导出插件 v3——多 TileSet 分组导出（一层一贴图约束）、场景 tile（tree.tscn 类）实例化转实体（solid 缺省 true、足印取 RectangleShape2D、贴图 offset 换算）、实体 Sprite2D → sprite（region 命中 tile 矩形 → 图集形态）、peering_bits 按 mode 导出、headless 多场景逗号分隔；引擎 v2——(y, z) 稳定排序复刻 LÖVE 层级、独立贴图路径缓存、solid 实体参与碰撞（里程碑 5 起 C++ 边界已重定）。已知 v2 限制：一层一贴图、tileset/纹理变更不热重载、场景 tile z_index 忽略（metadata `z` 微调）。v2 范围外：迷雾/移动 tween（M6 起游戏层自管）、运行时 autotile、props/custom_data 消费。
 
 ## Roadmap
 
@@ -542,43 +481,21 @@ assets/textures/*.png    (导出时自动从 editor/assets 拷贝)
 - [x] tro-scene/tro-tileset v2：多 tileset + 实体 sprite/z/solid + 场景 tile → 实体（导出插件 v3）
 - [x] 动画资产与插件统一：tro-scene v2.1（实体 animations + bare 三态）+ tro-animations v1 + 插件 v4（AnimatedSprite2D 导出/纯实体场景/独立动画导出）+ 删 tileset_exporter
 - [x] **C++ 引擎里程碑（原 M5A 扩展，2026-09-07 完成）**：C++20/纯 C++ API/RAII + nlohmann+json 替换 + 无 `TgWorld`/实体池边界重构 + 引擎内置帧动画播放器（消费 tro-animations）+ Tween 补间原语 + C++ game demo（计划 `docs/plan-5.md` 已通过审查并落地）
+- [x] **移植 trogue-orign 最小闭环（2026-09-09 完成）**：回合制（玩家回合 → 敌方回合 → 回合+1）+ 单格 8 向移动/碰撞（tile solid + 实体互斥 + 斜切切角）+ 敌方静止策略 + 手写 forest 关卡 + IPC `turn`/`move`/`wait` 回合命令 + 无窗口单测（计划 `docs/plan-6.md` 已通过审查并落地）
+- [x] **IPC 事件通道（2026-09-09 完成）**：engine `tg::Ipc` 新增 subscribe/unsubscribe/connections 传输层保留命令 + publish/disconnect/connections() API + subscribe 可选 filter 顶层等值匹配（单实体观测）；断开即订阅清零、事件超限无兜底直接断开（判别式保护）；game `events` 目录命令（注册表当前为空，不实现任何具体 game 事件）；计划 `docs/plan-7.md` 三轮审查通过并落地
 - [ ] autotile/bitmask 渲染（tileset v2 的 peering_bits 已透传）
-- [ ] 移植 trogue-origin：移动+碰撞+回合制最小闭环（InputSystem/MovementSystem/TurnSystem 对应物）+ IPC 回合命令（依赖 C++ 里程碑）
+- [ ] 敌人 AI 与战斗（视线/追击/状态机、能力系统、伤害与 HP 结算、A* 寻路）
 - [ ] RuleEngine 事件管线 C++ 化
 - [ ] 二进制资产格式（可选，JSON 为准）
 
 ## 历史实现阶段记录（非当前 API）
 
-- **2025-08-31 MVP（已完整验证）**：
-  - Debug + Release 双配置构建通过。
-  - `tools/ipc_smoke.py` 15/15 通过（hello/ping/status/list_entities/spawn/get_entity/set_entity 移动+颜色/despawn/截图落盘/reload/player 位置保留/quit）。
-  - watcher 实测 4 项：① 改坐标+新增实体 → reloads 自增且资产生效；② player 运行时位置保留；③ 还原资产 → goblin 回原位、probe 消失；④ 坏 JSON → 解析失败不计数、不破坏旧场景、引擎继续响应。
-  - 开发中修掉的 bug：spawn 唯一性检查早于 active 置位导致全体实体被错误改名 `_2`；raylib `TakeScreenshot` 破坏绝对路径（改用 LoadImageFromScreen+ExportImage）；热重载位置保留语义收窄为仅 `player`（原实现会让编辑器对 NPC 的改动永远不可见）。
+> **2025-08-31 MVP ~ 2026-09-07 里程碑 4 的完整实现记录归档于 `docs/history.md`**（其描述的 C 时代实现已在里程碑 5 整体删除）；以下为摘要，里程碑 5 起保留全文。
 
-- **2025-09-01 阶段 2：Godot → tro-scene 资产管线（已端到端验证）**：
-  - `editor/`（Godot 4.7 项目）+ `scene_exporter` 插件：编辑器菜单（Export tro-tileset/tro-scene）与 headless runner 双通道；texture 自动拷贝到 assets/textures/。
-  - tro-tileset v1 落地（tiles[] 顺序即 id，bitmask/peering/custom_data 透传）；tro-scene v1.1（可选 `tilemap.tileset` 引用 + 实体 `props` + 层 `origin`），palette 模式零迁移。
-  - 引擎新增 tileset 模块（`tg_tileset_load/destroy`、`DrawTextureRec` 图集渲染、最近邻采样）；solid 语义修正为"层外=无数据=不阻挡"。
-  - 端到端：`godot --headless` 导出 `test.tscn` → 引擎加载 → 截图确认贴图渲染位置正确；`tile_map_layer.tscn` 同样通过；demo.json 回归 15/15。
-  - 已知 v1 限制：scene tiles（tree.tscn）跳过（导出 warning + 引擎留空）；多 TileSet 资源不支持；tileset/纹理变更不触发热重载。
-  - 提交前 subagent 评审修复：world_swap 泄漏旧 tileset 及其 GPU 纹理（每次重载累积）；编辑器菜单导出少传 tree_root 参数（headless 测试掩盖）；热重载防抖改为**尾沿补触发**（窗口内连发不丢事件，实测验证）；spawn 复用 despawn 空槽；导出器支持层节点 transform 计入 origin、跳过空层、Color 类型 metadata 规范化；tileset/实体解析严格化；端口参数校验。
-
-- **2025-09-05 阶段 3：tro-scene/tro-tileset v2 与素材重整配套（已端到端验证）**：
-  - schema v2 破坏性升级（详见「资产规范」与「阶段 3 设计」）：多 tileset（`tilemap.tilesets` + 层引用，palette 与图集互斥）、实体 `sprite`（图集/独立贴图双形态）、`z`、`solid`；tro-tileset v2 透传 terrain_sets/peering_bits。
-  - 导出插件 v3：多 TileSet 分组导出（一层一贴图约束）、场景 tile（tree.tscn 等）自动转实体（solid 缺省 true、足印取 RectangleShape2D）、实体 Sprite2D → sprite、peering_bits、headless 多场景逗号分隔；独立贴图自动拷贝。
-  - 引擎 v2：world 持 tilesets 数组 + 层级 tileset 指针；实体贴图渲染（tint=color）；(y, z) 稳定排序复刻 LÖVE「同行树先画」；solid 实体参与碰撞（is_solid_at 与 rect_hits_solid 对称）；独立贴图缓存（失败哨兵防每帧刷日志）+ `tg_render_shutdown`。
-  - 端到端：headless 导出 test.tscn → 56 棵树实体化 → 引擎加载 + 截图；连续 6 次 reload 实体稳定；demo.json 回归 15/15；Debug/Release 双构建零警告；评审 subagent 另行 valgrind 验证 3 次热重载零泄漏。
-  - 评审修复：set_error 自重叠 UB；实体图集 sprite 引用的未注册 tileset 组未写入 tilemap.tilesets；tg_parse_hex_color 提前清零默认色；z 放宽为 number、solid 仅 true 字面量（语义已入文档）。
-  - 已知 v2 限制：一层一贴图（混用需拆 TileMapLayer）；tileset/纹理变更不热重载（重启或重导出）；场景 tile z_index 忽略（用 metadata z 微调）；独立贴图重名会覆盖。
-
-- **2026-09-07 里程碑 4：动画资产与插件统一（已端到端验证）**：
-  - 计划书 `docs/plan-4.md` 走完开工门禁（subagent 审查 PASS + 用户批准）后开工。
-  - schema v2.1（权威定义见「资产规范」）：实体 `animations` 完整帧表（textures 索引 + name/fps/loop/frames），引擎透传不消费、静态画面靠默认动画首帧 `sprite`；tro-scene 三态模式（图集/palette/bare 纯实体场景）；独立 tro-animations v1 资产。
-  - 导出插件 v4：AnimatedSprite2D → sprite 首帧 + animations 全帧表（AtlasTexture 取 atlas+region，fps/loop 透传）；纯实体场景导出（bare：无 tilesets/palette/层）；headless `animations=` 通道 + 菜单「Export tro-animations...」（撤「Export tro-scene...」菜单，headless scene= 保留）；root 单节点素材可直接作实体导出。
-  - 引擎：scene.c 三态判定（bare 合法需无 tilesets/palette 且层空/缺失），demo/test 场景零回归。
-  - 插件统一：删 `tileset_exporter`，仅启用 `scene_exporter`。
-  - 端到端：soldier 导出 tro-animations 7 动画 43 帧逐项一致（attack01/02/03/death/hurt/idle/walk，fps/帧数/region 100×100）；bare 场景引擎加载 + IPC 可见 + 贴图加载成功；冒烟 23/23；Release 构建通过。
-  - 评审修复：AGENTS.md 示例路径与 `_texture_rel` 平铺输出一致；SpriteFrames 空帧降级 warning 不炸整个场景导出；headless `animations=` 前缀连写兼容；错误提示覆盖 bare。
+- **2025-08-31 MVP**：world/scene/render + tro-scene v1 + 热重载 + tro-ipc 落地；冒烟 15/15、watcher 实测 4 项；修掉 spawn 改名竞态、`TakeScreenshot` 破坏绝对路径（改 LoadImageFromScreen+ExportImage）、热重载位置保留收窄为 `player`。
+- **2025-09-01 阶段 2（Godot 资产管线）**：editor/ + scene_exporter v2（菜单 + headless 双通道）；tro-tileset v1 / tro-scene v1.1；引擎 tileset 模块（图集渲染）；端到端 headless 导出 → 引擎加载截图确认；评审修复 world_swap 泄漏、防抖尾沿补触发、spawn 复用空槽等。
+- **2025-09-05 阶段 3（v2 素材重整）**：schema v2 破坏性升级（多 tileset / 实体 sprite/z/solid）+ 导出插件 v3（场景 tile 转实体、solid 缺省 true）+ 引擎 v2（(y,z) 稳定排序、独立贴图缓存、solid 实体碰撞）；56 树实体化端到端、valgrind 零泄漏；评审修复 set_error 自重叠 UB 等。
+- **2026-09-07 里程碑 4（动画资产与插件统一）**：schema v2.1（实体 animations + bare 三态）+ tro-animations v1 + 插件 v4（AnimatedSprite2D 导出/纯实体场景/独立动画导出）；引擎透传不消费；soldier 7 动画 43 帧逐项一致；冒烟 23/23。
 
 - **2026-09-07 里程碑 5：C++ 引擎迁移（已完整验证）**：
   - 计划书 `docs/plan-5.md`（综述）与 `docs/plan-5.1.md`~`docs/plan-5.6.md`（分卷）走完开工门禁（subagent 审查 PASS + 用户批准）后开工；`docs/plan-5.old-c11.md`（C11 版历史计划）作废归档。
@@ -588,3 +505,20 @@ assets/textures/*.png    (导出时自动从 editor/assets 拷贝)
   - C++ game demo（`game/src/main.cpp`）：窗口/相机/渲染、WASD 移动 + 静态碰撞、动画/Tween 示范、热重载（Watcher+F5+IPC reload，candidate load → 帧外 swap）、全部 IPC 命令由 game handler 实现；`tools/ipc_smoke.py` 23 项断言全过。
   - 测试体系：无窗口单测 5 个 + OOP/ECS consumer smoke 2 个（Debug/Release/ASan+UBSan 三配置 ctest 各 7/7）；测试库 seam 白名单精确 5 符号（`render_test_*`×2 + `asset_test_*`×3），生产库零 seam；Debug/Release 双构建零告警（`-Wall -Wextra -Wpedantic`）。
   - 门禁评审修复（两轮）：空帧 clip 播放永不结束/done 挂死、Tween tick 回调再入迭代器失效 UB、tile 查询「极大但有限」坐标 int 转换 UB、draw_rect 忽略 color 恒画白、LayerInfo.nonempty 计数未写入快照。
+
+- **2026-09-09 里程碑 6：移植 trogue-orign 最小闭环（已完整验证）**：
+  - 计划书 `docs/plan-6.md` 走完开工门禁（两轮审查 PASS：canDiagonalMove 语义写反、IPC move 斜向自相矛盾等修正后复审通过；用户批准）后开工。
+  - `game_core`（game 层纯逻辑、无窗口/无渲染依赖）：回合状态机（玩家回合 → 敌方回合 → 回合计数 +1，对齐原版 turn.lua）、单格 8 向移动裁决（tile solid + 实体互斥 + 斜切切角，对齐原版 coordinates.lua:canDiagonalMove「仅当两相邻正交格都被阻挡才禁止斜切」）、敌方回合为静止策略（同步结算不驻留 EnemyTurn）、`GameState` 唯一所有权（actor 表 + 回合状态，main.cpp 只读快照渲染/IPC）。
+  - `game/src/main.cpp` 改为回合制 demo：键盘 WASD/方向键 + Q/E/Z/C 斜向 + 空格等待、实体坐标统一 tile 网格（像素 = grid×16）、(y, z) 稳定排序显式绘制、玩家平滑插值、热重载保留玩家位置与回合数（失败安全）；IPC 新增 `turn`/`move`/`wait` 回合命令（tro-ipc v1.1 只增不改，dx/dy 严格整数 -1..1，非整数报错不静默截断；invalid/blocked 走成功包络 data.result，非玩家回合走 error 包络——同步结算下为未来异步分支预留；help 同步登记）。
+  - 资产：新增手写 forest.json（palette 地面 + solid 墙层外框/内部障碍 + 玩家与 3 敌人），可热重载。
+  - 测试体系：无窗口单测 `game_core_test`（8 用例：导入/移动消耗回合/地形与实体阻挡不消耗/单侧堵可切角/双侧堵禁止/等待/无玩家拒绝）接入 CTest（Debug/Release 各 8/8）；`tools/ipc_smoke.py` 新增 7 项场景无关回合断言（30/30）；Debug/Release 双构建零告警。
+  - 门禁评审修复：测试块作用域 asset 析构致 `GameState::asset` 悬垂崩溃（asset 提升到函数作用域）；空场无 asset 时 tile_is_solid 恒真导致切角测试误判（改用 forest 场地 + 手摆棋子）；移动 dx/dy 非整数被 nlohmann get<int> 静默截断消耗回合（改 is_number_integer 拒绝）。
+
+- **2026-09-09 里程碑 7：IPC 事件通道（已完整验证）**：
+  - 计划书 `docs/plan-7.md` 三轮审查 PASS（①判别式漏洞：publish 若复用 send_packet 会向订阅连接发无 event 键兜底行 → 改出站路径分叉「事件超限无兜底行直接断开」；②`1≠1.0` 口径与 nlohmann 实测相反 → 改「数值相等」并钉死 find() 缺键探测；③订阅表模型/超限措辞随 filter 同步 → 复核 PASS）。范围裁定（用户拍板）：**engine-only 通道，不实现任何具体 game 事件**（MoveStarted 等仅为协议示例）；move/tween 是 game 层测试脚手架不触碰。
+  - engine `tg::Ipc`：conn_id 单调不复用、按连接订阅表（(事件名, filter) 二元组，同名不同 filter 并存）、close_slot 单点收口「断开即订阅清零」、保留命令 subscribe/unsubscribe/connections（ping 档，无 handler 可用，先于 game handler 不可覆盖）、publish 非阻塞直写（dump 异常跳过不断开；超限无兜底行断开 filter 匹配订阅者；EAGAIN 断开慢消费者）、disconnect(conn_id)/connections() API；Release 桩同步；ipc.cpp 过时注释修正 + handle_line fd 快照重入因果链钉死。
+  - subscribe 可选 filter（**ECS 单实体观测**，用户拍板）：data 顶层字段 JSON 等值匹配（AND、缺键不匹配、数值相等 `1==1.0`、空 object 恒真）；engine 不识键语义，可过滤字段由 game 注册表文档化。
+  - game 仅 +`events` 目录命令（空注册表）+ help 登记。
+  - 测试：`tools/tests/ipc_test.cpp` 双分支（Debug 真实 loopback 9 组用例：订阅/退订全量集、校验、分流、filter 匹配、handler 内 publish 先于响应、超限断开、慢消费者 SO_RCVBUF 压小有界收敛、disconnect/conn_id 单调、无 handler 保留命令；Release 桩 3 checks）接入 CTest（两配置 9/9 对称）；`tools/ipc_smoke.py` +12 通道断言（44/44）；Debug/Release 双构建零告警。
+  - 检查修复：smoke「断开清零」断言补连接计数（原断言在 EOF 未感知时假通过）；超限用例补「不匹配者不收行不断开」半边；docstring 版本统一 v1.2。
+  - AGENTS.md 超 workspace 指令预算（65536B）→ 阶段 2/3 设计原文与 MVP~M4 完整记录拆分归档 `docs/history.md`（用户拍板：AGENTS.md 留摘要 + 指针，信息不丢）。
