@@ -126,7 +126,7 @@
 - `tg::SceneEntity` 是 schema 的通用值快照，不是 `TgEntity`；引擎不得提供按 id 改位置、spawn、despawn 或按 `type` 分支的通用运行时 API。
 - tile 查询（`is_solid_at`/`rect_hits_solid`/`tile_at`）只查显式标记 solid 的 tile 层，返回可区分的错误/清除/实体；descriptor 的 `solid` 只作 game 导入提示，不自动加入引擎碰撞集合。
 - 渲染：`tg::render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语，传入快照/变换/tint。对象排序、相机与 UI 属 game。
-- **动画**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer`（播放器）消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、帧事件与完成回调、`co_await` 完成；**它输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。实体 descriptor 的 `animations` 由 asset 解析为可查询的动画集；game 把播放器绑定到自己的对象并决定触发/切换。
+- **动画**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer`（播放器）消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、暂停/恢复与查询（`paused()`）、帧事件与完成回调、`co_await` 完成；**它输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。实体 descriptor 的 `animations` 由 asset 解析为可查询的动画集；game 把播放器绑定到自己的对象并决定触发/切换。
 - **Tween**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。
 - `tg::Ipc` 不持有 scene/world 指针；只负责 JSON-lines 分帧、响应顺序、包络、**事件通道**（传输层保留命令 `subscribe`/`unsubscribe`/`connections` + `publish`/`disconnect`/`connections()` API，语义见「IPC 协议」）与 game callback。命令语义由 game 注册和实现；事件是纯传输——engine 不识事件名与 filter 键的任何语义。
 - `tg::Watcher` 只报告监听目录内安全的 `.json` basename 变化；game 决定何时加载新资产、是否 reconcile、如何保留或删除运行时状态。
@@ -154,8 +154,8 @@ trogue/
 │   └── src/               # 目标：scene_asset.cpp render.cpp animation.cpp tween.cpp
 │                          #   hotreload.cpp ipc.cpp + 私有资源模块
 ├── game/                  # 游戏层（引擎消费方；游戏概念禁止流入 engine/）
-│   ├── CMakeLists.txt     # 可执行 trogue（输出到 build/bin/）
-│   └── src/               # main.cpp + 游戏自有模块（将成长为 roguelike 本体）
+│   ├── CMakeLists.txt     # 可执行 trogue + anim_viewer（输出到 build/bin/）
+│   └── src/               # main.cpp + anim_viewer.cpp + 游戏自有模块（将成长为 roguelike 本体）
 ├── assets/                # 游戏资产（引擎按 CWD assets/ 约定读取）
 │   ├── scenes/            # demo.json（手写示例）+ test.json/tile_map_layer.json（Godot 导出）
 │   ├── animations/        # tro-animations v1 独立动画资产（导出产物）
@@ -168,7 +168,7 @@ trogue/
 │   ├── ipc_smoke.py       # IPC 冒烟测试（61 项断言）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── build/  build-release/ # 构建产物（gitignore）
-├── reference/             # Godot 引擎源码参考副本（gitignore；查证引擎行为用，见「依赖与环境」）
+├── reference/             # 引擎源码参考副本（gitignore；Godot 4.7.2 + raylib 6.0，查证行为用，见「依赖与环境」）
 └── trogue-orign/          # 只读参考（gitignore）
 ```
 
@@ -182,6 +182,9 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 
 # 运行（必须从项目根目录，资产路径相对 CWD）
 ./build/bin/trogue [--scene assets/scenes/demo.json] [--port 48764]
+
+# 动画查看器（帧动画触发/切换验证台；独立 IPC 端点 48765，见 IPC 节）
+./build/bin/anim_viewer [--scene assets/scenes/soldier_animated_sprite_2d.json] [--port 48765] [--zoom 3]
 
 # Release 构建（IPC/热重载为 no-op 桩）
 cmake -B build-release -S . -DCMAKE_BUILD_TYPE=Release -DTROGUE_DEBUG=OFF
@@ -210,6 +213,10 @@ python3 tools/ipc_smoke.py
 > **2026-09-07 环境事故记录**：构建曾因 raylib 被 `emerge --depclean` 清理（未加入 world 包集合）而整体失败，同时发现 glfw 缺 `X` USE flag。教训：依赖变化由用户维护（world 集合 + USE flags），Agent 只负责在 CMake 侧给出清晰的探测与报错。修复：用户将 raylib 加入 world 并安装；glfw 需加 `X` 后重编。
 
 > **Godot 行为查证约定（2026-09-09 拍板）**：需要确认 Godot 引擎行为语义（渲染公式、API 行为、编辑器数据模型等）时，**以本地源码为准**：Godot 4.7.2-stable 完整源码已下载至 `reference/godot-4.7.2-stable/`（gitignore，不入仓库；来源 `https://github.com/godotengine/godot/archive/refs/tags/4.7.2-stable.tar.gz`，与 editor/ 实际使用的 Godot 版本一致），直接 grep/阅读实现；官方文档用 browser-mcp 查看 `https://docs.godotengine.org/en/stable/`。不得凭记忆或旧版本资料推断 Godot 语义。
+
+> **raylib 行为查证约定（2026-09-10 拍板）**：raylib 6.0 完整源码已放置于 `reference/raylib/`（gitignore，不入仓库）；需要确认 raylib API 行为/渲染语义时直接 grep/阅读本地源码，不得凭记忆推断。
+
+> **PixelLab MCP 使用约定（2026-09-10 拍板）**：凡调用 PixelLab MCP 工具（素材生成/动画/像素转换等），**必须先查看其文档**：`https://api.pixellab.ai/mcp/docs`，以文档为准确认参数与行为，不得凭记忆猜测。
 
 ## 资产规范：tro-scene v2.1
 
@@ -332,6 +339,8 @@ python3 tools/ipc_smoke.py
 > v1.1 在 v1 基础上**只增不改**：新增观测命令（query_entities/layers/solid_at/get_tile）与实体快照字段（z/solid/sprite/v）；包络、传输、既有命令语义不变，协议版本号仍为 1（老客户端不受影响）。设计目标：非视觉 Agent 不看截图也能摸清实体与地形。
 
 > v1.2 在 v1.1 基础上**只增不改**（2026-09-09，里程碑 7）：新增**事件通道**——传输层保留命令 `subscribe`/`unsubscribe`/`connections`、game 层 `events` 目录命令、engine `publish`/`disconnect`/`connections()` API；包络、传输、既有命令语义不变，协议版本号仍为 1（老客户端不受影响）。设计目标：Agent 免轮询的 inspector 式可观测（语义见「事件通道语义」）。
+
+> **anim_viewer 独立端点（2026-09-10，里程碑 11）**：`game/src/anim_viewer.cpp` 是与 demo 平级的 engine 消费者，自带 `tg::Ipc` 实例监听 **48765**（`--port` 可改），命令语义与上方 demo 命令表无关：`status`（scene/clip/clip_index/frame/paused/playing/zoom/fps）、`anim`（`op`: `toggle_pause`｜`next_clip`｜`play`+`clip`，响应=操作后 status 同构数据）、`screenshot`（`path?`，缺省 `anim_view_<时间戳>.png`）、`quit`、`help`。IPC op 与键鼠（任意键暂停/恢复、左键轮转 clip）**共用同一组动作函数**——E2E 走 IPC 即覆盖触发逻辑本体。
 
 - TCP `127.0.0.1:48764`（`--port` 可改），仅本机可达。
 - JSON-lines：每行一个请求对象，每行一个响应。
@@ -498,6 +507,8 @@ python3 tools/ipc_smoke.py
 - [x] **IPC 事件通道（2026-09-09 完成）**：engine `tg::Ipc` 新增 subscribe/unsubscribe/connections 传输层保留命令 + publish/disconnect/connections() API + subscribe 可选 filter 顶层等值匹配（单实体观测）；断开即订阅清零、事件超限无兜底直接断开（判别式保护）；game `events` 目录命令（注册表当前为空，不实现任何具体 game 事件）；计划 `docs/plan-7.md` 三轮审查通过并落地
 - [ ] autotile/bitmask 渲染（tileset v2 的 peering_bits 已透传）
 - [x] **敌人 AI + RuleEngine 最小子集 + 首批事件（2026-09-09 完成）**：game 层 EventBus（tg::Json 载荷，桥接 IPC）+ 三态状态机/视野（chebyshev≤5+Bresenham LOS）/A* 寻路（ALERT_DELAY=1、70% 游走、固定种子）+ punch→damage 管线（冷却/死亡延迟销毁/GameOver 相位）+ 首批 6 对外事件 + hp/ai 快照注入（计划 `docs/plan-9.md` 两轮审查通过并落地）
+- [x] **帧动画消费（2026-09-10 完成）**：`AnimationSet::name()` 返回所属 entity id + game `Actor::anim_set` 导入绑定 + 绘制循环采样 `current_frame()` 组合 offset + IPC 快照 `anim:{clip,frame}`；E2E 帧序列/像素比对验证（计划 `docs/plan-10.md` 已通过审查并落地）
+- [x] **动画查看器（2026-09-10 完成）**：game 层触发/切换首个消费者——独立可执行 `anim_viewer`（任意键暂停/恢复、左键轮转 clip、相机 zoom 3x 观察、自带 IPC 端点 48765）+ 引擎 `AnimationPlayer::paused()` 查询；E2E 轮转/冻结/像素比对全过（计划 `docs/plan-11.md` 已通过审查并落地）
 - [ ] 二进制资产格式（可选，JSON 为准）
 
 ## 历史实现阶段记录（非当前 API）

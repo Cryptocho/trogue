@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### 动画查看器：帧动画触发/切换交互验证台
+
+- 影响的文件: `game/src/anim_viewer.cpp`（新增）、`game/CMakeLists.txt`、`engine/include/trogue/animation.hpp`、`tools/tests/anim_tween_test.cpp`、`docs/plan-11.md`（新增）、`AGENTS.md`
+
+#### Added
+- 独立可执行 `anim_viewer`（game 层动画触发/切换首个消费者，与 demo 平级）：加载 tro-scene 场景（缺省 `soldier_animated_sprite_2d.json`，`--scene/--port/--zoom` 可改），任意键播放/暂停切换（同帧多键只切一次防奇偶抵消、ESC 为 raylib 默认退出键不参与切换）、鼠标左键按资产枚举序轮转 clip（暂停中点击 = 切换并恢复播放，引擎 play 语义）、相机 zoom 3x 观察、HUD 显示 clip/状态/操作提示；动画采样失败回退静态 sprite/色块，无动画场景交互 no-op 不崩
+- viewer 自带 IPC 端点 48765（独立于 demo 48764）：`status`（scene/clip/clip_index/frame/paused/playing/zoom/fps）、`anim`（`op`: toggle_pause\|next_clip\|play+clip，响应 = 操作后 status 同构数据）、`screenshot`（path?，复用 demo 批 flush 读屏管线）、`quit`、`help`；IPC op 与键鼠共用同一组动作函数——E2E 走 IPC 即覆盖触发逻辑本体，wire 错误消息英文对齐 demo
+- 引擎 `AnimationPlayer::paused()` 只读查询（对称 `playing()`，header inline）：调用方凭它决定 toggle，避免 game 侧自持 bool 与 play() 清暂停漂移（单一事实源）
+
+#### Tests
+- `anim_tween_test` 新增 `test_player_pause`：paused 初值/pause/resume/play 清除语义 + 暂停冻结回归钉（pause 后 advance 返回 true 不推时间、frame_index 恒定、current_frame 恒有效；resume 后 fmod 回卷帧 0 证冻结期不积累时间）
+- E2E（临时脚本驱动，不入库）：idle 推进回绕、暂停冻结 5 采样恒定/恢复推进、next_clip ×7 轮转一周且每次切换后 frame==0、play 指定 clip 与无效名报错；截图与 `Soldier_Hurt.png` 源帧 3x 像素比对最优帧 100% 命中（223/223，暂停帧精确定位）+ 读图视觉验收
+
+#### Documentation
+- AGENTS.md：目录结构/开发命令补 `anim_viewer`；IPC 节新增 anim_viewer 独立端点注记；引擎 API 边界动画行补 `paused()` 查询；Roadmap 补帧动画消费与动画查看器条目
+
 ### 帧动画消费：士兵 idle 循环渲染接入
 
 - 影响的文件: `engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/main.cpp`、`tools/tests/scene_schema_test.cpp`、`docs/plan-10.md`（新增）、`AGENTS.md`、`CMakeLists.txt`、`.gitignore`

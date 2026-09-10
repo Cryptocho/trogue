@@ -308,6 +308,53 @@ bool test_tween_reentrant_callbacks() {
     return ok;
 }
 
+// ── 暂停查询与冻结语义（plan-11 §4.5：viewer 的 toggle 依赖 paused() 单一事实源） ──
+bool test_player_pause() {
+    bool ok = true;
+    const SceneAsset& asset = inline_asset();
+    REQUIRE(asset.animation_set_count() == 1);
+    const auto& set = asset.animation_set(0);
+
+    // 初值 / pause / resume / play 清除
+    AnimationPlayer p;
+    p.bind(set);
+    CHECK(!p.paused());
+    CHECK(p.play("loop3"));
+    CHECK(!p.paused());
+    p.pause();
+    CHECK(p.paused());
+    CHECK(p.playing());            // 暂停中仍处「播放状态」（时间挂起）
+    p.resume();
+    CHECK(!p.paused());
+    p.pause();
+    CHECK(p.play("two"));          // play() 清除暂停（切 clip 即恢复播放，引擎语义）
+    CHECK(!p.paused());
+
+    // 冻结回归钉：pause 后 advance() 挂起（返回 true）但时间不推进 →
+    // frame_index 不变、current_frame 恒有效且内容不变
+    AnimationPlayer p2;
+    p2.bind(set);
+    CHECK(p2.play("loop3"));       // fps=1 → 1s/帧
+    p2.advance(1.5);               // t=1.5 → 帧1
+    CHECK(p2.frame_index() == 1);
+    p2.pause();
+    const auto frozen = p2.current_frame();
+    CHECK(frozen.has);
+    for (int i = 0; i < 5; ++i) {
+        CHECK(p2.advance(0.5));    // 挂起：true（仍在播放状态）
+        CHECK(p2.frame_index() == 1);
+        const auto f = p2.current_frame();
+        CHECK(f.has);
+        CHECK(f.texture == frozen.texture);
+    }
+    // 冻结期不积累时间：resume 后 t=3.0 → fmod 回卷帧0（若冻结期误积累，
+    // fmod 后必落非 0 帧——此断言即回归钉）
+    p2.resume();
+    p2.advance(1.5);
+    CHECK(p2.frame_index() == 0);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -315,6 +362,7 @@ int main() {
     test_player_events_and_done();
     test_player_current_frame();
     test_player_empty_clip();
+    test_player_pause();
     test_tween_float();
     test_tween_delay_repeat();
     test_tween_cancel_wait();

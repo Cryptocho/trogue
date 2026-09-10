@@ -80,6 +80,9 @@ public:
 
     bool valid() const { return set_ != nullptr; }  // 是否已绑定动画集
     bool playing() const;
+    // 暂停查询（对称 playing()；plan-11）：pause/resume 后调用方凭它决定下一次
+    // toggle，避免 game 侧自持 bool 与 play() 清暂停产生状态漂移（单一事实源）
+    bool paused() const { return paused_; }
     double time() const { return time_; }
     int frame_index() const;
 
