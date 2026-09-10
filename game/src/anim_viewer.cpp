@@ -21,9 +21,9 @@
 #include <string>
 
 #include <raylib.h>
-#include <rlgl.h>  // rlDrawRenderBatchActive（截图前强制 flush 渲染批）
 
 #include "trogue/trogue.hpp"
+#include "anim_util.hpp"
 
 namespace {
 
@@ -246,33 +246,12 @@ int main(int argc, char** argv) {
 
         if (v.asset) tg::render_scene(*v.asset);
 
-        // 士兵绘制：current_frame 采样 + 实体锚点组合（demo M10 同公式：
-        // 实体 sprite.offset + 帧自身 offset）；采样失败回退静态 sprite，
-        // 再退色块——画面永不空白
-        bool drawn = false;
-        if (v.set.clip_count() > 0) {
-            tg::SpriteDesc f = v.anim.current_frame();
-            if (f.has) {
-                f.offset = tg::Vec2{v.ent.sprite.offset.x + f.offset.x,
-                                    v.ent.sprite.offset.y + f.offset.y};
-                const auto rr = tg::render_sprite(*v.asset, f,
-                                                  tg::Vec2{v.ent.x, v.ent.y},
-                                                  v.ent.color);
-                drawn = rr == tg::RenderResult::Drawn;
-            }
-        }
-        if (!drawn && v.ent.sprite.has && v.asset) {
-            const auto rr = tg::render_sprite(*v.asset, v.ent.sprite,
-                                              tg::Vec2{v.ent.x, v.ent.y},
-                                              v.ent.color);
-            drawn = rr == tg::RenderResult::Drawn;
-        }
-        if (!drawn)
-            DrawRectanglePro(
-                ::Rectangle{v.ent.x, v.ent.y, v.ent.w, v.ent.h},
-                ::Vector2{0.0f, 0.0f}, 0.0f,
-                ::Color{v.ent.color.r, v.ent.color.g, v.ent.color.b,
-                        v.ent.color.a});
+        // 士兵绘制（共享工具 anim_util）：动画集已绑定 → 采样当前帧；
+        // 机制（offset 组合 + 静态回退 + 色块兜底）在 game::draw_entity_sprite
+        game::draw_entity_sprite(*v.asset,
+                                 v.set.clip_count() > 0 ? &v.anim : nullptr,
+                                 v.ent.sprite, tg::Vec2{v.ent.x, v.ent.y},
+                                 v.ent.color, v.ent.w, v.ent.h);
 
         EndMode2D();
 
@@ -290,16 +269,11 @@ int main(int argc, char** argv) {
         DrawText("any key: play/pause | click: next clip | ESC: quit",
                  10, 70, 16, GRAY);
 
-        // 帧末截图（game 排队；先 flush 渲染批再读屏——demo 同管线教训）
+        // 帧末截图（game 排队；管线见 game::export_screenshot：flush 批 → 读屏 → 导出）
         if (v.shot_requested) {
             v.shot_requested = false;
-            rlDrawRenderBatchActive();
-            Image img = LoadImageFromScreen();
-            if (!ExportImage(img, v.shot_path.c_str()))
-                TraceLog(LOG_WARNING, "[viewer] 截图导出失败: %s",
-                         v.shot_path.c_str());
-            UnloadImage(img);
-            TraceLog(LOG_INFO, "[viewer] 截图已写出: %s", v.shot_path.c_str());
+            if (game::export_screenshot(v.shot_path))
+                TraceLog(LOG_INFO, "[viewer] 截图已写出: %s", v.shot_path.c_str());
         }
 
         EndDrawing();

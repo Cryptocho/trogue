@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### 渲染：贴图缺失日志每路径一次
+
+- 影响的文件: `engine/src/render.cpp`
+
+#### Bug Fixes
+- 独立贴图/图集贴图缺失的错误日志从「每次绘制调用都打」改为「每路径首次失败记一次」：日志移入 loader 首失败插入哨兵处，`failed_once` 出参随之移除（60fps 缺失场景从每秒 ~120 条降为 1 条）；绘制返回值 `TextureMissing` 语义不变，头注释「每路径一次错误日志」的合同自此真实成立
+
+### 重构：动画实体绘制与截图管线抽取为 game 层共享工具
+
+- 影响的文件: `game/src/anim_util.hpp`（新增）、`game/src/anim_util.cpp`（新增）、`game/src/main.cpp`、`game/src/anim_viewer.cpp`、`game/CMakeLists.txt`
+
+#### Added
+- `game::draw_entity_sprite`：动画实体绘制单点实现——采样播放器当前帧（offset 组合 = 实体静态锚点 + 帧自身偏移）→ 静态 sprite 回退 → 色块兜底；**采样失败或绘制失败**（anim 为 null、帧无、贴图缺失/参数非法）均回退，画面永不空白；触发/绑定策略留调用方（main 的 bound_anim_set 归属校验、viewer 的 clip 判断以传 nullptr 表达）
+- `game::export_screenshot`：截图管线单点化（flush 渲染批 → 读屏 → 导出，含批 flush 教训注释）；调用方按返回值决定成功日志（失败 warning 归工具，`[game]` 前缀）
+
+#### Refactored
+- demo 与 anim_viewer 各自重复的绘制段（~30 行）与截图块（~12 行）收敛至共享工具；`rlgl.h` 依赖随之收敛至 anim_util.cpp；归属说明：工具是 game 层应用决策的组合，不下沉 engine（引擎播放器刻意不绑绘制）
+- 退化路径实测：贴图缺失场景下实体以色块兑底可见（截图像素 RGB(255,0,0) 验证），不再出现「动画帧绘制失败 → 实体隐形」的中间态（首版实现的回退链断裂已修）
+
+#### Bug Fixes
+- 截图导出失败时不再误打「截图已写出」成功日志（改按 export_screenshot 返回值决定）
+
 ### 动画查看器：帧动画触发/切换交互验证台
 
 - 影响的文件: `game/src/anim_viewer.cpp`（新增）、`game/CMakeLists.txt`、`engine/include/trogue/animation.hpp`、`tools/tests/anim_tween_test.cpp`、`docs/plan-11.md`（新增）、`AGENTS.md`

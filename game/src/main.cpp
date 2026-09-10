@@ -30,10 +30,10 @@
 #include <vector>
 
 #include <raylib.h>
-#include <rlgl.h>  // rlDrawRenderBatchActive（截图前强制 flush 渲染批）
 
 #include "trogue/trogue.hpp"
 #include "ai.hpp"
+#include "anim_util.hpp"
 #include "event_bus.hpp"
 #include "game_core.hpp"
 #include "rules.hpp"
@@ -925,35 +925,19 @@ int main(int argc, char** argv) {
                     wy = vit->second.vy;
                 }
             }
-            const ::Color rc{a->color.r, a->color.g, a->color.b, a->color.a};
-            bool drawn = false;
-            // 帧动画采样（plan-10 §3.2）：该 actor 的动画集已绑定 → 画当前帧。
-            // offset 组合 = 实体 descriptor 锚点 + 帧自身偏移（士兵 [-50,-50]+
-            // [0,0] 居中语义与静态帧一致）；采样失败回退静态 sprite。
-            if (a->anim_set >= 0 && d.has_anim && d.bound_anim_set == a->anim_set) {
-                tg::SpriteDesc f = d.anim.current_frame();
-                if (f.has) {
-                    f.offset = tg::Vec2{a->sprite.offset.x + f.offset.x,
-                                        a->sprite.offset.y + f.offset.y};
-                    const auto rr = tg::render_sprite(*d.asset, f,
-                                                      tg::Vec2{wx, wy}, a->color);
-                    if (rr == tg::RenderResult::Drawn) drawn = true;
-                }
-            }
-            if (!drawn && a->sprite.has && d.asset) {
-                const auto rr = tg::render_sprite(*d.asset, a->sprite,
-                                                  tg::Vec2{wx, wy}, a->color);
-                if (rr == tg::RenderResult::Drawn) drawn = true;
-            }
-            if (!drawn)
-                // 浮点矩形绘制（raylib DrawRectanglePro，不做 int 截断）：
-                // 与 tile 层同相机变换下严格对齐（引擎 draw_rect 会 int 截断，
-                // 移动插值中会造成 ±1px 错位/抖动，故此处直接调 raylib）。
-                DrawRectanglePro(
-                    ::Rectangle{wx, wy,
-                                static_cast<float>(game::kTileSize),
-                                static_cast<float>(game::kTileSize)},
-                    ::Vector2{0.0f, 0.0f}, 0.0f, rc);
+            // 绘制（共享工具 anim_util，plan-10 采样公式所在处）：该 actor 的
+            // 动画集已绑定 → 传播放器采样当前帧；触发/绑定策略在此调用方，
+            // 机制（offset 组合 + 静态回退 + 色块兜底）在 game::draw_entity_sprite。
+            // *d.asset 解引用依赖不变量：actors 非空 ⟹ 某次加载成功且 asset
+            // 存活（初始加载失败则无 actor；reload 失败保留旧 asset）。
+            game::draw_entity_sprite(
+                *d.asset,
+                (a->anim_set >= 0 && d.has_anim &&
+                 d.bound_anim_set == a->anim_set)
+                    ? &d.anim
+                    : nullptr,
+                a->sprite, tg::Vec2{wx, wy}, a->color, game::kTileSize,
+                game::kTileSize);
         }
 
         EndMode2D();
@@ -971,19 +955,11 @@ int main(int argc, char** argv) {
         if (d.gs.phase == game::Phase::GameOver)
             DrawText("GAME OVER - F5 reload to restart", 10, 60, 20, RED);
 
-        // 帧末截图（game 排队；帧后 ExportImage）
+        // 帧末截图（game 排队；管线见 game::export_screenshot：flush 批 → 读屏 → 导出）
         if (d.shot_requested) {
             d.shot_requested = false;
-            // 先强制 flush 渲染批（raylib 的批顶点在 EndDrawing 才真正提交 GL；
-            // 不 flush 就 glReadPixels 会拍到未绘制的残缺帧——曾致 soldier 场景
-            // 截图全黑、forest 截图丢 HUD 的误诊）。
-            rlDrawRenderBatchActive();
-            Image img = LoadImageFromScreen();
-            if (!ExportImage(img, d.shot_path.c_str()))
-                TraceLog(LOG_WARNING, "[demo] 截图导出失败: %s",
-                         d.shot_path.c_str());
-            UnloadImage(img);
-            TraceLog(LOG_INFO, "[demo] 截图已写出: %s", d.shot_path.c_str());
+            if (game::export_screenshot(d.shot_path))
+                TraceLog(LOG_INFO, "[demo] 截图已写出: %s", d.shot_path.c_str());
         }
 
         EndDrawing();

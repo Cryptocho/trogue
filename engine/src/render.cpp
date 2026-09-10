@@ -63,19 +63,17 @@ std::unordered_map<std::string, std::shared_ptr<const SharedTexture>> g_texture_
 // 失败哨兵：path → true，缓存生命周期内每路径只记一次错误日志。
 std::unordered_set<std::string> g_texture_failed;
 
-// 加载（或取缓存）独立贴图。返回空 shared_ptr 表示失败（哨兵已置）。
-// 返回的 shared_ptr 为空但不代表路径已记录失败 —— 调用方统一走 log 逻辑。
-std::shared_ptr<const SharedTexture> get_or_load_texture(const std::string& path,
-                                                         bool& failed_once) {
-    failed_once = false;
+// 加载（或取缓存）独立贴图。返回空 shared_ptr 表示失败；失败哨兵同时保证
+// 错误日志每路径只在首次失败时记一次（后续调用静默返回空）。
+std::shared_ptr<const SharedTexture> get_or_load_texture(const std::string& path) {
     if (auto it = g_texture_cache.find(path); it != g_texture_cache.end())
         return it->second;
-    if (g_texture_failed.count(path)) { failed_once = true; return {}; }
+    if (g_texture_failed.count(path)) return {};  // 已记过日志：不再尝试、不再打
     const std::string full = assets_path(path);
     Texture2D tex = LoadTexture(full.c_str());
     if (tex.id == 0) {
         g_texture_failed.insert(path);      // 哨兵：后续不再尝试
-        failed_once = true;
+        TraceLog(LOG_ERROR, "[render] 独立贴图缺失: %s", path.c_str());  // 仅首失败
         return {};
     }
     SetTextureFilter(tex, TEXTURE_FILTER_POINT);  // 像素风（沿用 C 版）
@@ -105,18 +103,18 @@ detail::SceneImpl::TilesetMeta::TileVisual atlas_tile_visual(
 
 detail::RenderStats g_render_stats;
 
-// 图集贴图装载（asset 槽位，懒）：成功返回非空 void*；失败置哨兵。
-void* load_atlas_texture(detail::SceneImpl& impl, std::size_t ts_index,
-                         bool& failed_once) {
+// 图集贴图装载（asset 槽位，懒）：成功返回非空 void*；失败置哨兵并只记一次日志。
+void* load_atlas_texture(detail::SceneImpl& impl, std::size_t ts_index) {
     auto& slot = impl.atlas_textures[ts_index];
     if (slot.texture) return slot.texture;              // 已装
-    if (slot.attempted) { failed_once = true; return nullptr; }  // 失败哨兵
+    if (slot.attempted) return nullptr;                 // 已失败：不再尝试、不再打日志
     slot.attempted = true;
     const std::string full = assets_path(impl.tilesets[ts_index].texture);
     Texture2D* t = new Texture2D(LoadTexture(full.c_str()));
     if (t->id == 0) {
         delete t;
-        failed_once = true;
+        TraceLog(LOG_ERROR, "[render] 图集贴图缺失: %s",
+                 impl.tilesets[ts_index].texture.c_str());  // 仅首失败
         return nullptr;
     }
     SetTextureFilter(*t, TEXTURE_FILTER_POINT);
@@ -154,13 +152,9 @@ RenderResult render_scene(const SceneAsset& asset) {
         if (info.tileset_index >= 0) {
             // 图集模式
             const std::size_t ts = static_cast<std::size_t>(info.tileset_index);
-            bool failed_once = false;
-            void* tp = load_atlas_texture(impl, ts, failed_once);
+            void* tp = load_atlas_texture(impl, ts);
             if (!tp) {
-                if (failed_once)
-                    TraceLog(LOG_ERROR, "[render] 图集贴图缺失: %s",
-                             impl.tilesets[ts].texture.c_str());
-                continue;  // 该层跳过（TextureMissing 由首失败记忆）
+                continue;  // 该层跳过（首失败日志已由 loader 记过）
             }
             Texture2D& tex = *static_cast<Texture2D*>(tp);
             const auto& tsm = impl.tilesets[ts];
@@ -245,13 +239,9 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
         // 图集形态
         const std::size_t ts = static_cast<std::size_t>(sprite.tileset_index);
         const auto& tsm = impl.tilesets[ts];
-        bool failed_once = false;
-        void* tp = load_atlas_texture(impl, ts, failed_once);
+        void* tp = load_atlas_texture(impl, ts);
         if (!tp) {
-            if (failed_once)
-                TraceLog(LOG_ERROR, "[render] 图集贴图缺失: %s",
-                         tsm.texture.c_str());
-            return RenderResult::TextureMissing;
+            return RenderResult::TextureMissing;  // 首失败日志已由 loader 记过
         }
         Texture2D& tex = *static_cast<Texture2D*>(tp);
         const auto tv = atlas_tile_visual(tsm, sprite.tile);
@@ -265,13 +255,10 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
         return RenderResult::Drawn;
     }
     // 独立贴图形态
-    bool failed_once = false;
     ++g_render_stats.texture_attempts;
-    auto tex_sp = get_or_load_texture(sprite.texture, failed_once);
+    auto tex_sp = get_or_load_texture(sprite.texture);
     if (!tex_sp) {
-        if (failed_once)
-            TraceLog(LOG_ERROR, "[render] 独立贴图缺失: %s", sprite.texture.c_str());
-        return RenderResult::TextureMissing;
+        return RenderResult::TextureMissing;  // 首失败日志已由 loader 记过
     }
     // region 缺省（w/h==0）→ 整图
     float rw = sprite.region.w, rh = sprite.region.h;
