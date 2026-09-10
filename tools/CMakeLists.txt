@@ -92,11 +92,14 @@ target_link_libraries(trogue_ecs_client_smoke PRIVATE trogue_engine
 add_test(NAME ecs_client_smoke COMMAND trogue_ecs_client_smoke)
 set_tests_properties(ecs_client_smoke PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-# ── game_core 无窗口单测（plan-6 §4.d；回合制核心纯逻辑，引用 game 源码） ──
-# 直接编译 tools/tests/game_core_test.cpp + game/src/game_core.cpp；
+# ── game_core 无窗口单测（plan-6 §4.d；plan-9 §3.7 扩 AI/规则/导航） ──
+# 直接编译 tools/tests/game_core_test.cpp + game/src/{game_core,nav,rules,ai}.cpp；
 # 顶层顺序 engine → tools → game 不影响源路径解析；门控同既有工具测试。
 add_executable(trogue_game_core_test tests/game_core_test.cpp tests/test_util.hpp
-               ${CMAKE_SOURCE_DIR}/game/src/game_core.cpp)
+               ${CMAKE_SOURCE_DIR}/game/src/game_core.cpp
+               ${CMAKE_SOURCE_DIR}/game/src/nav.cpp
+               ${CMAKE_SOURCE_DIR}/game/src/rules.cpp
+               ${CMAKE_SOURCE_DIR}/game/src/ai.cpp)
 target_link_libraries(trogue_game_core_test PRIVATE trogue_engine
                                                    ${TROGUE_TOOLS_NLOHMANN})
 target_include_directories(trogue_game_core_test PRIVATE

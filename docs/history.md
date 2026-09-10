@@ -137,3 +137,37 @@ assets/textures/*.png    (导出时自动从 editor/assets 拷贝)
   - 插件统一：删 `tileset_exporter`，仅启用 `scene_exporter`。
   - 端到端：soldier 导出 tro-animations 7 动画 43 帧逐项一致（attack01/02/03/death/hurt/idle/walk，fps/帧数/region 100×100）；bare 场景引擎加载 + IPC 可见 + 贴图加载成功；冒烟 23/23；Release 构建通过。
   - 评审修复：AGENTS.md 示例路径与 `_texture_rel` 平铺输出一致；SpriteFrames 空帧降级 warning 不炸整个场景导出；headless `animations=` 前缀连写兼容；错误提示覆盖 bare。
+
+---
+
+## 历史实现阶段记录（2026-09-07 里程碑 5 ~ 2026-09-09 里程碑 7）
+
+> 2026-09-09 M9 收尾时 AGENTS.md 再超 workspace 指令预算（65536B），按既定拍板模式（留摘要+指针、信息不丢）将 M5–M7 完整记录自 AGENTS.md 原文归档于此。
+
+- **2026-09-07 里程碑 5：C++ 引擎迁移（已完整验证）**：
+  - 计划书 `docs/plan-5.md`（综述）与 `docs/plan-5.1.md`~`docs/plan-5.6.md`（分卷）走完开工门禁（subagent 审查 PASS + 用户批准）后开工；`docs/plan-5.old-c11.md`（C11 版历史计划）作废归档。
+  - 引擎整体 C++20 化：公共 API 纯 C++（`namespace tg`、自由函数优先、值类型 + RAII 资源类、无继承/虚函数）；删除全部历史 C11 API（`TgWorld`/`TgEntity`/`tg_world_*` 等与旧 `.c/.h`）；资产格式（`tro-*`）不变，旧场景 JSON 零迁移。
+  - 模块落地：`SceneAsset`（只读 RAII 资产 + `tg::expected` 错误）、tile-only 查询（is_solid_at/rect_hits_solid/tile_at）、显式渲染原语（render_scene/render_sprite/draw_rect/shutdown_render）、`AnimationSet`/`AnimationPlayer`（消费实体 animations 帧表）、`TweenManager`（float/Vec2/Color 补间 + wait 协程）、`Ipc`（无 world JSON-lines 传输 + game handler）、`Watcher`（150ms 防抖尾沿）；`TROGUE_DEBUG=OFF` 编译为 API 形状不变的桩。
+  - 依赖替换：nlohmann/json（替换 jansson）、tl-expected 系统包（替换 submodule vendored）；第三方库全部走系统包/CMake 探测，删除 `third_party/` 与 `.gitmodules`（用户拍板不 vendored）。
+  - C++ game demo（`game/src/main.cpp`）：窗口/相机/渲染、WASD 移动 + 静态碰撞、动画/Tween 示范、热重载（Watcher+F5+IPC reload，candidate load → 帧外 swap）、全部 IPC 命令由 game handler 实现；`tools/ipc_smoke.py` 23 项断言全过。
+  - 测试体系：无窗口单测 5 个 + OOP/ECS consumer smoke 2 个（Debug/Release/ASan+UBSan 三配置 ctest 各 7/7）；测试库 seam 白名单精确 5 符号（`render_test_*`×2 + `asset_test_*`×3），生产库零 seam；Debug/Release 双构建零告警（`-Wall -Wextra -Wpedantic`）。
+  - 门禁评审修复（两轮）：空帧 clip 播放永不结束/done 挂死、Tween tick 回调再入迭代器失效 UB、tile 查询「极大但有限」坐标 int 转换 UB、draw_rect 忽略 color 恒画白、LayerInfo.nonempty 计数未写入快照。
+
+- **2026-09-09 里程碑 6：移植 trogue-orign 最小闭环（已完整验证）**：
+  - 计划书 `docs/plan-6.md` 走完开工门禁（两轮审查 PASS：canDiagonalMove 语义写反、IPC move 斜向自相矛盾等修正后复审通过；用户批准）后开工。
+  - `game_core`（game 层纯逻辑、无窗口/无渲染依赖）：回合状态机（玩家回合 → 敌方回合 → 回合计数 +1，对齐原版 turn.lua）、单格 8 向移动裁决（tile solid + 实体互斥 + 斜切切角，对齐原版 coordinates.lua:canDiagonalMove「仅当两相邻正交格都被阻挡才禁止斜切」）、敌方回合为静止策略（同步结算不驻留 EnemyTurn）、`GameState` 唯一所有权（actor 表 + 回合状态，main.cpp 只读快照渲染/IPC）。
+  - `game/src/main.cpp` 改为回合制 demo：键盘 WASD/方向键 + Q/E/Z/C 斜向 + 空格等待、实体坐标统一 tile 网格（像素 = grid×16）、(y, z) 稳定排序显式绘制、玩家平滑插值、热重载保留玩家位置与回合数（失败安全）；IPC 新增 `turn`/`move`/`wait` 回合命令（tro-ipc v1.1 只增不改，dx/dy 严格整数 -1..1，非整数报错不静默截断；invalid/blocked 走成功包络 data.result，非玩家回合走 error 包络——同步结算下为未来异步分支预留；help 同步登记）。
+  - 资产：新增手写 forest.json（palette 地面 + solid 墙层外框/内部障碍 + 玩家与 3 敌人），可热重载。
+  - 测试体系：无窗口单测 `game_core_test`（8 用例）接入 CTest（Debug/Release 各 8/8）；`tools/ipc_smoke.py` 新增 7 项场景无关回合断言（30/30）；Debug/Release 双构建零告警。
+  - 门禁评审修复：测试块作用域 asset 析构致 `GameState::asset` 悬垂崩溃（asset 提升到函数作用域）；空场无 asset 时 tile_is_solid 恒真导致切角测试误判（改用 forest 场地 + 手摆棋子）；移动 dx/dy 非整数被 nlohmann get<int> 静默截断消耗回合（改 is_number_integer 拒绝）。
+
+- **2026-09-09 里程碑 7：IPC 事件通道（已完整验证）**：
+  - 计划书 `docs/plan-7.md` 三轮审查 PASS（①判别式漏洞：publish 若复用 send_packet 会向订阅连接发无 event 键兜底行 → 改出站路径分叉「事件超限无兜底行直接断开」；②`1≠1.0` 口径与 nlohmann 实测相反 → 改「数值相等」并钉死 find() 缺键探测；③订阅表模型/超限措辞随 filter 同步 → 复核 PASS）。范围裁定（用户拍板）：**engine-only 通道，不实现任何具体 game 事件**（MoveStarted 等仅为协议示例）；move/tween 是 game 层测试脚手架不触碰。
+  - engine `tg::Ipc`：conn_id 单调不复用、按连接订阅表（(事件名, filter) 二元组，同名不同 filter 并存）、close_slot 单点收口「断开即订阅清零」、保留命令 subscribe/unsubscribe/connections（ping 档，无 handler 可用，先于 game handler 不可覆盖）、publish 非阻塞直写（dump 异常跳过不断开；超限无兜底行断开 filter 匹配订阅者；EAGAIN 断开慢消费者）、disconnect(conn_id)/connections() API；Release 桩同步；ipc.cpp 过时注释修正 + handle_line fd 快照重入因果链钉死。
+  - subscribe 可选 filter（**ECS 单实体观测**，用户拍板）：data 顶层字段 JSON 等值匹配（AND、缺键不匹配、数值相等 `1==1.0`、空 object `{}` 恒真）；engine 不识键语义，可过滤字段由 game 注册表文档化。
+  - game 仅 +`events` 目录命令（空注册表）+ help 登记。
+  - 测试：`tools/tests/ipc_test.cpp` 双分支（Debug 真实 loopback 9 组用例；Release 桩 3 checks）接入 CTest（两配置 9/9 对称）；`tools/ipc_smoke.py` +12 通道断言（44/44）；Debug/Release 双构建零告警。
+  - 检查修复：smoke「断开清零」断言补连接计数（原断言在 EOF 未感知时假通过）；超限用例补「不匹配者不收行不断开」半边；docstring 版本统一 v1.2。
+  - AGENTS.md 超 workspace 指令预算（65536B）→ 阶段 2/3 设计原文与 MVP~M4 完整记录拆分归档 `docs/history.md`（用户拍板：AGENTS.md 留摘要 + 指针，信息不丢）。
+
+- **2026-09-09 里程碑 8：tro-tileset 多格 tile（size_in_atlas）与纹理原点（已完整验证）**：计划 `docs/plan-8.md` 审查落地；schema 只增可选字段 + 插件导出三字段 + 引擎 Godot 语义绘制（dest = cell 中心 − region.size/2 − texture_origin）；像素级截图比对验证；详见 CHANGELOG 与「资产规范」小节。

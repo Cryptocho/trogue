@@ -1,14 +1,18 @@
-// main.cpp —— 里程碑 6：回合制 roguelike demo（移植 trogue-orign 最小闭环）。
+// main.cpp —— 回合制 roguelike demo（M6 最小闭环 + M9 敌 AI/规则/事件接入）。
 //
-// 仅使用 trogue/*.hpp 公共 API + game_core（game 层纯逻辑）。
+// 仅使用 trogue/*.hpp 公共 API + game 层模块（game_core/nav/rules/ai/event_bus）。
 // demo 演示：
-//   - 回合制：玩家移动（8 向 + 斜切约束）→ 敌方回合（静止策略）→ 回合 +1
+//   - 回合制：玩家移动（8 向 + 斜切约束）→ 敌方回合（AI：三态状态机 +
+//     视野 + A*，docs/plan-9.md）→ 回合 +1
 //   - 键盘：WASD/方向键 4 向、Q/E/Z/C 斜向（对齐原版 input.lua KEY_MOVEMENTS）、
-//     空格等待；视觉平滑插值（帧间 lerp）
+//     空格等待；玩家/敌人视觉移动均由引擎 TweenManager 驱动
+//   - 规则管线：EventBus（game 层）→ AbilityUse → 伤害结算 → AbilityUsed/
+//     EntityDied（docs/plan-9.md §2.5 原版顺序）
 //   - 渲染：render_scene 画 tile 层；实体按 (y, z) 排序后显式绘制（色块/sprite）
 //   - 热重载：Watcher + F5 + IPC reload（candidate load → 帧外 swap，位置+回合保留）
-//   - IPC 命令 handler（全部命令语义在 game；engine 只传 ping）
-//   - 新增 IPC 回合命令 turn/move/wait（docs/plan-6.md §3.4；场景无关，非视觉 Agent 可驱动）
+//   - IPC 命令 handler（全部命令语义在 game；engine 只传 ping）+ 事件桥
+//     （首批 6 个对外事件经 tg::Ipc::publish，docs/plan-9.md §3.6）
+//   - IPC 回合命令 turn/move/wait（docs/plan-6.md §3.4；场景无关，非视觉 Agent 可驱动）
 //   - 截图（game 排队，帧后 ExportImage）、log、quit
 //
 // 命令归属表见 docs/plan-5.6.md §1 与 docs/plan-6.md §3.4。
@@ -29,7 +33,10 @@
 #include <rlgl.h>  // rlDrawRenderBatchActive（截图前强制 flush 渲染批）
 
 #include "trogue/trogue.hpp"
+#include "ai.hpp"
+#include "event_bus.hpp"
 #include "game_core.hpp"
+#include "rules.hpp"
 
 namespace {
 
@@ -137,6 +144,20 @@ struct Demo {
     game::GameState gs;                      // game_core：actor+回合唯一所有权
     int reloads = 0;
 
+    // ── 里程碑 9：事件总线 / 规则引擎 / 敌 AI（plan-9 §3.4-§3.6） ──
+    game::EventBus bus;        // game 层纯逻辑事件总线（IPC 桥接在 main 完成）
+    game::RuleEngine rules;    // 规则最小子集（构造即内置 punch/damage_physical）
+    game::AiSystem ai;         // 敌 AI（固定种子 20260909，可复现）
+    game::GameSystems sys{&bus, &rules, &ai};
+
+    // 敌人视觉位置（复用引擎 TweenManager；静止时 == 逻辑格像素）
+    struct EnemyView {
+        float vx = 0, vy = 0;
+        tg::TweenManager::Id tween = 0;
+        bool init = false;
+    };
+    std::map<std::string, EnemyView> enemy_view;
+
     tg::TweenManager tween;
     tg::AnimationPlayer anim;                // 绑定首个动画集（示意；可共存）
     bool has_anim = false;
@@ -174,7 +195,8 @@ struct Demo {
 };
 
 // 实体视觉状态：玩家取引擎 tween 插值位置（未在动画时 == 逻辑格像素）；
-// 其他实体无插值，视觉位置就是逻辑格像素。（供 IPC transform 视图使用）
+// 敌人同由引擎 tween 驱动（静止时 == 逻辑格像素，plan-9 §3.6）；
+// 惰性实体无插值，视觉位置就是逻辑格像素。（供 IPC transform 视图使用）
 void entity_visual(const Demo& d, const game::Actor& a, float& vx, float& vy,
                    bool& moving) {
     vx = static_cast<float>(a.pos.x * game::kTileSize);
@@ -184,6 +206,13 @@ void entity_visual(const Demo& d, const game::Actor& a, float& vx, float& vy,
         vx = d.view_x;
         vy = d.view_y;
         moving = d.tween.alive(d.view_tween);
+        return;
+    }
+    const auto it = d.enemy_view.find(a.id);
+    if (it != d.enemy_view.end() && d.tween.alive(it->second.tween)) {
+        vx = it->second.vx;
+        vy = it->second.vy;
+        moving = true;
     }
 }
 
@@ -251,6 +280,7 @@ void reload_scene(Demo& d, const std::string& path) {
     }
     d.gs.turn_count = keep_turn;       // 回合数跨 reload 保留（游戏进度）
     d.tween.cancel_all();              // 打断进行中的移动 tween（旧场景视觉位置失效）
+    d.enemy_view.clear();              // 敌人视觉条目随场景重建（plan-9 §3.6 S8）
     d.view_init = false;               // 重新追踪玩家视觉位置
     d.view_tween = 0;
     game::input_buffer_flush(d.input); // 清空未决输入（场景已换）
@@ -273,11 +303,15 @@ void reload_scene(Demo& d, const std::string& path) {
 //   - 移动视觉：引擎 add_vec2 + quad_out（0.12s），播完精确落格。
 // 以上缓冲逻辑在 game_core（InputBuffer 自由函数，可无窗口单测）；
 // 本层只把 raylib 按键喂进缓冲，并把成功移动接到引擎 tween。
-void handle_move(Demo& d, game::Dir m) {
+game::ActionResult handle_move(Demo& d, game::Dir m) {
     // 原版 handleMove 不查回合门控（缓冲触发无守卫，回合已由按键入口保证）；
-    // player_move 内部自处理 invalid/blocked，无副作用风险。
-    const auto r = game::player_move(d.gs, m.dx, m.dy);
-    if (r != game::ActionResult::Moved || !d.gs.player()) return;
+    // GameSystems 版内部处理 invalid/blocked（含 phase 守卫），无副作用风险。
+    // 完整敌方阶段：移动成功后 AI 敌人行动（事件驱动，plan-9 §3.3）。
+    // 返回 ActionResult：IPC move 复用本函数——键盘/IPC 同一条「移动→tween」
+    // 管线（曾因 IPC 直接调 player_move 跳过 tween，导致逻辑格已动、视觉
+    // 停在旧格整整 1 tile 的分叉 bug，transform 视图暴露）。
+    const auto r = game::player_move(d.gs, d.sys, m.dx, m.dy);
+    if (r != game::ActionResult::Moved || !d.gs.player()) return r;
 
     // 移动成功：用引擎 tween 从当前显示位置滑到新逻辑格。
     // from = 当前 view（若上一个 tween 未播完则从其当前值续滑，保证连续无跳变）；
@@ -296,6 +330,7 @@ void handle_move(Demo& d, game::Dir m) {
             d.view_x = tx;
             d.view_y = ty;
         });
+    return r;
 }
 
 // 每帧：喂按键进缓冲（原版 love.keypressed 语义）
@@ -319,7 +354,7 @@ void poll_key_presses(Demo& d) {
     }
     if (IsKeyPressed(KEY_SPACE)) {
         game::input_buffer_flush(d.input);
-        (void)game::player_wait(d.gs);
+        (void)game::player_wait(d.gs, d.sys);
     }
 }
 
@@ -341,7 +376,9 @@ void init_player_view_if_needed(Demo& d) {
 
 tg::Json turn_json(const Demo& d) {
     tg::Json j = tg::Json::object();
-    j["phase"] = d.gs.phase == game::Phase::PlayerTurn ? "player" : "enemy";
+    j["phase"] = d.gs.phase == game::Phase::PlayerTurn ? "player"
+                 : d.gs.phase == game::Phase::EnemyTurn ? "enemy"
+                                                        : "game_over";
     j["turn_count"] = d.gs.turn_count;
     tg::Json en = tg::Json::array();
     const game::Actor* player = nullptr;
@@ -377,6 +414,9 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         (*data)["scene"] = d.asset ? std::string(d.asset->name()) : "";
         (*data)["reloads"] = d.reloads;
         (*data)["entities"] = static_cast<int>(d.gs.actors.size());
+        (*data)["phase"] = d.gs.phase == game::Phase::PlayerTurn ? "player"
+                           : d.gs.phase == game::Phase::EnemyTurn ? "enemy"
+                                                                  : "game_over";
         (*data)["fps"] = GetFPS();
         (*data)["uptime_s"] = std::lround(GetTime());
         (*data)["port"] = d.port;
@@ -400,7 +440,8 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         }
         const int dx = req["dx"].get<int>();
         const int dy = req["dy"].get<int>();
-        const auto r = game::player_move(d.gs, dx, dy);
+        // 与键盘同一入口：移动成功时由 handle_move 启动视觉 tween（见其注释）
+        const auto r = handle_move(d, game::Dir{dx, dy});
         const char* result = "moved";
         if (r == game::ActionResult::Blocked) result = "blocked";
         else if (r == game::ActionResult::Invalid) result = "invalid";
@@ -416,7 +457,7 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
             error = "not player turn";
             return tg::IpcStatus::error;
         }
-        (void)game::player_wait(d.gs);
+        (void)game::player_wait(d.gs, d.sys);
         tg::Json out = tg::Json::object();
         out["result"] = "waited";
         out["turn"] = turn_json(d);
@@ -506,13 +547,17 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
                 else a.pos.y = px / game::kTileSize;
             }
         }
-        // teleport（不走回合门控）之后，玩家的视觉位置必须同步 snap 到新逻辑格，
+        // teleport（不走回合门控）之后，视觉位置必须同步 snap 到新逻辑格，
         // 否则 transform 视图会暴露"逻辑/视觉错位"（set_entity 是瞬移语义）。
         if (is_player) {
             d.tween.cancel(d.view_tween);
             d.view_x = static_cast<float>(a.pos.x * game::kTileSize);
             d.view_y = static_cast<float>(a.pos.y * game::kTileSize);
             d.view_init = true;
+        } else if (auto vit = d.enemy_view.find(a.id); vit != d.enemy_view.end()) {
+            d.tween.cancel(vit->second.tween);
+            vit->second.vx = static_cast<float>(a.pos.x * game::kTileSize);
+            vit->second.vy = static_cast<float>(a.pos.y * game::kTileSize);
         }
         if (req.contains("color")) {
             if (!req["color"].is_string()) {
@@ -553,6 +598,13 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         if (id.empty() || !d.gs.actors.erase(id)) {
             error = "no such entity";
             return tg::IpcStatus::error;
+        }
+        // 视觉状态与 actor 同生共死（同 EntityDied 分支）：残留 enemy_view
+        // 条目会让同 id 重生渲染在旧位置（wire visual 正确、画面错位，
+        // transform 视图会暴露矛盾——审查 M9 发现）。
+        if (auto vit = d.enemy_view.find(id); vit != d.enemy_view.end()) {
+            d.tween.cancel(vit->second.tween);
+            d.enemy_view.erase(vit);
         }
         data = tg::Json::object();
         (*data)["despawned"] = true;
@@ -629,10 +681,31 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         return tg::IpcStatus::handled;
     }
     if (cmd == "events") {
-        // 事件目录（plan-7 §3.5）：game 事件注册表——当前无注册事件（传输通道
-        // 机制就位）。未来 game 事件在此登记：条目形态 {name, when, data}，并
-        // 注明 data 中可被 subscribe filter 过滤的字段（如 entity，建议字符串 id）。
-        data = tg::Json{{"events", tg::Json::array()}};
+        // 事件目录（plan-7 §3.5；plan-9 §3.6 首批 6 个对外事件实表）。
+        // 条目 {name, when, data}；data 顶层 entity/source/target = 字符串 id，
+        // 可被 subscribe filter 等值匹配（M7 语义）。内部事件（AbilityUse/
+        // AbilityUseFailed/DamageRequest）不在注册表——不对外发布。
+        auto entry = [](const char* name, const char* when, const char* data,
+                        const char* filter) {
+            return tg::Json{{"name", name},
+                            {"when", when},
+                            {"data", data},
+                            {"filter", filter}};
+        };
+        data = tg::Json{{"events", tg::Json::array({
+            entry("StateChanged", "敌人 AI 状态迁移时",
+                  "{entity, from, to, turn}", "entity"),
+            entry("MoveSucceeded", "任意 actor 移动成功时",
+                  "{entity, from:[gx,gy], to:[gx,gy]}", "entity"),
+            entry("AbilityUsed", "规则层成功释放能力时（伤害结算之后）",
+                  "{entity, ability, target:[gx,gy], turn}", "entity"),
+            entry("DamageDealt", "伤害结算时",
+                  "{source, target, amount, hp, max_hp}", "source target"),
+            entry("EntityDied", "实体 hp≤0 时（敌人在回合收尾才真正移除）",
+                  "{entity, turn}", "entity"),
+            entry("TurnEnded", "敌方阶段完成、回合数 +1 后（GameOver 不发）",
+                  "{turn}", "（无实体字段，仅全量订阅可收）"),
+        })}};
         return tg::IpcStatus::handled;
     }
     if (cmd == "log") {
@@ -672,6 +745,23 @@ int main(int argc, char** argv) {
     }
     d.scene_path = scene_path;
 
+    // ── 里程碑 9 接线（plan-9 §3.6） ──
+    // 实体快照扩展注入点：hp（有 hp 的 actor）+ ai（战斗原型）；
+    // goblin 有 hp/ai，coin 等惰性实体两者皆无，player 仅 hp。
+    d.extra_entity_fields = [](tg::Json& j, const game::Actor& a) {
+        if (a.hp) j["hp"] = {a.hp->cur, a.hp->max};
+        if (game::is_combat_archetype(a.type)) {
+            tg::Json ai = tg::Json{{"state", game::ai_state_name(a.ai.state)}};
+            ai["target"] = a.ai.has_target
+                               ? tg::Json{a.ai.target.x, a.ai.target.y}
+                               : tg::Json(nullptr);
+            j["ai"] = ai;
+        }
+    };
+    // 规则引擎订阅管线事件（AbilityUse/DamageRequest/TurnEnded）；gs 对象
+    // 生命周期 = Demo（热重载只换 asset，指针恒有效），绑定一次即可。
+    d.rules.bind(d.gs, d.bus);
+
     InitWindow(d.window_w, d.window_h, "[trogue] C++ demo");
     SetTargetFPS(60);
 
@@ -687,12 +777,72 @@ int main(int argc, char** argv) {
     } else {
         TraceLog(LOG_INFO, "[demo] IPC 不可用（Release 桩/端口占用）");
     }
+
+    // ── IPC 事件桥（plan-9 §3.6）：白名单 6 事件逐个桥到 tg::Ipc::publish。
+    // EventBus 保持纯逻辑零 IPC 依赖，桥接（订阅→转发）在 main 层完成。
+    {
+        static const char* kWireEvents[] = {"StateChanged", "MoveSucceeded",
+                                            "AbilityUsed",  "DamageDealt",
+                                            "EntityDied",   "TurnEnded"};
+        for (const char* ev : kWireEvents) {
+            d.bus.on(ev, [&d, ev](const tg::Json& j) {
+                if (d.ipc.valid()) d.ipc.publish(ev, j);
+            });
+        }
+    }
+    // 敌人移动 → 视觉 tween（复用引擎 add_vec2 + quad_out，与玩家同参数；
+    // 播完精确落格，静止时 == 逻辑格像素）。
+    d.bus.on("MoveSucceeded", [&d](const tg::Json& j) {
+        const auto entity = j.at("entity").get<std::string>();
+        const auto act = d.gs.actors.find(entity);
+        if (act == d.gs.actors.end() || act->second.is_player) return;
+        const auto to = j.at("to");
+        const float tx = to.at(0).get<float>() * game::kTileSize;
+        const float ty = to.at(1).get<float>() * game::kTileSize;
+        auto& v = d.enemy_view[entity];
+        if (!v.init) {
+            const auto from = j.at("from");
+            v.vx = from.at(0).get<float>() * game::kTileSize;
+            v.vy = from.at(1).get<float>() * game::kTileSize;
+            v.init = true;
+        }
+        d.tween.cancel(v.tween);  // 打断上一个（连续移动续滑）
+        v.tween = d.tween.add_vec2(
+            tg::Vec2{v.vx, v.vy}, tg::Vec2{tx, ty},
+            tg::TweenSpec{game::kMoveDuration, 0.0, 0, tg::Easing::quad_out},
+            [&d, entity](const tg::TweenManager::Sample<tg::Vec2>& s) {
+                // find 而非 []：条目被删（despawn/reload）时不静默回插僵尸条目
+                if (auto vit = d.enemy_view.find(entity); vit != d.enemy_view.end()) {
+                    vit->second.vx = s.value.x;
+                    vit->second.vy = s.value.y;
+                }
+            },
+            [&d, entity, tx, ty]() {
+                if (auto vit = d.enemy_view.find(entity); vit != d.enemy_view.end()) {
+                    vit->second.vx = tx;
+                    vit->second.vy = ty;
+                }
+            });
+    });
+    // 敌人死亡 → 清理视觉条目（尸体在回合收尾移除，视觉先行收尾）
+    d.bus.on("EntityDied", [&d](const tg::Json& j) {
+        const auto entity = j.at("entity").get<std::string>();
+        const auto vit = d.enemy_view.find(entity);
+        if (vit != d.enemy_view.end()) {
+            d.tween.cancel(vit->second.tween);
+            d.enemy_view.erase(vit);
+        }
+    });
+
     d.watcher = tg::Watcher::create("assets/scenes");
     if (!d.watcher.valid())
         TraceLog(LOG_INFO, "[demo] watcher 不可用（非 Debug/非 Linux）");
 
     while (!WindowShouldClose() && !d.quit) {
         const float dt = GetFrameTime();
+
+        // 视觉追踪先于 IPC/按键：任何来源的首帧行动都不会从 (0,0) 起 tween
+        init_player_view_if_needed(d);
 
         // ── IPC poll（每帧） ──
         d.ipc.poll();
@@ -712,7 +862,6 @@ int main(int argc, char** argv) {
         // ── 回合制输入：按原版缓冲语义（0.18s 窗口双键对角 / 斜向直走 / 空格等待） ──
         poll_key_presses(d);
         tick_input_buffer(d, dt);
-        init_player_view_if_needed(d);
 
         // ── Tween / 动画推进（数据驱动） ──
         d.tween.tick(dt);
@@ -746,7 +895,17 @@ int main(int argc, char** argv) {
         for (const game::Actor* a : order) {
             float wx = a->pos.x * game::kTileSize;
             float wy = a->pos.y * game::kTileSize;
-            if (a->is_player) { wx = d.view_x; wy = d.view_y; }
+            if (a->is_player) {
+                wx = d.view_x;
+                wy = d.view_y;
+            } else {
+                // 敌人：tween 插值中的视觉位置（静止 == 逻辑格像素，plan-9 §3.6）
+                const auto vit = d.enemy_view.find(a->id);
+                if (vit != d.enemy_view.end()) {
+                    wx = vit->second.vx;
+                    wy = vit->second.vy;
+                }
+            }
             const ::Color rc{a->color.r, a->color.g, a->color.b, a->color.a};
             bool drawn = false;
             if (a->sprite.has && d.asset) {
@@ -774,8 +933,11 @@ int main(int argc, char** argv) {
                             static_cast<int>(d.gs.actors.size()), d.reloads,
                             d.gs.turn_count,
                             d.gs.phase == game::Phase::PlayerTurn ? "player"
-                                                                  : "enemy"),
+                            : d.gs.phase == game::Phase::EnemyTurn ? "enemy"
+                                                                   : "game_over"),
                  10, 36, 16, WHITE);
+        if (d.gs.phase == game::Phase::GameOver)
+            DrawText("GAME OVER - F5 reload to restart", 10, 60, 20, RED);
 
         // 帧末截图（game 排队；帧后 ExportImage）
         if (d.shot_requested) {

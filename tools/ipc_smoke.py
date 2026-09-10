@@ -8,7 +8,8 @@
 覆盖: 握手/ping/status/list_entities/spawn/set_entity/get_entity/
       despawn/观测命令(query_entities/layers/solid_at/get_tile)/
       screenshot/reload(位置保留)/回合命令(turn/move/wait)/
-      事件通道(subscribe/unsubscribe/connections/events 协议断言)/quit。
+      事件通道(subscribe/unsubscribe/connections/events 协议断言)/
+      游戏事件(plan-9: 注册表实表/hp-ai 快照/filter 单实体观测/GameOver 前的伤害)/quit。
 """
 
 import argparse
@@ -204,11 +205,13 @@ def main():
           r.get("ok") and r["data"]["turn_count"] == tc0 + 2,
           f"{tc0+1} → {r['data']['turn_count']}")
 
-    print("== 事件通道（tro-ipc v1.2 协议断言，无 game 事件）==")
-    # 事件目录：game 当前未注册事件（机制就位，注册表为空）
+    print("== 事件通道（tro-ipc v1.2 协议断言）==")
+    # 事件目录：plan-9 首批 6 个对外游戏事件实表（内部事件不登记）
+    k_wire_events = {"StateChanged", "MoveSucceeded", "AbilityUsed",
+                     "DamageDealt", "EntityDied", "TurnEnded"}
     r = rpc(cmd="events")
-    check("events 目录（空注册表）",
-          r.get("ok") and r["data"].get("events") == [], r)
+    names = {e.get("name") for e in r.get("data", {}).get("events", [])}
+    check("events 目录 6 事件", r.get("ok") and names == k_wire_events, r)
 
     r = rpc(cmd="help")
     cmds = r.get("data", {}).get("commands", [])
@@ -265,6 +268,141 @@ def main():
     check("断开即订阅清零（connections 回落）",
           r.get("ok") and len(r["data"]["connections"]) == 1
           and all(not c.get("events") for c in r["data"]["connections"]), r)
+
+    print("== 游戏事件（plan-9：EventBus → IPC 桥）==")
+
+    def drain(reader, count_max=64, timeout=0.4):
+        """非阻塞收集一段时间内到达的事件行（超时即停；残行留在缓冲）。"""
+        reader.sock.settimeout(timeout)
+        out = []
+        for _ in range(count_max):
+            try:
+                out.append(reader.next_line())
+            except (socket.timeout, TimeoutError):
+                break
+        return [m for m in out if m.get("event") not in (None, "hello")]
+
+    # 快照注入：goblin 有 hp/ai；coin（惰性实体）两者皆无
+    r = rpc(cmd="get_entity", id="goblin_1")
+    g = r.get("data", {}).get("entity", {})
+    check("goblin 快照含 hp/ai",
+          isinstance(g.get("hp"), list) and isinstance(g.get("ai"), dict)
+          and g["ai"].get("state") in ("idle", "alerted", "chasing"), r)
+    r = rpc(cmd="spawn", id="smoke_coin2", type="coin", x=200, y=200)
+    check("spawn coin", r.get("ok"), r)
+    r = rpc(cmd="get_entity", id="smoke_coin2")
+    c = r.get("data", {}).get("entity", {})
+    check("coin 无 hp/ai（惰性门控）",
+          "hp" not in c and "ai" not in c, r)
+    rpc(cmd="despawn", id="smoke_coin2")
+
+    # 连接 A：全量订阅 6 事件（无 filter）
+    a_sock = socket.create_connection(("127.0.0.1", args.port), timeout=5)
+    a_reader = LineReader(a_sock)
+    a_reader.next_line()  # hello
+    a_sock.sendall((json.dumps({
+        "cmd": "subscribe",
+        "events": ["StateChanged", "MoveSucceeded", "AbilityUsed",
+                   "DamageDealt", "EntityDied", "TurnEnded"]
+    }) + "\n").encode())
+    r = a_reader.next_line()
+    check("A 全量订阅", r.get("ok") and len(r["data"]["events"]) == 6, r)
+
+    # 玩家 move（四方向试到成功）：A 应收到玩家 MoveSucceeded + TurnEnded
+    moved = False
+    for dx, dy in ((1, 0), (0, 1), (0, -1), (-1, 0)):
+        r = rpc(cmd="move", dx=dx, dy=dy)
+        if r.get("ok") and r["data"].get("result") == "moved":
+            moved = True
+            break
+    check("move（事件段）成功", moved, r)
+    evs = drain(a_reader)
+    kinds = [m["event"] for m in evs]
+    check("A 收到 TurnEnded", "TurnEnded" in kinds, kinds)
+    check("A 收到玩家 MoveSucceeded",
+          any(m["event"] == "MoveSucceeded"
+              and m["data"].get("entity") == "player" for m in evs), kinds)
+
+    # 连接 B：按字段订阅——{entity:goblin_1} 观测状态/移动/攻击，
+    # {target:player} 观测受伤（M7 同连接多 filter 并存 + 缺键不匹配反向验证）
+    b_sock = socket.create_connection(("127.0.0.1", args.port), timeout=5)
+    b_reader = LineReader(b_sock)
+    b_reader.next_line()  # hello
+    b_sock.sendall((json.dumps({
+        "cmd": "subscribe",
+        "events": ["StateChanged", "MoveSucceeded", "AbilityUsed", "EntityDied"],
+        "filter": {"entity": "goblin_1"},
+    }) + "\n").encode())
+    b_reader.next_line()
+    b_sock.sendall((json.dumps({
+        "cmd": "subscribe",
+        "events": ["DamageDealt"],
+        "filter": {"target": "player"},
+    }) + "\n").encode())
+    b_reader.next_line()
+
+    # 传送 goblin_1 到玩家邻格：先取玩家当前格（回合命令段可能移动过），
+    # 再按 8 邻格探测通行格（攻击射程 chebyshev ≤1 含斜邻）。通行 = 非墙
+    # 且无其他实体占位（query_entities rect；否则 set_entity 会造成重叠、
+    # 违反实体互斥语义——检查人建议 7）
+    r = rpc(cmd="get_entity", id="player")
+    p = r["data"]["entity"]
+    pgx, pgy = int(p["x"]) // 16, int(p["y"]) // 16
+    target = None
+    for cx, cy in ((pgx - 1, pgy), (pgx + 1, pgy), (pgx, pgy - 1),
+                   (pgx, pgy + 1), (pgx - 1, pgy - 1), (pgx + 1, pgy - 1),
+                   (pgx - 1, pgy + 1), (pgx + 1, pgy + 1)):
+        r = rpc(cmd="solid_at", x=cx * 16 + 8, y=cy * 16 + 8)
+        if not (r.get("ok") and r["data"]["solid"] is False):
+            continue
+        r = rpc(cmd="query_entities",
+                rect=[cx * 16, cy * 16, 16, 16])
+        if r.get("ok") and r["data"]["count"] == 0:
+            target = (cx, cy)
+            break
+    check("找到玩家邻格通行格", target is not None)
+    r = rpc(cmd="set_entity", id="goblin_1", x=target[0] * 16, y=target[1] * 16)
+    check("传送 goblin_1 至玩家邻格", r.get("ok"), r)
+
+    # wait#1：idle→alerted（当回合停；ALERT_DELAY=1）
+    rpc(cmd="wait")
+    evs = drain(b_reader)
+    check("B: idle→alerted",
+          any(m["event"] == "StateChanged"
+              and m["data"].get("entity") == "goblin_1"
+              and m["data"].get("from") == "idle"
+              and m["data"].get("to") == "alerted" for m in evs), evs)
+    check("B: TurnEnded 不达（缺键不匹配）",
+          all(m["event"] != "TurnEnded" for m in evs), evs)
+
+    # wait#2：alerted→chasing → 贴脸攻击：DamageDealt(95) → AbilityUsed
+    rpc(cmd="wait")
+    evs = drain(b_reader)
+    kinds = [m["event"] for m in evs]
+    check("B: alerted→chasing",
+          any(m["event"] == "StateChanged"
+              and m["data"].get("to") == "chasing" for m in evs), evs)
+    dd = [m for m in evs if m["event"] == "DamageDealt"]
+    au = [m for m in evs if m["event"] == "AbilityUsed"]
+    check("B: DamageDealt(target=player, hp=95)",
+          len(dd) == 1 and dd[0]["data"].get("source") == "goblin_1"
+          and dd[0]["data"].get("target") == "player"
+          and dd[0]["data"].get("amount") == 5
+          and dd[0]["data"].get("hp") == 95, evs)
+    check("B: AbilityUsed(entity=goblin_1)", len(au) == 1, evs)
+    check("B: wire 序 DamageDealt → AbilityUsed（原版顺序）",
+          len(dd) == 1 and len(au) == 1 and kinds.index("DamageDealt")
+          < kinds.index("AbilityUsed"), kinds)
+    check("B: TurnEnded 仍不达", all(m["event"] != "TurnEnded" for m in evs), evs)
+
+    # 玩家实际掉血（快照与事件一致）
+    r = rpc(cmd="get_entity", id="player")
+    check("玩家 hp 快照 95",
+          r.get("ok") and r["data"]["entity"].get("hp") == [95, 100], r)
+
+    a_sock.close()
+    b_sock.close()
+    time.sleep(0.3)
 
     print("== 退出 ==")
     r = rpc(cmd="quit")

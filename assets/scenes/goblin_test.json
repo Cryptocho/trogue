@@ -1,0 +1,24 @@
+{
+	"format": "tro-scene",
+	"version": 2,
+	"meta": {
+		"name": "goblin_test",
+		"background": "#101018"
+	},
+	"tilemap": {
+		"layers": []
+	},
+	"entities": [
+		{
+			"id": "goblin_test",
+			"type": "goblin",
+			"x": 48.0,
+			"y": 48.0,
+			"w": 16,
+			"h": 16,
+			"sprite": {
+				"texture": "textures/goblin.png"
+			}
+		}
+	]
+}

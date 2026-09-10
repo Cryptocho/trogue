@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+### IPC 移动视觉修复与审查修正（AI 调试会话）
+
+- 影响的文件: `game/src/main.cpp`、`game/src/rules.hpp`、`game/src/nav.hpp`、`game/src/nav.cpp`、`AGENTS.md`、`docs/plan-9.md`、`assets/textures/goblin.png`（新增）、`assets/scenes/goblin_test.json`（新增）
+
+#### Bug Fixes
+- IPC `move` 从直接调 `game::player_move` 改为复用 `handle_move`（改返回 `ActionResult`）——修复 IPC 移动不驱动视觉 tween：逻辑格已动、视觉停在旧格一整格（transform 视图暴露：logical y=64、visual y=48）；键盘/IPC 收敛为同一条「移动→tween→精确落格」管线
+- `despawn` 清理对应 `enemy_view` 条目并取消 tween（此前只 erase actor，同 id 重生会渲染在旧位置）；敌人移动 tween 的 update/complete 回调改 `find` 判空，条目被删时不再静默回插僵尸条目
+- 首帧 `init_player_view_if_needed` 提前到 IPC poll/按键处理之前（任何来源的首帧行动不会从 (0,0) 起 tween）
+
+#### Added
+- PixelLab 外部工具连通性验证素材：`assets/textures/goblin.png`（16×16 哥布林精灵）+ `assets/scenes/goblin_test.json`（tro-scene v2.1 bare 模式示例；加载/快照/截图/像素比对端到端验证）
+
+#### Documentation
+- AGENTS.md：截图视觉验收改为 Agent 读图自证（模型已支持图片输入，取代 2026-09-09 分工版）；IPC 命令表 `list_entities`/`solid_at` 与实体快照字段说明对齐现实现（移除不再输出的 `solid?`/`v?`，补 `transform` 视图）
+- plan-9：§2.4/§7 A* 切角措辞修正（地形 + 战斗实体、惰性实体不参与；比 `try_move` 窄、比原版 A* 宽，nav.hpp/cpp 注释同步）；§6 GameOver wire 口径补 2026-09-10 实测记录（status/turn 均为 `game_over`；`turn.player` 按 §2.5 不 despawn 语义留场，快照 hp:[0,100]）
+
+### 敌人 AI + RuleEngine 最小子集 + 首批游戏事件（EventBus）
+
+- 影响的文件: `game/src/event_bus.hpp`（新增）、`game/src/nav.hpp`/`nav.cpp`（新增）、`game/src/rules.hpp`/`rules.cpp`（新增）、`game/src/ai.hpp`/`ai.cpp`（新增）、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/main.cpp`、`game/CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/tests/game_core_test.cpp`、`tools/ipc_smoke.py`、`docs/plan-9.md`（新增）、`docs/history.md`、`AGENTS.md`
+
+#### Added
+- game 层 EventBus（`event_bus.hpp`，header-only、纯逻辑零 IPC 依赖）：on/off/emit + priority 越小越先（同优先级按注册序）、dirty 延迟重建（对齐原版 events.lua）、emit 先快照后调用（handler 内 on/off/嵌套 emit 重入安全）；载荷 `tg::Json` 与 IPC wire 同构、顶层 `entity`/`source`/`target` 字符串 id 与 M7 filter 口径直接兼容
+- 导航原语（`nav`）：chebyshev、Bresenham 视线（两端点不判定、遮挡回调注入）、A* 单步（8 向/chebyshev 启发/对角 1.414/切角约束复用/迭代上限 1000/实体阻挡注入——敌人互挡、玩家格不挡，对齐原版 player 无 Actor 组件语义）
+- RuleEngine 最小子集（`rules`）：punch（冷却 0/射程 1）+ damage_physical（固定 5）；管线严格按原版顺序——校验（失败仅 AbilityUseFailed）→ 设冷却（仅 >0 才登记）→ DamageRequest → DamageDealt → EntityDied → 最后 AbilityUsed（仅成功），wire 上 DamageDealt 先于 AbilityUsed；TurnEnded 全体冷却 -1 下限 0；射程校验为加固（原版无）；死亡走延迟销毁（enemy → pending_despawn 收尾统一清除，player → GameOver 相位）
+- 敌人 AI（`ai`）：三态状态机（idle/alerted/chasing，先迁移后行动）+ 视野（chebyshev ≤5 + Bresenham LOS，solid 层遮挡）+ 行为表（idle 70% 4 向游走 / alerted 停 1 回合（ALERT_DELAY=1）/ chasing 贴脸攻击否则 A* 一步，丢视线且抵达记忆位回 idle）；std::mt19937 固定种子（20260909）可复现
+- 首批对外游戏事件 6 个（StateChanged/MoveSucceeded/AbilityUsed/DamageDealt/EntityDied/TurnEnded）经 main 层桥接 `tg::Ipc::publish`；IPC `events` 注册表从空表变实表（含可 filter 字段说明）；实体快照注入 `hp:[cur,max]` 与战斗原型 `ai:{state,target}`（coin 等惰性实体两者皆无）
+- GameOver 相位：玩家 hp≤0 → 收尾不 +1 回合、不发 TurnEnded、`turn`/`status` 的 phase 三值化（player/enemy/game_over）、move/wait 拒绝、HUD 提示、reload 复位
+- 敌人视觉移动复用引擎 `tg::TweenManager`（0.12s quad_out，与玩家同参数，精确落格）；`MoveSucceeded`/`EntityDied` 驱动视觉条目生命周期，热重载随 `cancel_all()` 清空
+- 单测 `game_core_test` 扩至 21 用例（EventBus priority/off/快照重入、LOS/A*、状态机迁移、攻击 wire 序、死亡与 GameOver、冷却、固定种子游走复现、惰性门控）；冒烟扩至 61 项（events 注册表实表、hp/ai 快照、filter 单实体观测实战——双 filter 并存 + 缺键不匹配反向断言 + wire 序）
+
+#### Refactored
+- 移动裁决泛化为 `try_move`（任意 actor，成功 emit MoveSucceeded）；`player_move`/`player_wait` 增加 GameSystems 可空重载——完整敌方阶段（AI）与 M6 静止语义单一代码路径，既有测试零改动；新增 `tile_solid_terrain`（界外=不阻挡，供视野）与 `tile_is_solid`（界外=阻挡，M6 移动语义）区分
+
 ### 渲染：独立贴图缓存 RAII
 
 - 影响的文件: `engine/src/render.cpp`
