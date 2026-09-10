@@ -12,6 +12,8 @@
 
 #include "game_core.hpp"
 
+#include "trogue/animation.hpp"  // AnimationSet::name（entity→动画集映射，plan-10）
+
 #include "ai.hpp"      // AiSystem（resolve_enemy_turn 完整模式调用）
 #include "event_bus.hpp"
 
@@ -112,6 +114,13 @@ void import_scene(GameState& gs, const tg::SceneAsset& asset) {
         a.color = e.color;
         a.z = e.z;
         a.sprite = e.sprite;
+        // 动画集映射（plan-10 §3.1）：动画集名 = 所属 entity id；未命中 = -1
+        for (int s = 0; s < asset.animation_set_count(); ++s) {
+            if (asset.animation_set(s).name() == a.id) {
+                a.anim_set = s;
+                break;
+            }
+        }
         // 原型门控（plan-9 §3.3）：player → hp 100；goblin → hp 25 + AI；
         // 其余惰性实体（coin 等）不参与战斗（对齐原版 ai.lua:41 只查 AIState）。
         if (a.is_player) {

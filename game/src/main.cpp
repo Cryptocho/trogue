@@ -84,6 +84,7 @@ int skeleton_regression() {
     if (!r3 || r3->animation_set_count() != 1) return 1;
     const tg::AnimationSet& set = r3->animation_set(0);
     if (set.clip_count() != 7 || !set.has_clip("idle")) return 1;
+    if (set.name() != "AnimatedSprite2D") return 1;  // 名 = entity id（plan-10）
     auto r4 = tg::SceneAsset::load("assets/scenes/forest.json");
     if (!r4 || r4->layer_count() < 2 || r4->entity_count() < 4) return 1;
     return 0;
@@ -159,8 +160,9 @@ struct Demo {
     std::map<std::string, EnemyView> enemy_view;
 
     tg::TweenManager tween;
-    tg::AnimationPlayer anim;                // 绑定首个动画集（示意；可共存）
-    bool has_anim = false;
+    tg::AnimationPlayer anim;          // 帧动画播放器（绑定首个含动画 actor 的集）
+    bool has_anim = false;             // 已绑定可播放动画集
+    int bound_anim_set = -1;           // 当前绑定动画集序号（plan-10 归属校验）
 
     int window_w = 960, window_h = 540;
     tg::Vec2 cam{0, 0};
@@ -285,10 +287,22 @@ void reload_scene(Demo& d, const std::string& path) {
     d.view_tween = 0;
     game::input_buffer_flush(d.input); // 清空未决输入（场景已换）
     ++d.reloads;
-    d.has_anim = d.asset && d.asset->animation_set_count() > 0;
+    // 动画绑定（plan-10 §3.2）：绑定首个含动画 actor 的动画集；bound_anim_set
+    // 供绘制采样与快照注入做归属校验（防多动画实体时张冠李戴）
+    d.bound_anim_set = -1;
+    if (d.asset) {
+        // 注意：actors 为 std::map，「首个」= id 字典序而非场景文件序；
+        // 单动画实体场景无影响，多动画实体时的选择策略留遭留（plan-10 §7）
+        for (const auto& [id, a] : d.gs.actors) {
+            if (a.anim_set >= 0) { d.bound_anim_set = a.anim_set; break; }
+        }
+    }
+    d.has_anim = d.asset && d.bound_anim_set >= 0;
     if (d.has_anim) {
-        d.anim.bind(d.asset->animation_set(0));
+        d.anim.bind(d.asset->animation_set(d.bound_anim_set));
         if (!d.anim.play("idle")) d.anim.play("walk");
+    } else {
+        d.anim.bind(tg::AnimationSet{});
     }
     TraceLog(LOG_INFO, "[demo] 场景已交换（reloads=%d）", d.reloads);
 }
@@ -746,9 +760,10 @@ int main(int argc, char** argv) {
     d.scene_path = scene_path;
 
     // ── 里程碑 9 接线（plan-9 §3.6） ──
-    // 实体快照扩展注入点：hp（有 hp 的 actor）+ ai（战斗原型）；
-    // goblin 有 hp/ai，coin 等惰性实体两者皆无，player 仅 hp。
-    d.extra_entity_fields = [](tg::Json& j, const game::Actor& a) {
+    // 实体快照扩展注入点：hp（有 hp 的 actor）+ ai（战斗原型）+ anim（plan-10，
+    // 该 actor 的动画集被绑定时上报 clip/frame）；goblin 有 hp/ai，coin 等
+    // 惰性实体两者皆无，player 仅 hp，soldier 仅 anim。
+    d.extra_entity_fields = [&d](tg::Json& j, const game::Actor& a) {
         if (a.hp) j["hp"] = {a.hp->cur, a.hp->max};
         if (game::is_combat_archetype(a.type)) {
             tg::Json ai = tg::Json{{"state", game::ai_state_name(a.ai.state)}};
@@ -756,6 +771,10 @@ int main(int argc, char** argv) {
                                ? tg::Json{a.ai.target.x, a.ai.target.y}
                                : tg::Json(nullptr);
             j["ai"] = ai;
+        }
+        if (a.anim_set >= 0 && d.has_anim && d.bound_anim_set == a.anim_set) {
+            j["anim"] = tg::Json{{"clip", d.anim.clip_name()},
+                                 {"frame", d.anim.frame_index()}};
         }
     };
     // 规则引擎订阅管线事件（AbilityUse/DamageRequest/TurnEnded）；gs 对象
@@ -908,7 +927,20 @@ int main(int argc, char** argv) {
             }
             const ::Color rc{a->color.r, a->color.g, a->color.b, a->color.a};
             bool drawn = false;
-            if (a->sprite.has && d.asset) {
+            // 帧动画采样（plan-10 §3.2）：该 actor 的动画集已绑定 → 画当前帧。
+            // offset 组合 = 实体 descriptor 锚点 + 帧自身偏移（士兵 [-50,-50]+
+            // [0,0] 居中语义与静态帧一致）；采样失败回退静态 sprite。
+            if (a->anim_set >= 0 && d.has_anim && d.bound_anim_set == a->anim_set) {
+                tg::SpriteDesc f = d.anim.current_frame();
+                if (f.has) {
+                    f.offset = tg::Vec2{a->sprite.offset.x + f.offset.x,
+                                        a->sprite.offset.y + f.offset.y};
+                    const auto rr = tg::render_sprite(*d.asset, f,
+                                                      tg::Vec2{wx, wy}, a->color);
+                    if (rr == tg::RenderResult::Drawn) drawn = true;
+                }
+            }
+            if (!drawn && a->sprite.has && d.asset) {
                 const auto rr = tg::render_sprite(*d.asset, a->sprite,
                                                   tg::Vec2{wx, wy}, a->color);
                 if (rr == tg::RenderResult::Drawn) drawn = true;

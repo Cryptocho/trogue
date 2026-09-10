@@ -38,7 +38,7 @@ class AnimationSet {
 public:
     AnimationSet() = default;  // 空集（无效绑定源）
 
-    // 唯一标识/调试用（如 "soldier"）；空视图为空串
+    // 名 = 所属 entity 的 id（plan-10：entity→动画集映射）；空视图为空串
     std::string_view name() const;
 
     int clip_count() const;

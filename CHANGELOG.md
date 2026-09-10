@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### 帧动画消费：士兵 idle 循环渲染接入
+
+- 影响的文件: `engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/main.cpp`、`tools/tests/scene_schema_test.cpp`、`docs/plan-10.md`（新增）、`AGENTS.md`、`CMakeLists.txt`、`.gitignore`
+
+#### Added
+- 动画集名 = 所属 entity id（plan-10）：解析内嵌 animations 时记录 entity id，`AnimationSet::name()` 返回之（plan-5.4 预留路径就地兑现，不新增 API 面、快照结构不动）——entity→动画集映射键；多动画实体按解析序各自配对
+- game 层帧动画消费闭环：`Actor::anim_set` 导入时按名解析；reload 绑定首个含动画 actor 的动画集（`bound_anim_set` 归属校验，防多动画实体张冠李戴）；绘制循环采样 `current_frame()` 并组合 offset（实体 descriptor 锚点 + 帧自身偏移），采样失败回退静态 sprite；IPC 实体快照注入 `anim:{clip,frame}`（经既有 `extra_entity_fields` 注入点，lambda 改捕获）
+- 端到端验证（脚本驱动）：`anim.frame` 序列 [0,1,3,4,5,0] 出现回绕、clip 恒 idle；3 张连拍中相邻对 412 像素变化 + 与 `Soldier_Idle.png` 源帧逐像素比对 100% 命中 + 读图视觉验收
+
+#### Tests
+- `scene_schema_test` 新增 `test_animation_names`：真实士兵场景 + nlohmann 构造最小场景（多动画实体解析序配对 hero/foe、无动画实体不产生动画集）；`skeleton_regression` 补 name 断言
+
+#### Removed
+- `editor/assets/` 移出版本库（用户拍板：本地 Godot 视觉素材与导入元数据不入仓库；`.gitignore` 排除 + `git rm --cached` 解除跟踪，本地文件保留）
+
+#### Documentation
+- AGENTS.md：IPC 命令表与实体快照说明补 `anim` 字段；记录远端拓扑拍板（origin = 原版仓库、本地 main 追踪 `trogue-raylib` 分支、两分支零共同历史永不 merge）；子代理纪律措辞更新（用户更换工具后同步）
+
 ### IPC 移动视觉修复与审查修正（AI 调试会话）
 
 - 影响的文件: `game/src/main.cpp`、`game/src/rules.hpp`、`game/src/nav.hpp`、`game/src/nav.cpp`、`AGENTS.md`、`docs/plan-9.md`、`assets/textures/goblin.png`（新增）、`assets/scenes/goblin_test.json`（新增）

@@ -351,7 +351,7 @@ python3 tools/ipc_smoke.py
 | `help` | — | `{commands:[...]}` |
 | `events` | — | `{events:[{name, when, data, filter}]}`（game 事件注册表；plan-9 起 6 事件实表：StateChanged/MoveSucceeded/AbilityUsed/DamageDealt/EntityDied/TurnEnded，可 filter 字段=entity/source/target，逐条目文档化） |
 | `status` | — | `{scene, reloads, entities, phase, fps, uptime_s, port}` |
-| `list_entities` | — | `{entities:[{id,type,x,y,w,h,color, z?, transform:{visual,moving}, sprite?, hp?:[cur,max], ai?:{state,target}}], count}`（z≠0 才出现；hp/ai 仅战斗原型，plan-9；transform 为 inspector 视图，见下方说明） |
+| `list_entities` | — | `{entities:[{id,type,x,y,w,h,color, z?, transform:{visual,moving}, sprite?, hp?:[cur,max], ai?:{state,target}, anim?:{clip,frame}}], count}`（z≠0 才出现；hp/ai 仅战斗原型，plan-9；anim 仅动画集被绑定的实体，plan-10；transform 为 inspector 视图，见下方说明） |
 | `get_entity` | `id` | `{entity:{...}}`（字段同 list_entities） |
 | `query_entities` | 半径模式 `x` `y` `radius` 必填；或矩形模式 `rect:[x,y,w,h]`（同时提供时**半径模式优先**）；可选 `type` 过滤 | `{entities:[...], count}`；radius 按实体中心距查询点距离 ≤ radius，rect 按 AABB 相交 |
 | `set_entity` | `id`，`x?` `y?` `color?` | `{entity:{...}}`（改后快照） |
@@ -365,7 +365,7 @@ python3 tools/ipc_smoke.py
 | `log` | `msg` | `{logged:true}`（打印进引擎日志） |
 | `quit` | — | `{bye:true}`（引擎退出主循环） |
 
-实体快照字段说明：`z`/`sprite` 仅在有意义时出现（z≠0、有贴图）；`sprite` 图集形态为 `{tileset:<名字>,tile:<id>}`，独立贴图形态为 `{texture, region?, offset?}`；`transform` 为 inspector 视图（`visual` 当前绘制位置——静止时精确等于逻辑格像素 x/y，`moving` 是否在移动 tween 中，见「数值精度纪律」）。
+实体快照字段说明：`z`/`sprite`/`anim` 仅在有意义时出现（z≠0、有贴图、该实体动画集被绑定）；`sprite` 图集形态为 `{tileset:<名字>,tile:<id>}`，独立贴图形态为 `{texture, region?, offset?}`；`transform` 为 inspector 视图（`visual` 当前绘制位置——静止时精确等于逻辑格像素 x/y，`moving` 是否在移动 tween 中，见「数值精度纪律」）；`anim` 为帧动画状态（clip 名 + 当前帧索引，随播放推进，plan-10）。
 
 > **transform 视图（2026-09-09 拍板，inspector 式可观测性）**：实体快照含 `transform: {visual:[vx,vy], moving}`——`visual` 为当前绘制位置（玩家移动中为引擎 tween 插值浮点值，静止时**精确等于**逻辑格像素 x/y；其余实体恒等于逻辑位置），`moving` 为是否在移动动画中。设计目的：非视觉 Agent 凭"静止时 visual==x/y"即可**数值发现**插值残差/截断/逻辑-视觉失步类渲染问题（实测：曾因指数趋近 lerp 残差 + `DrawRectangle(int)` 截断产生恒定错位与抖动，单测与冒烟均不暴露，人眼才发现）。**game 层可扩展**：`game/src/main.cpp` 的 `Demo::extra_entity_fields`（`std::function`）可在快照上追加任意字段——未来 ECS 组件观察（如组件列表/属性）走同一注入点，不修改引擎与 wire 包络。
 
@@ -444,13 +444,15 @@ python3 tools/ipc_smoke.py
 4. 检查之后或用户要求时更新 CHANGELOG.md（检查之前禁止修改 CHANGELOG.md）
 5. 检查是否需要更新本文件
 6. 询问用户是否写 commit message；如需则给出**英文** commit message 预览等待用户确认，**禁止直接提交**
-7. 确认后提交**所有**变更（包括非本次变更）；当前无 remote，配置远端后提交并推送
+7. 确认后提交**所有**变更（包括非本次变更），然后推送（`git push`，本地 main 追踪远端）
+
+> **远端拓扑（2026-09-10 拍板）**：唯一远端 `origin = https://github.com/Cryptocho/trogue`（原版 Lua 项目的仓库）；本地 main → 远端分支 `trogue-raylib`，两分支**零共同历史、永不 merge**（无意义且需要 `--allow-unrelated-histories`）；远端 main（Lua 原版）永不触碰；本地仓库不含 `trogue-orign/`（gitignore），两分支内容零重叠。remote URL 内嵌 `$GIT_PAT` 凭证（仅存本地 .git/config，勿打印/勿外传）。
 
 - 计划必须含具体步骤（含上述 3~7 步）；重大设计先写入本文件对应章节再实现（文档先行）
 - CHANGELOG 与 commit message 不包含阶段编号、AGENTS.md/TODO 等内部文档信息
 - 回复用户始终使用中文；禁止 mermaid
 
-> **子代理等待纪律（2026-09-07 拍板，反例教训）**：启动 subagent 时若**下一步动作依赖其结果**，一律用 `run_in_background: false` 阻塞等待，拿到结果再继续；不要开后台 subagent 后反复轮询（`list_agents`/`job_output` 空转、连续重复相同调用）空耗 token。若确实需要后台并行推进独立工作，启动后**继续做有用的独立准备**（只读核对、起草文档等），只在其真正完成的通知到达后收集结果；等待期间禁止重复无意义轮询。
+> **子代理等待纪律（2026-09-07 拍板，反例教训）**：启动 subagent 时若**下一步动作依赖其结果**，一律阻塞等待，拿到结果再继续；不要开后台 subagent 后反复轮询（`list_agents`/`job_output` 空转、连续重复相同调用）空耗 token。若确实需要后台并行推进独立工作，启动后**继续做有用的独立准备**（只读核对、起草文档等），只在其真正完成的通知到达后收集结果；等待期间禁止重复无意义轮询。
 
 > **不重复造轮子（2026-09-09 拍板，反例教训）**：引擎已提供的通用能力（如 `tg::TweenManager` 的数值/位置/颜色补间、`tg::AnimationPlayer` 动画）**必须直接复用，不得在 game 层手写等价物**。本项目两次踩坑：① `MoveAnim`（手写 0.12s outQuad 移动插值）——后改为引擎 `add_vec2 + Easing::quad_out`（公式 `1-(1-t)²` 与原版 `-t*(t-2)` 完全一致，1:1 对齐手感）；② manual lerp（指数趋近，永不收敛 → 残差）。凡通用表现、算法、数据结构，先检索引擎 `trogue/*.hpp` 与既有代码有无现成实现；有则直接调用。game 层只写「引擎原语之上的决策/组合/编排」。
 
@@ -512,4 +514,3 @@ python3 tools/ipc_smoke.py
 - **2026-09-09 里程碑 6：移植 trogue-orign 最小闭环（已完整验证；完整记录归档 `docs/history.md`）**：game_core 回合状态机 + 单格 8 向移动（地形 solid/实体互斥/斜切切角，对齐原版 canDiagonalMove）+ 静止敌方回合（同步结算）+ forest.json + IPC `turn`/`move`/`wait` 回合命令（dx/dy 严格整数）+ game_core_test 8 用例；评审修复 asset 悬垂/切角误判/dx 非整数截断。
 
 - **2026-09-09 里程碑 7：IPC 事件通道（已完整验证；完整记录归档 `docs/history.md`）**：engine `tg::Ipc` 事件通道（subscribe/unsubscribe/connections + publish/disconnect + 可选 filter 顶层等值匹配；断开即订阅清零、事件超限无兜底直接断开；三轮审查 PASS，范围裁定 engine-only 不实现具体 game 事件）+ game `events` 空注册表；`tools/tests/ipc_test.cpp` 双分支单测 + smoke +12 断言（44/44）。
-

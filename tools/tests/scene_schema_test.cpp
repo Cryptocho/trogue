@@ -667,6 +667,63 @@ bool test_tileset_visual_fields() {
     return ok;
 }
 
+// 动画集名 = 所属 entity id（plan-10 §3.1：entity→动画集映射键）
+bool test_animation_names() {
+    bool ok = true;
+    // 真实资产：士兵场景
+    {
+        const auto r =
+            tg::SceneAsset::load("assets/scenes/soldier_animated_sprite_2d.json");
+        if (!r) {
+            ::tg_test::record_failure(__FILE__, __LINE__,
+                                      "soldier load failed: " + r.error().message);
+            return false;
+        }
+        if (r->animation_set_count() != 1 ||
+            r->animation_set(0).name() != "AnimatedSprite2D") {
+            ::tg_test::record_failure(
+                __FILE__, __LINE__, "动画集名应 = 所属 entity id (AnimatedSprite2D)");
+            ok = false;
+        } else {
+            ::tg_test::record_ok();
+        }
+    }
+    // 内嵌最小场景：自定义 id 同步；无动画实体不产生动画集；
+    // 多动画实体按解析序各自配对（plan-10 映射核心场景，审查 M10 补钉）
+    // 用 nlohmann 构造（同 test_payload_limits），避免手写嵌套括号的转义陷阱
+    const json scene = {
+        {"format", "tro-scene"}, {"version", 2},
+        {"tilemap", json{{"layers", json::array()}}},
+        {"entities", json::array({
+            {{"id", "hero"},
+             {"animations", json{{"textures", json::array()},
+                                 {"animations", json::array()}}}},
+            {{"id", "plain"}},
+            {{"id", "foe"},
+             {"animations", json{{"textures", json::array()},
+                                 {"animations", json::array()}}}},
+        })},
+    };
+    const std::string path = write_temp_scene2(scene.dump());
+    const auto r = tg::SceneAsset::load(path);
+    std::remove(path.c_str());
+    if (!r) {
+        ::tg_test::record_failure(__FILE__, __LINE__,
+                                  "minimal anim scene load failed: " +
+                                      r.error().message);
+        return false;
+    }
+    if (r->animation_set_count() != 2 || r->animation_set(0).name() != "hero" ||
+        r->animation_set(1).name() != "foe") {
+        ::tg_test::record_failure(__FILE__, __LINE__,
+                                  "动画集应按 entity 解析序配对：hero, foe");
+        ok = false;
+    } else {
+        ::tg_test::record_ok();
+    }
+    return ok;
+}
+
 }  // namespace
 
 // 注意：build/ 目录必须存在（写临时文件用）。ctest working dir = 项目根。
@@ -681,6 +738,7 @@ int main() {
     test_entities();
     test_sprite();
     test_animations();
+    test_animation_names();
     test_payload_limits();
     test_positive_regressions();
     test_atlas_col_row_meta();

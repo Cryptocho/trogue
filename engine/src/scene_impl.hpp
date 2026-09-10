@@ -34,6 +34,7 @@ struct AnimClip {
 };
 struct AnimData {
     std::uint64_t asset_id = 0;          // 归属（= 所属 asset 的 id）
+    std::string name;                    // 所属 entity 的 id（plan-10：entity→动画集映射键）
     std::vector<std::string> textures;   // assets-relative 路径
     std::vector<AnimClip> clips;
 };

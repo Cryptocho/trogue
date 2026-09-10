@@ -849,10 +849,12 @@ expected<void, Error> parse_entity(const json& e, std::size_t index,
             return tl::unexpected(r.error());
     }
     out.entities.push_back(std::move(ent));
-    // animations（可选；null 拒绝）
+    // animations（可选；null 拒绝）；动画集名 = 所属 entity id（plan-10 映射键；
+    // ent 已被 move，从 entities 取回 id）
     if (auto a = e.find("animations"); a != e.end()) {
         if (auto r = parse_animations(*a, where + ".animations", out); !r)
             return tl::unexpected(r.error());
+        out.anims.back().name = out.entities.back().id;
     }
     return {};
 }

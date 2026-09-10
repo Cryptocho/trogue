@@ -22,8 +22,8 @@ namespace tg {
 // ════════════════════ AnimationSet（只读视图） ════════════════════
 
 std::string_view AnimationSet::name() const {
-    // 动画集无独立名字段：返回空视图（后续如需按 entity id 命名由 asset 提供）。
-    return "";
+    // 动画集名 = 解析时记录的所属 entity id（plan-10：entity→动画集映射键）。
+    return data_ ? std::string_view{data_->name} : std::string_view{};
 }
 
 int AnimationSet::clip_count() const {

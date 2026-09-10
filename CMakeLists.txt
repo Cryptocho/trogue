@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)            # clangd会自动使用
+
 # 引擎与游戏代码统一零告警基线（plan-5.1 §2：-Wall -Wextra -Wpedantic）
 add_compile_options(-Wall -Wextra -Wpedantic)
 

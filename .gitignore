@@ -11,6 +11,9 @@ trogue-orign/
 # Godot 引擎源码参考副本（只读查证用，不入仓库）
 reference/
 
+# Godot 本地视觉素材（美术源文件与导入元数据，不入仓库）
+editor/assets/
+
 # agent 工具状态
 .mimocode/
 

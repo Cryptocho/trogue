@@ -9,7 +9,8 @@
 //
 // 设计约束（plan-6 §3.3 / plan-9 §3.3）：
 //   - 不依赖渲染/窗口/输入：可直接进入 tools/tests 无窗口单测；
-//   - 只消费 trogue/scene.hpp 的 tile 查询（tg::is_solid_at）；
+//   - 只消费 trogue/scene.hpp 的 tile 查询（tg::is_solid_at）与
+//     trogue/animation.hpp 的动画集名查询（纯声明，plan-10）；
 //   - GameState 是 actor 表 + 回合状态的唯一所有权，main.cpp 只读快照；
 //   - 引擎公共 API 不动，本模块全部是 game 层代码。
 
@@ -120,6 +121,7 @@ struct Actor {
     tg::Color color{255, 255, 255, 255};
     int z = 0;               // 视觉层级提示（descriptor 透传，渲染排序用）
     tg::SpriteDesc sprite;   // 视觉快照（无贴图时 has==false，渲染为色块）
+    int anim_set = -1;       // 动画集索引（-1=无动画；名=entity id 映射，plan-10）
     // ── 里程碑 9：战斗/AI 状态（惰性实体一律 nullopt/空） ──
     std::optional<Hp> hp;                 // nullopt = 无 hp（不参与战斗）
     std::map<std::string, int> cooldowns; // 能力冷却（仅 >0 才登记，plan-9 §2.5）
