@@ -530,7 +530,7 @@ bool test_positive_regressions() {
                         return std::string((std::istreambuf_iterator<char>(in)),
                                            std::istreambuf_iterator<char>());
                     }());
-    ok &= expect_ok("test.json（图集模式，引真实 tilesets/test{,_1}.json）",
+    ok &= expect_ok("test.json（图集模式，引真实 tilesets/test_tileset{,_1}.json）",
                     [] {
                         std::ifstream in("assets/scenes/test.json", std::ios::binary);
                         return std::string((std::istreambuf_iterator<char>(in)),

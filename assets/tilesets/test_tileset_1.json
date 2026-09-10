@@ -4,7 +4,7 @@
 	"rows": 16,
 	"terrain_sets": [
 		{
-			"mode": "corners",
+			"mode": "corners_and_sides",
 			"terrains": [
 				{
 					"color": "#d2bc00",
@@ -20,6 +20,10 @@
 		{
 			"col": 1,
 			"id": 0,
+			"peering_bits": {
+				"bottom_side": 0,
+				"right_side": 0
+			},
 			"row": 3,
 			"terrain": 0,
 			"terrain_set": 0
@@ -27,6 +31,11 @@
 		{
 			"col": 1,
 			"id": 1,
+			"peering_bits": {
+				"bottom_side": 0,
+				"right_side": 0,
+				"top_side": 0
+			},
 			"row": 4,
 			"terrain": 0,
 			"terrain_set": 0
@@ -34,6 +43,10 @@
 		{
 			"col": 1,
 			"id": 2,
+			"peering_bits": {
+				"right_side": 0,
+				"top_side": 0
+			},
 			"row": 5,
 			"terrain": 0,
 			"terrain_set": 0
@@ -41,6 +54,9 @@
 		{
 			"col": 1,
 			"id": 3,
+			"peering_bits": {
+				"right_side": 0
+			},
 			"row": 6,
 			"terrain": 0,
 			"terrain_set": 0
@@ -48,6 +64,11 @@
 		{
 			"col": 2,
 			"id": 4,
+			"peering_bits": {
+				"bottom_side": 0,
+				"left_side": 0,
+				"right_side": 0
+			},
 			"row": 3,
 			"terrain": 0,
 			"terrain_set": 0
@@ -55,6 +76,12 @@
 		{
 			"col": 2,
 			"id": 5,
+			"peering_bits": {
+				"bottom_side": 0,
+				"left_side": 0,
+				"right_side": 0,
+				"top_side": 0
+			},
 			"row": 4,
 			"terrain": 0,
 			"terrain_set": 0
@@ -62,6 +89,11 @@
 		{
 			"col": 2,
 			"id": 6,
+			"peering_bits": {
+				"left_side": 0,
+				"right_side": 0,
+				"top_side": 0
+			},
 			"row": 5,
 			"terrain": 0,
 			"terrain_set": 0
@@ -69,6 +101,10 @@
 		{
 			"col": 2,
 			"id": 7,
+			"peering_bits": {
+				"left_side": 0,
+				"right_side": 0
+			},
 			"row": 6,
 			"terrain": 0,
 			"terrain_set": 0
@@ -76,6 +112,10 @@
 		{
 			"col": 3,
 			"id": 8,
+			"peering_bits": {
+				"bottom_side": 0,
+				"left_side": 0
+			},
 			"row": 3,
 			"terrain": 0,
 			"terrain_set": 0
@@ -83,6 +123,11 @@
 		{
 			"col": 3,
 			"id": 9,
+			"peering_bits": {
+				"bottom_side": 0,
+				"left_side": 0,
+				"top_side": 0
+			},
 			"row": 4,
 			"terrain": 0,
 			"terrain_set": 0
@@ -90,6 +135,10 @@
 		{
 			"col": 3,
 			"id": 10,
+			"peering_bits": {
+				"left_side": 0,
+				"top_side": 0
+			},
 			"row": 5,
 			"terrain": 0,
 			"terrain_set": 0
@@ -97,6 +146,9 @@
 		{
 			"col": 3,
 			"id": 11,
+			"peering_bits": {
+				"left_side": 0
+			},
 			"row": 6,
 			"terrain": 0,
 			"terrain_set": 0
@@ -104,6 +156,9 @@
 		{
 			"col": 4,
 			"id": 12,
+			"peering_bits": {
+				"bottom_side": 0
+			},
 			"row": 3,
 			"terrain": 0,
 			"terrain_set": 0
@@ -111,6 +166,10 @@
 		{
 			"col": 4,
 			"id": 13,
+			"peering_bits": {
+				"bottom_side": 0,
+				"top_side": 0
+			},
 			"row": 4,
 			"terrain": 0,
 			"terrain_set": 0
@@ -118,6 +177,9 @@
 		{
 			"col": 4,
 			"id": 14,
+			"peering_bits": {
+				"top_side": 0
+			},
 			"row": 5,
 			"terrain": 0,
 			"terrain_set": 0

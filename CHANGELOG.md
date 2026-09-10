@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 导出器：terrain mode 正确判定，peering_bits 真实导出
+
+- 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`tools/tests/scene_schema_test.cpp`、`assets/scenes/test.json`、`assets/tilesets/test_tileset.json`（新增，替代原 test.json）、`assets/tilesets/test_tileset_1.json`（新增，替代原 test_1.json）、`assets/tilesets/test.json`（删除）、`assets/tilesets/test_1.json`（删除）
+
+#### Bug Fixes
+- 导出器本地维护的 `TileSet.TerrainMode` 枚举值副本与 Godot 4.7.2 实际枚举不符（4.7 改名为 `TERRAIN_MODE_MATCH_*` 且值序重排），terrain set mode 判定走错分支：corners_and_sides 集合被误标为 `corners`，peering_bits 只读四角邻位而漏掉用户标注的四边连接，导致 peering_bits 从未导出；修复为按名引用引擎常量 `TileSet.TERRAIN_MODE_MATCH_*`（枚举再变动将编译期报错，不再静默错导）
+
+#### Added
+- tro-tileset v2 的 per-tile `peering_bits` 至此真实可用：按 terrain set 实际 mode（sides/corners/corners_and_sides）导出对应邻位、未连接（-1）省略，为动态 autotile（地图生成等）提供数据基础；`test.tscn` 重导出，16 个地形 tile 的 peering_bits 与 Godot 侧标注逐一核对一致，导出产物随源 .tres 改名为 `test_tileset{,_1}.json`，孤儿旧导出删除
+
 ### 渲染：贴图缺失日志每路径一次
 
 - 影响的文件: `engine/src/render.cpp`

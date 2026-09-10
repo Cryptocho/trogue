@@ -30,10 +30,10 @@ const MAX_TILESETS := 8
 # 保留 metadata 名（不进 props）；z = 渲染排序键，solid = 实体/层碰撞标记
 const RESERVED_META := ["type", "w", "h", "color", "solid", "background", "z"]
 
-# Godot TileSet.TerrainMode
-const TERRAIN_MODE_CORNERS := 0
-const TERRAIN_MODE_SIDES := 1
-const TERRAIN_MODE_CORNERS_AND_SIDES := 2
+# Godot TileSet.TerrainMode：直接用引擎常量 TileSet.TERRAIN_MODE_MATCH_*，勿本地抄值。
+# 曾有的本地值序副本与 Godot 4.7.2 实际枚举（CORNERS_AND_SIDES=0/CORNERS=1/SIDES=2，
+# 查证 reference/godot-4.7.2-stable tile_set.h）不符，导致 mode 判定走错分支、
+# peering_bits 漏导（2026-09-10 修复）；按名引用后枚举再变将编译期报错。
 
 
 # ──────────────────────────────────────────────
@@ -359,10 +359,12 @@ static func _append_terrain_sets(data: Dictionary, ts: TileSet) -> void:
 			})
 		var mode_name := "sides"
 		match ts.get_terrain_set_mode(i):
-			TERRAIN_MODE_CORNERS:
+			TileSet.TERRAIN_MODE_MATCH_CORNERS:
 				mode_name = "corners"
-			TERRAIN_MODE_CORNERS_AND_SIDES:
+			TileSet.TERRAIN_MODE_MATCH_CORNERS_AND_SIDES:
 				mode_name = "corners_and_sides"
+			TileSet.TERRAIN_MODE_MATCH_SIDES:
+				mode_name = "sides"
 		sets.append({"mode": mode_name, "terrains": terrains})
 	if not sets.is_empty():
 		data["terrain_sets"] = sets
@@ -374,13 +376,13 @@ static func _append_peering_bits(entry: Dictionary, ts: TileSet, td: TileData) -
 		return
 	var bits: Array = []
 	match ts.get_terrain_set_mode(td.get_terrain_set()):
-		TERRAIN_MODE_SIDES:
+		TileSet.TERRAIN_MODE_MATCH_SIDES:
 			bits = [TileSet.CELL_NEIGHBOR_RIGHT_SIDE, TileSet.CELL_NEIGHBOR_BOTTOM_SIDE,
 					TileSet.CELL_NEIGHBOR_LEFT_SIDE, TileSet.CELL_NEIGHBOR_TOP_SIDE]
-		TERRAIN_MODE_CORNERS:
+		TileSet.TERRAIN_MODE_MATCH_CORNERS:
 			bits = [TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER, TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,
 					TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER, TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER]
-		TERRAIN_MODE_CORNERS_AND_SIDES:
+		TileSet.TERRAIN_MODE_MATCH_CORNERS_AND_SIDES:
 			bits = [TileSet.CELL_NEIGHBOR_RIGHT_SIDE, TileSet.CELL_NEIGHBOR_BOTTOM_SIDE,
 					TileSet.CELL_NEIGHBOR_LEFT_SIDE, TileSet.CELL_NEIGHBOR_TOP_SIDE,
 					TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER, TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,

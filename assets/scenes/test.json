@@ -19,7 +19,7 @@
 			},
 			"type": "soldier",
 			"w": 16.0,
-			"x": -14.0,
+			"x": -19.0,
 			"y": 47.0
 		}
 	],
@@ -65,7 +65,7 @@
 					0,
 					0
 				],
-				"tileset": "test",
+				"tileset": "test_tileset",
 				"width": 5
 			},
 			{
@@ -108,7 +108,7 @@
 					7,
 					10
 				],
-				"tileset": "test_1",
+				"tileset": "test_tileset_1",
 				"width": 5
 			}
 		],
@@ -116,12 +116,12 @@
 		"tile_width": 16,
 		"tilesets": [
 			{
-				"name": "test",
-				"path": "tilesets/test.json"
+				"name": "test_tileset",
+				"path": "tilesets/test_tileset.json"
 			},
 			{
-				"name": "test_1",
-				"path": "tilesets/test_1.json"
+				"name": "test_tileset_1",
+				"path": "tilesets/test_tileset_1.json"
 			}
 		]
 	},

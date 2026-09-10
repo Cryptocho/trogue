@@ -4,7 +4,7 @@
 	"rows": 16,
 	"terrain_sets": [
 		{
-			"mode": "corners",
+			"mode": "corners_and_sides",
 			"terrains": [
 				{
 					"color": "#d2bc00",
