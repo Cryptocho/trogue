@@ -324,6 +324,12 @@ bool test_entities() {
     ok &= expect_reject("entity 未知键",
                         scene_with(R"({"id":"a","junk":1})"),
                         tg::ErrorCode::kSchemaViolation);
+    // props 透传（v1.1 预留字段）：object 容忍（校验形状后忽略不存）；非 object 拒绝
+    ok &= expect_ok("entity props object 容忍",
+                    scene_with(R"({"id":"a","props":{"hp":3,"note":"x"}})"));
+    ok &= expect_reject("entity props 非 object",
+                        scene_with(R"({"id":"a","props":42})"),
+                        tg::ErrorCode::kSchemaViolation);
     // id 缺失 / 空 / 超长 / 重复
     ok &= expect_reject("entity 缺 id", scene_with(R"({"type":"x"})"),
                         tg::ErrorCode::kSchemaViolation);

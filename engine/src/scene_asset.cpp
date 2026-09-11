@@ -759,10 +759,16 @@ expected<void, Error> parse_entity(const json& e, std::size_t index,
         const std::string& k = kv.key();
         if (k != "id" && k != "type" && k != "x" && k != "y" && k != "w" &&
             k != "h" && k != "z" && k != "color" && k != "solid" &&
-            k != "sprite" && k != "animations")
+            k != "sprite" && k != "animations" && k != "props")
             return tl::unexpected(err(ErrorCode::kSchemaViolation,
                                       at(where, "未知键 " + k)));
     }
+    // props：Godot 侧玩法 metadata 透传（v1.1 起预留字段，导出器持续写入）。引擎只
+    // 校验形状、不读取不存储——只携带不解释，语义由 game 导入 descriptor 时决定；
+    // 未来消费时再扩展 SceneEntity 快照（需求驱动）。
+    if (auto p = e.find("props"); p != e.end() && !p->is_object())
+        return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                  at(where, "props 必须为 object")));
     SceneEntity ent;
     // id 必填、唯一
     const auto id_it = e.find("id");

@@ -270,6 +270,7 @@ python3 tools/ipc_smoke.py
 | 实体 solid | 可选 bool（缺省 false）：通用的初始空间/导入提示；engine tile-only 查询不读取它，也不自动把实体 AABB 加入碰撞。game 接管对象时可自行决定是否导入 OOP/ECS 碰撞组件；仅 `true` 字面量生效，其余值按缺省 false 处理 |
 | 实体 sprite | 可选对象，两种形态互斥：图集形态 `{"tileset": name, "tile": id}`（name 必须在场景 tilesets 中；不接受 region/offset，写了被忽略）或独立贴图形态 `{"texture": "textures/x.png", "region": [x,y,w,h]?, "offset": [ox,oy]?}`；region 缺省整图，offset 缺省 `[0,0]`；绘制锚点 = 实体 x/y + offset，贴图按原始像素尺寸绘制（不缩放） |
 | 实体 animations | 可选对象（v2.1）：动画帧表 `{"textures": [贴图路径索引表], "animations": [{"name": ..., "fps": N, "loop": bool, "frames": [{"texture": 索引, "region": [x,y,w,h]?, "offset": [ox,oy]?}]}]}`；`textures` 路径相对 assets/ 且去重，帧经索引引用；region 缺省整图，offset 缺省 `[0,0]`；结构同「tro-animations v1」。引擎已消费（C++ 里程碑起由 `tg::AnimationSet`/`tg::AnimationPlayer` 播放，见「引擎公共 API 边界」）；历史 C 阶段曾透传不消费 |
+| 实体 props | 可选 object（v1.1 起预留字段）：Godot 侧实体 metadata 的自由透传——导出器把非保留名 metadata 收进该对象，逐实体玩法标注/移植初值的载体；引擎只校验为 object、**忽略不存**（只携带不解释，语义由 game 导入 spawn descriptor 时自行决定）；未来按需消费（扩展 `SceneEntity` 快照），不预做 API。非 object 拒绝载入；实体序列化字节限额照常约束它 |
 | color | `#rrggbb` 或 `#rrggbbaa`，缺省白色；有 sprite 时作染色 tint（缺省白 = 原样绘制），无 sprite 时为色块颜色 |
 | 渲染顺序 | engine 只保证 tile 层按资产数组序绘制；entity descriptor 不由 engine 自动绘制或排序。game 自己决定显式 sprite 的调用顺序、y-sort、z-sort 和实体色块绘制 |
 | 校验 | format/version 不符、tiles 长度或值域不对、tileset 引用不存在、尺寸不一致、三态组合不合法（图集+palette 同现、无 tilesets/palette 但有层）→ 拒绝载入并保留旧场景 |

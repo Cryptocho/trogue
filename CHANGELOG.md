@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 引擎：实体 props 透传字段容忍（导出器-引擎契约矛盾修复）
+
+- 影响的文件: `engine/src/scene_asset.cpp`、`tools/tests/scene_schema_test.cpp`、`AGENTS.md`
+
+#### Bug Fixes
+- 实体 `props` 曾被实体键白名单以「未知键」拒绝载入，与导出器自 v1.1 起持续写 `props`（非保留名 metadata 收集，注释称玩法移植预留）的行为矛盾——任何带 `props` 的导出场景都无法加载（现有资产恰好不含，属潜伏问题）；引擎现放行 `props` 并校验为 object 后忽略不存：只携带不解释，语义由 game 导入 spawn descriptor 时自行决定；非 object 仍拒绝
+
+#### Documentation
+- AGENTS.md tro-scene 权威表补回「实体 props」字段定义（v1.1 预留字段的权威化：来源、引擎行为、限额约束、未来按需消费）
+
 ### 引擎构建：独立构建 engine 目录恢复自包含
 
 - 影响的文件: `engine/CMakeLists.txt`
