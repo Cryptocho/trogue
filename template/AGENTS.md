@@ -22,7 +22,9 @@ project/
 ```
 
 快照（`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp`）由上游同步，
-**不得手改**；要改引擎请改 trogue 仓库再同步。项目自有：`game/`、`assets/`、
+**不得手改**；要改引擎请改 trogue 仓库，再在 trogue 仓库内重跑
+`template/scripts/sync_from_source.sh` 刷新本项目的快照（同步脚本只存在于
+trogue 仓库的 template/ 中，派生项目不含它）。项目自有：`game/`、`assets/`、
 `CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`。
 
 ## 引擎公共 API 边界（重要）
@@ -124,7 +126,7 @@ godot --headless --path editor --script res://addons/scene_exporter/headless_exp
 python3 pixellab/pxlab.py import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle]
 # Wang 瓦片集：保存 create_topdown_tileset 的 metadata
 python3 pixellab/pxlab.py import-tileset --meta <json> --image-url <png URL> --lower <名> --upper <名>
-# 地图：get_map ASCII 网格 → 场景
+# 地图：get_map ASCII 网格 → 场景（依赖 build/tools/trogue_scene_gen，先构建）
 python3 pixellab/pxlab.py import-map --grid <文件|-> --tileset <tro-tileset> --scene <名> --out <assets 相对路径>
 python3 pixellab/pxlab.py verify        # 复核产物 sha256
 ```

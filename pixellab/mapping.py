@@ -7,7 +7,7 @@
    归 lower）。实测 16/16 精确命中（探针 2026-09-11）。
 3. 顶点采样：格的 4 顶点 = 该格 terrain 与 4/8 邻格多数投票（见 vertex_corners）。
 
-纯数据 + 纯函数，无 IO；单测见 tests/test_mapping.py。
+纯数据 + 纯函数，无 IO。
 """
 
 from __future__ import annotations
