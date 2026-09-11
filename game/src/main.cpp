@@ -633,7 +633,7 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         static const char* cmds[] = {
             "ping", "help", "status", "list_entities", "get_entity",
             "query_entities", "set_entity", "spawn", "despawn",
-            "layers", "solid_at", "get_tile", "reload", "screenshot",
+            "layers", "solid_at", "get_tile", "probe_collide", "reload", "screenshot",
             "log", "quit", "turn", "move", "wait", "genmap",
             "subscribe", "unsubscribe", "connections", "events",
         };
@@ -898,6 +898,65 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         data = tg::Json::object();
         (*data)["tiles"] = tiles;
         (*data)["solid"] = solid;
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "probe_collide") {
+        if (!d.asset) {
+            error = "no scene loaded";
+            return tg::IpcStatus::error;
+        }
+        tg::Json out = tg::Json::object();
+        bool any = false;
+        // segment 分区：a + b
+        if (req.contains("a") && req.contains("b")) {
+            if (!req["a"].is_array() || req["a"].size() != 2 ||
+                !req["b"].is_array() || req["b"].size() != 2) {
+                error = "probe_collide a/b must be [x,y]";
+                return tg::IpcStatus::error;
+            }
+            const float ax = req["a"][0].get<float>(), ay = req["a"][1].get<float>();
+            const float bx = req["b"][0].get<float>(), by = req["b"][1].get<float>();
+            const auto h = tg::segment_hits_solid(*d.asset, tg::Vec2{ax, ay},
+                                                  tg::Vec2{bx, by});
+            tg::Json sj = tg::Json::object();
+            sj["result"] = h.result == tg::TileQueryResult::solid  ? "solid"
+                           : h.result == tg::TileQueryResult::error ? "error"
+                                                                    : "clear";
+            sj["layer"] = h.layer;
+            sj["tx"] = h.tx;
+            sj["ty"] = h.ty;
+            sj["t"] = h.t;
+            sj["point"] = tg::Json::array({h.point.x, h.point.y});
+            out["segment"] = sj;
+            any = true;
+        }
+        // sweep 分区：rect + delta
+        if (req.contains("rect") && req.contains("delta")) {
+            if (!req["rect"].is_array() || req["rect"].size() != 4 ||
+                !req["delta"].is_array() || req["delta"].size() != 2) {
+                error = "probe_collide rect must be [x,y,w,h], delta [dx,dy]";
+                return tg::IpcStatus::error;
+            }
+            const tg::Rect box{req["rect"][0].get<float>(), req["rect"][1].get<float>(),
+                               req["rect"][2].get<float>(), req["rect"][3].get<float>()};
+            const tg::Vec2 delta{req["delta"][0].get<float>(),
+                                 req["delta"][1].get<float>()};
+            const auto s = tg::sweep_move(*d.asset, box, delta);
+            tg::Json wj = tg::Json::object();
+            wj["box"] = tg::Json::array({s.box.x, s.box.y, s.box.w, s.box.h});
+            wj["blocked_x"] = s.blocked_x;
+            wj["blocked_y"] = s.blocked_y;
+            wj["result"] = s.result == tg::TileQueryResult::solid  ? "solid"
+                           : s.result == tg::TileQueryResult::error ? "error"
+                                                                    : "clear";
+            out["sweep"] = wj;
+            any = true;
+        }
+        if (!any) {
+            error = "probe_collide needs (a,b) and/or (rect,delta)";
+            return tg::IpcStatus::error;
+        }
+        data = out;
         return tg::IpcStatus::handled;
     }
     if (cmd == "genmap") return handle_genmap(d, req, data, error);

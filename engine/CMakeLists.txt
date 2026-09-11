@@ -67,6 +67,7 @@ find_package(tl-expected REQUIRED)
 set(ENGINE_SOURCES
     src/engine.cpp
     src/scene_asset.cpp
+    src/collision.cpp
     src/render.cpp
     src/animation.cpp
     src/tween.cpp

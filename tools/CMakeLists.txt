@@ -67,6 +67,14 @@ add_test(NAME task_runner_test COMMAND trogue_task_runner_test)
 set_tests_properties(task_runner_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── 碰撞几何原语单测（纯公共 API，链接生产库） ──
+add_executable(trogue_collision_test tests/collision_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_collision_test PRIVATE trogue_engine
+                                                     ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME collision_test COMMAND trogue_collision_test)
+set_tests_properties(collision_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── terrain 匹配表/选择器单测（纯公共 API，链接生产库） ──
 add_executable(trogue_terrain_test tests/terrain_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_terrain_test PRIVATE trogue_engine

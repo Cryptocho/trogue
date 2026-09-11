@@ -130,6 +130,27 @@ def main():
     check("get_tile 结构", r.get("ok") and isinstance(r["data"]["tiles"], list)
           and isinstance(r["data"]["solid"], bool), r)
 
+    # 碰撞几何原语（probe_collide）：segment 命中/未命中、sweep 接触、非法参数
+    r = rpc(cmd="probe_collide", a=[24, 72], b=[640, 72])
+    seg = r.get("data", {}).get("segment", {})
+    check("probe_collide segment 命中墙",
+          r.get("ok") and seg.get("result") == "solid"
+          and seg.get("tx") == 20 and seg.get("ty") == 4, r)
+
+    r = rpc(cmd="probe_collide", a=[24, 24], b=[600, 24])
+    check("probe_collide segment 空区 clear",
+          r.get("ok") and r["data"]["segment"]["result"] == "clear", r)
+
+    r = rpc(cmd="probe_collide", rect=[24, 24, 16, 16], delta=[0, 400])
+    sw = r.get("data", {}).get("sweep", {})
+    check("probe_collide sweep 停在墙前",
+          r.get("ok") and sw.get("result") == "solid"
+          and sw.get("blocked_y") is True
+          and abs(sw["box"][1] - 352.0) < 0.1, r)
+
+    r = rpc(cmd="probe_collide")
+    check("probe_collide 缺参数报错", r.get("ok") is False, r)
+
     r = rpc(cmd="query_entities", x=0, y=0)
     check("query_entities 缺 radius 报错", r.get("ok") is False, r)
 
@@ -218,6 +239,7 @@ def main():
     check("help 登记通道命令",
           all(c in cmds for c in
               ("subscribe", "unsubscribe", "connections", "events")), r)
+    check("help 登记 probe_collide", "probe_collide" in cmds, r)
 
     # 独立长连接订阅（主 sock 保持短连接 RPC 语义，互不干扰）
     ev_sock = socket.create_connection(("127.0.0.1", args.port), timeout=5)

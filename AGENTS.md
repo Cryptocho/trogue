@@ -113,7 +113,7 @@
 │  scene_asset  tro-* 资产解析与只读 descriptor    │
 │  tileset     图集资源与 tile 区域                │
 │  render      tile 层/显式 sprite 绘制原语        │
-│  collision   tile 层查询（调用方选择如何使用）   │
+│  collision   tile 层查询 + 静态几何原语          │
 │  animation   帧动画播放器（消费 tro-animations）│
 │  tween       数值/位置/颜色补间执行原语          │
 │  terrain     autotile 匹配表 TerrainTable/pick_tile│
@@ -131,7 +131,7 @@
 - **功能准入判据（2026-09-11 拍板）**：引擎只收**机制性、确定性、可无头测试**的执行原语（帧采样、补间、bits→tile id 选择、JSON 校验、watcher、IPC）；音频总线/混音、shader 管理、粒子等**美学/玩法决策载体**由 game 直调 raylib 实现（沿「游戏概念不得流入引擎」的反方向流动）。公共 API 薄到能完整装进 Agent 上下文——使用者熟悉 raylib 甚于本引擎 API，能用 raylib 直达的不进引擎。
 - **场景资产不是游戏世界**：引擎加载的是不可变/只读的 `tg::SceneAsset` 与 `tg::SceneEntity` 快照，只描述 tilemap、资源和通用 spawn descriptor；运行时对象由 game 自己定义和维护。
 - **绘制采用显式输入**：引擎绘制 tile 层和调用方传入的 sprite/变换，不隐式遍历或修改 game 对象；descriptor 的 `type`、`solid` 不触发引擎玩法分支。
-- **碰撞是低层查询，不是规则系统**：引擎提供 tile 层查询；是否把 descriptor 或 OOP/ECS 对象纳入碰撞、如何处理动态碰撞，由 game 决定。
+- **碰撞是低层查询，不是规则系统**：引擎提供 tile 层查询与**静态地形几何原语**（谓词/线段/swept 滑移）；是否把 descriptor 或 OOP/ECS 对象纳入碰撞、如何处理动态碰撞，由 game 决定。
 - **单线程**：ipc/watcher/tween/animation 的推进在主循环每帧调用，无锁，状态确定性好（AI 调试可预期）。
 - **DEBUG no-op**：`TROGUE_DEBUG=OFF` 时 ipc/hotreload 编译为桩，API 形状不变，release 零开销。
 
@@ -156,6 +156,10 @@
 > - **离屏渲染**：`tg::render_scene_to_png(asset, w, h, path)`（把 tile 层渲染到离屏 FBO 并导出 PNG；恒等相机，**不含实体/HUD**；需 GL 上下文（隐藏窗口即可）；离屏取像不翻转→内部 `ImageFlipVertical`）。含实体的完整帧截图由 game 自建离屏区间（demo 的 `capture_offscreen_png` 是范例）。
 > - **批量 tile 查询**：`tg::tile_grid`（某层一块 tile 值，行主序；层外写 -1）/ `tg::solid_mask`（全部 solid 层可走性合成掩码）；区域以 **tile 坐标**表达（非像素）。
 > - **协程推进**：`tg::TaskRunner`（启动/回收 `tg::task<>` 的容器；**不**每帧重 resume 挂起协程——等待由事件同步驱动；析构不隐式 cancel，调用方需显式 `cancel_all()`）。补全了「引擎返回 `task` 却无推进器」的缺口。
+
+> **2026-09-11 新增（里程碑 16）**：
+> - **碰撞几何原语**（`trogue/collision.hpp`）：`tg::aabb_overlap`（纯谓词，委托 raylib `CheckCollisionRecs`）、`tg::segment_hits_solid`（线段 vs solid 层的保守 supercover 网格步进，逐层处理 origin；返回首个命中的层/tile/坐标/参数 `t`）、`tg::sweep_move`（轴分离 swept 滑移解算：先 X 后 Y，停在前缘恰好接触 solid 边界处，可沿墙滑动）。引擎只回答「矩形/线段与**静态地形几何**的关系」；**谁和谁碰、碰后如何**仍归 game。工具/探针侧 `probe_collide` IPC 命令（demo）可直接验证这三者。
+> - 明确**不进引擎**：动态实体碰撞**规则**、刚体物理/solver、单向平台/斜坡、分层碰撞矩阵、寻路（图搜索）、相机与绘制排序。
 
 > `world.c`/`TgWorld`/`TgEntity`/`tg_*` 等历史 C API 已在 **里程碑 5（2026-09-07）** 整体删除/迁移到 `game/`（见「文档有效性与历史实现降级」），引擎不再拥有这些类型；不得再以兼容名义把它们引回 engine。
 
@@ -432,6 +436,7 @@ python3 tools/ipc_smoke.py
 | `layers` | — | `{layers:[{name,width,height,solid,origin,tileset,tiles}], count}`（tileset=null 表 palette 模式；tiles=非空 tile 数） |
 | `solid_at` | `x` `y`（像素） | `{solid}`（仅判定 solid tile 层；实体不参与，见「引擎公共 API 边界」） |
 | `get_tile` | `x` `y`（像素） | `{tiles:[{layer,value}]（仅非空格）, solid}` |
+| `probe_collide` | `a`/`b`（各 `[x,y]`，给则出 segment）；`rect`（`[x,y,w,h]`）+`delta`（`[dx,dy]`，给则出 sweep）；至少给一组 | `{segment?:{result,layer,tx,ty,t,point}, sweep?:{box,blocked_x,blocked_y,result}}`（`result` ∈ solid/clear/error；验证静态几何原语的 Agent 探针） |
 | `reload` | — | `{reloaded:true, reloads:N}` |
 | `genmap` | `seed` 必填 int；`w`/`h` 可选（缺省 40，∈[1,64]） | `{generated:true, seed, w, h, nonempty, reloads}`（程序生成地图：game 噪声指派 → pick_tile → load_json → swap；同 seed 同尺寸逐位一致，plan-12 §4.5；生成后 watcher/F5/reload 会以 scene_path 覆盖之——预期行为） |
 | `screenshot` | `path?`（缺省 `screenshot_<时间戳>.png`） | `{path, ok, w, h, bytes}`；**同步**——响应返回时文件已落盘（game 层离屏 FBO 渲染完整帧，不依赖屏幕缓冲；`--headless` 下同样可用） |
@@ -579,6 +584,8 @@ python3 tools/ipc_smoke.py
 - [x] **autotile 机制与内存加载（2026-09-11 完成）**：engine `TerrainTable`/`pick_tile`（peering_bits 解析校验 + 确定性评分选择器，AnimationPlayer 边界模式：采样归 engine、指派/生成归 game）+ `SceneAsset::load_json` 内存加载 + demo IPC `genmap`（game 噪声指派 → 选择器 → 内存加载 → 渲染；同 seed 像素级一致）（计划 `docs/plan-12.md` 两轮审查通过并落地）
 - [x] **帧动画消费（2026-09-10 完成）**：`AnimationSet::name()` 返回所属 entity id + game `Actor::anim_set` 导入绑定 + 绘制循环采样 `current_frame()` 组合 offset + IPC 快照 `anim:{clip,frame}`；E2E 帧序列/像素比对验证（计划 `docs/plan-10.md` 已通过审查并落地）
 - [x] **项目模板（template/，2026-09-11 完成）**：最小自包含骨架——vendored 快照（engine/pixellab/editor/tools/scene_gen）+ 起步 game 骨架（内置内存场景）+ 模板自有 `AGENTS.md`（不含本仓库测试套件/fixture）；单份 `sync_from_source.sh` 兼顾安装（空目录运行→铺模板）/更新（项目根运行→临时克隆上游、只刷新 vendored 快照、保留 game/）/维护者模式（template 内运行→刷新快照）；独立副本构建零告警 + 起服/冒烟/截图验证（计划 `docs/plan-14.md`）
+- [x] **引擎缺口修复与 Agent-first 原语（2026-09-11 完成）**：`AnimationPlayer::play()` 复位 loop 覆盖（修跨 clip 粘连致 `done()` 永久挂起）+ 删死常量 `kMaxSpriteTextures` + 同步 `screenshot`（离屏 FBO）+ `render_scene_to_png` + 公共 `RenderStats` + 批量查询 `tile_grid`/`solid_mask` + `TaskRunner`；实战反馈驱动（计划 `docs/plan-15.md` 三轮审查通过并落地）
+- [x] **碰撞几何原语（2026-09-11 完成）**：`collision.hpp` —— `aabb_overlap`（纯谓词）/`segment_hits_solid`（线段 vs solid 层保守 supercover DDA，逐层 origin）/`sweep_move`（轴分离 swept 滑移，停在前缘相切）；引擎只回答「矩形/线段与静态地形几何的关系」，动态碰撞规则/物理/寻路仍归 game；`tools/tests/collision_test.cpp`（含 40 组暴力对照）+ demo `probe_collide` IPC 命令；模板快照已刷新（计划 `docs/plan-16.md` 两轮审查通过并落地）
 - [ ] 二进制资产格式（可选，JSON 为准）
 
 ### 引擎能力验证线（探针：`game/`；非交付物）

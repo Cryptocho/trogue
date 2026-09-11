@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### 引擎：碰撞几何原语（静态 tile 层）
+
+- 影响的文件: `engine/include/trogue/collision.hpp`（新增）、`engine/src/collision.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/collision_test.cpp`（新增）、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/**`、`AGENTS.md`、`docs/plan-16.md`（新增）
+
+#### Added
+- `tg::aabb_overlap(Rect, Rect)`：轴对齐矩形相交纯谓词（半开语义，边界相接不算相交；委托 raylib `CheckCollisionRecs`，另加退化尺寸防御，不暴露 raylib 类型）
+- `tg::segment_hits_solid(asset, a, b)`：线段 vs solid tile 层的首个命中（`TileHit`：层/tile 坐标/命中点/参数 `t`）。闭区间参数（起/终点单元参与判定）；逐层处理（各层 origin 可不同）；先对线段与层 AABB 做 slab 裁剪再步进；Amanatides–Woo 的 supercover 变体（精确对角线双轴步进，不漏判）
+- `tg::sweep_move(asset, box, delta)`：矩形对 solid 层的轴分离 swept 滑移解算（`SweepResult`：解算后 box + 受阻轴 + 结果）。先 X 后 Y，停在前缘恰好接触 solid 边界处（可沿墙滑动），逐层取最紧约束；**核心不变式**：解算后 box 与 solid 不重叠（内部贴边浮点修正保证）
+- demo IPC 命令 `probe_collide`（`a`/`b` 出 segment，`rect`+`delta` 出 sweep），把静态几何原语接上 Agent 可观测通道；已登记入 `help`
+
+#### Tests
+- `collision_test`（新增，纯公共 API）：`aabb_overlap` 半开/退化；`segment_hits_solid` 闭区间/supercover 对角线/端点半开边界/多 origin 层/层外/error；`sweep_move` 含 **40 组暴力对照**（0.05px 步进 `rect_hits_solid`，复刻先 X 后 Y 轴序）、接触语义、沿墙滑动、多 origin、层外、大位移不穿透、极大坐标不假阻挡、退化/非法、确定性
+- `ipc_smoke`：新增 `probe_collide` segment 命中/空区 clear、sweep 停在墙前、缺参数报错、`help` 登记（61→66 断言）
+- 回归：Debug + Release 零告警、ctest 13/13、`ipc_smoke` 66/66；模板维护者模式刷新后独立副本构建零告警 + 起服冒烟 10/10
+
+#### Docs
+- `AGENTS.md`：架构分层 `collision` 模块、公共 API 边界（碰撞几何原语 + 明确不进引擎项）、IPC 命令表、Roadmap（补记里程碑 15 与新增里程碑 16）
+
 ### 引擎：缺口修复与 Agent-first 原语补全（plan-15，实战反馈驱动）
 
 - 影响的文件: `engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/task_runner.hpp`（新增）、`engine/src/task_runner.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/src/scene_test_seams.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`game/src/anim_viewer.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`tools/tests/anim_tween_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/task_runner_test.cpp`（新增）、`tools/CMakeLists.txt`、`AGENTS.md`、`docs/plan-15.md`（新增）

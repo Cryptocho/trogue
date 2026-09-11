@@ -8,6 +8,7 @@
 #include "trogue/coro.hpp"
 #include "trogue/task_runner.hpp"
 #include "trogue/scene.hpp"
+#include "trogue/collision.hpp"
 #include "trogue/terrain.hpp"
 #include "trogue/render.hpp"
 #include "trogue/animation.hpp"
