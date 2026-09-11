@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 引擎构建：独立构建 engine 目录恢复自包含
+
+- 影响的文件: `engine/CMakeLists.txt`
+
+#### Bug Fixes
+- 独立构建（`cmake -B <dir> -S engine`）时没有任何 `-std` 标志：语言基线（C++20/告警）原本只写在根 CMakeLists.txt，而 `CMAKE_CXX_STANDARD` 等是目录作用域变量、仅在被 `add_subdirectory` 引入时从父目录继承，导致 GCC 15 默认 `gnu++17` 下 `coro.hpp` 触发 `<coroutine>` 头的 `#error`（表面提示为 `requires -fcoroutines`，实为标准级别不足）；engine 现自备语言基线，与「本目录自包含」声明一致，告警 flag 以 `CMAKE_SOURCE_DIR` 守卫仅在独立构建时添加（经根引入时根已提供，避免编译行重复）
+
 ### 导出器：terrain mode 正确判定，peering_bits 真实导出
 
 - 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`tools/tests/scene_schema_test.cpp`、`assets/scenes/test.json`、`assets/tilesets/test_tileset.json`（新增，替代原 test.json）、`assets/tilesets/test_tileset_1.json`（新增，替代原 test_1.json）、`assets/tilesets/test.json`（删除）、`assets/tilesets/test_1.json`（删除）

@@ -5,6 +5,20 @@ project(trogue_engine CXX)
 # 本目录自包含（依赖查找 + 构建定义），可整体取走独立复用或拆库。
 # 游戏层（game/）是它的消费方——引擎概念不得反向流入游戏，游戏概念不得流入引擎。
 
+# ── 语言基线：独立 configure（cmake -S engine）与 add_subdirectory 两种用法下一致 ──
+# CMAKE_CXX_STANDARD 等是目录作用域变量：根 CMakeLists 的设置只在本目录被 add_subdirectory
+# 引入时继承；独立构建不经过根文件，缺了这里就没有 -std=c++20（GCC 15 默认 gnu++17，
+# <coroutine>/coro.hpp 直接 #error「requires -fcoroutines」），告警基线同样缺失。
+# set 同值变量对 add_subdirectory 用法无副作用（目录作用域覆盖，不产生重复 flag）；
+# 告警只在独立构建时自备——经根引入时根已提供，避免编译行出现两份 -Wall/-Wextra/-Wpedantic。
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
 option(TROGUE_DEBUG "Enable debug IPC & hot-reload tooling" ON)
 
 # ── 依赖：raylib（优先包配置，回退 pkg-config） ──
