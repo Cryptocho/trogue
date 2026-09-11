@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### 项目模板（template/ → 派生新游戏项目）
+
+- 影响的文件: `template/`（新增：`README.md`、`AGENTS.md`、`.gitignore`、`CMakeLists.txt`、`scripts/new_project.sh`、`scripts/sync_from_source.sh`、`game/CMakeLists.txt`、`game/src/main.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`assets/scenes/starter.json`、vendored 快照 `engine/`/`pixellab/`/`editor/`/`tools/tests/` 与 fixture 资产）、`engine/src/render.cpp`、`engine/CMakeLists.txt`、`AGENTS.md`、`docs/plan-14.md`（新增）
+
+#### Added
+- 顶层 `template/`：自包含项目骨架（vendored `engine`/`pixellab`/`editor`/`tools` 快照 + 起步 `game` 骨架 + 引擎测试 fixture + 模板自有 `AGENTS.md`/`README.md`/`CMakeLists.txt`），复制即得到能构建、能运行、能被 Agent 迭代的新游戏起点
+- `template/scripts/new_project.sh`：派生独立项目（复制并按白名单剥离模板专属文件 `scripts/`/`README.md`，保留 `AGENTS.md`；拒绝覆盖已存在目标）
+- `template/scripts/sync_from_source.sh`：从本源仓库刷新 vendored 快照（整目录替换 engine/pixellab/editor + tools/fixture 显式文件清单；支持含空格文件名；永不触碰模板自有文件；幂等）
+- 起步游戏 `template/game/src/main.cpp`：窗口 + 场景渲染 + WASD 单格移动（引擎 `TweenManager` 驱动、播完精确落格）+ Watcher 热重载 + IPC（`status`/`list_entities`/`get_entity`/`move`/`screenshot`/`log`/`quit`）+ inspector 式 `transform` 快照
+- 模板 `AGENTS.md`：新项目 Agent 指南（引擎公共 API 边界、tro-* schema 精简表（声明权威源=本源仓库）、IPC 协议、调试工作流、PixelLab 管线、快照同步纪律）
+- 模板 `tools/CMakeLists.txt` 裁剪去 `trogue_game_core_test`（该目标编译 game/src 玩法模块）；模板 `tools/ipc_smoke.py` 为与起步游戏命令集匹配的精简版
+
+#### Bug Fixes
+- `engine/src/render.cpp`：`draw_rect` 改用浮点原语 `DrawRectanglePro`（原 `DrawRectangle(int)` 截断坐标，违背「数值精度纪律」——插值中的移动实体会产生 ±1px 错位与帧间抖动）
+- `engine/CMakeLists.txt`：raylib 安装前缀兜底注释去除发行版专属措辞（可移植化）
+
+#### Tests
+- 派生项目验证：`new_project.sh` 产出副本构建零告警、`ctest` 10/10 全绿、起服 + `tools/ipc_smoke.py` 10/10、截图视觉与像素色值验收一致、reload-中途移动无逻辑/视觉失步（`transform.visual == 逻辑格像素` 数值自证）
+
 ### PixelLab 资产管线（pixellab/ → tro-* 转换层）
 
 - 影响的文件: `pixellab/pxlab.py`（新增）、`pixellab/api.py`（新增）、`pixellab/mapping.py`（新增）、`pixellab/tileset.py`（新增）、`pixellab/character.py`（新增）、`pixellab/scene.py`（新增）、`pixellab/gridcheck.py`（新增）、`pixellab/manifest.py`（新增）、`pixellab/tests/test_mapping.py`（新增）、`pixellab/fixtures/`（新增）、`tools/scene_gen.cpp`（新增）、`tools/CMakeLists.txt`、`tools/tests/terrain_test.cpp`、`assets/tilesets/pixellab/wang_grass_dirt.json`（新增）、`assets/textures/pixellab/wang_grass_dirt.png`（新增）、`assets/textures/pixellab/pxlab_soldier.png`（新增）、`assets/animations/pxlab_soldier.json`（新增）、`assets/pixellab_manifest.json`（新增）、`pixellab/fixtures/wang_pattern.json`（新增）、`pixellab/tests/test_scene_gen.py`（新增）、`.gitignore`、`AGENTS.md`、`docs/plan-13.md`（新增）

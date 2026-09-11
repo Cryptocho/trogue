@@ -174,6 +174,11 @@ trogue/
 │   ├── scene_gen.cpp      # 离线场景生成 CLI（pixellab 管线数据流 C 机制半，复用 pick_tile）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── pixellab/              # PixelLab MCP → tro-* 转换层（上游资产管线，与 editor/ 平级；见「PixelLab 资产管线」）
+├── template/             # 新游戏项目模板（自包含快照 + 起步 game；见「项目模板」）
+│   ├── scripts/          # new_project.sh（派生新项目）/ sync_from_source.sh（刷新快照）
+│   ├── engine/ pixellab/ editor/ tools/   # 快照（权威源=本仓库，勿在模板内手改）
+│   ├── game/ assets/     # 起步骨架与资产（模板自有）
+│   └── AGENTS.md README.md CMakeLists.txt # 模板自有
 ├── build/  build-release/ # 构建产物（gitignore）
 ├── reference/             # 引擎源码参考副本（gitignore；Godot 4.7.2 + raylib 6.0，查证行为用，见「依赖与环境」）
 └── trogue-orign/          # 只读参考（gitignore）
@@ -345,6 +350,18 @@ python3 tools/ipc_smoke.py
 - **明确损失**：25-tile（transition_size=1.0）4×8 Wang 集、tile_size 非 16/32、spritesheet 边 > 4096px、图像尺寸 <8px → 一律拒绝导入并报错，不静默伪造兼容。像素网格检测只做**整数倍放大还原**（检测到 ≥2× 则还原真实网格）；未检测到 = 按原生图接受（无法用块一致性证明非整数倍放大，不做拒绝）——这是检测能力边界，非静默伪造。
 - **独立 tro-animations 无运行时加载器**：引擎只消费场景实体**内嵌** `animations`（动画集名 = entity id）；`assets/animations/*.json` 是转换中间产物，消费时把 `textures`/`animations` 两键内嵌进场景实体（同构 `assets/scenes/soldier_animated_sprite_2d.json`）。
 - **双路径不变**：规则明确的资产仍直接手写 tro-*；PixelLab 路径只在需要美术生成力时使用。
+
+## 项目模板（template/，plan-14）
+
+> **目的**：让「用 trogue 从零自主开发一个游戏」可复制——`template/` 是一个自包含项目骨架，复制它即得到能构建、能运行、能被 Agent 迭代的新游戏起点。
+
+- **内容**：`engine/`、`pixellab/`、`editor/`、`tools/`（引擎级测试 + `scene_gen`）的 **vendored 快照** + **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ `assets/`（起步场景 + 引擎测试 fixture）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`。
+- **权威源**：vendored 文件的权威源是**本仓库**；模板内 vendored 文件禁止手改，上游更新后在仓库内重跑 `template/scripts/sync_from_source.sh` 刷新（显式清单式复制，永不触碰模板自有文件）。
+- **派生项目**：`./template/scripts/new_project.sh <目标目录>` 复制并剥离模板专属文件（`scripts/`、`README.md`），保留 `AGENTS.md`（新项目的 Agent 指南）。
+- **模板自有 vs 快照**：`game/**`、`assets/**`、`CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`README.md`、`AGENTS.md`、`scripts/**` 为模板自有；其余为快照。模板 `tools/CMakeLists.txt` 裁剪掉了 `trogue_game_core_test`（它编译 game/src 的 roguelike 模块），`tools/ipc_smoke.py` 是与起步游戏命令集匹配的精简版。
+- **验证**：`new_project.sh` 产出的独立副本构建零告警、`ctest` 10/10 全绿、起服 + `tools/ipc_smoke.py` 通过、截图视觉与数值（像素色值）验收一致。
+- **非目标**：不改 engine 公共 API / tro-* schema；不把 roguelike 玩法带入模板；不做参数化脚手架；不自动建 git。
+- **遗留**：模板 `AGENTS.md` 的 schema 段落与根 `AGENTS.md` 双份维护（模板顶部已声明权威源）；模板 `tools/CMakeLists.txt`/`ipc_smoke.py` 随上游变化需手工跟进。
 
 ## 热重载规范
 
@@ -534,6 +551,7 @@ python3 tools/ipc_smoke.py
 - [x] **敌人 AI + RuleEngine 最小子集 + 首批事件（2026-09-09 完成）**：game 层 EventBus（tg::Json 载荷，桥接 IPC）+ 三态状态机/视野（chebyshev≤5+Bresenham LOS）/A* 寻路（ALERT_DELAY=1、70% 游走、固定种子）+ punch→damage 管线（冷却/死亡延迟销毁/GameOver 相位）+ 首批 6 对外事件 + hp/ai 快照注入（计划 `docs/plan-9.md` 两轮审查通过并落地）
 - [x] **帧动画消费（2026-09-10 完成）**：`AnimationSet::name()` 返回所属 entity id + game `Actor::anim_set` 导入绑定 + 绘制循环采样 `current_frame()` 组合 offset + IPC 快照 `anim:{clip,frame}`；E2E 帧序列/像素比对验证（计划 `docs/plan-10.md` 已通过审查并落地）
 - [x] **动画查看器（2026-09-10 完成）**：game 层触发/切换首个消费者——独立可执行 `anim_viewer`（任意键暂停/恢复、左键轮转 clip、相机 zoom 3x 观察、自带 IPC 端点 48765）+ 引擎 `AnimationPlayer::paused()` 查询；E2E 轮转/冻结/像素比对全过（计划 `docs/plan-11.md` 已通过审查并落地）
+- [x] **项目模板（template/，2026-09-11 完成）**：自包含 vendored 快照（engine/pixellab/editor/tools）+ 起步 game 骨架 + 引擎测试 fixture + 模板自有 `AGENTS.md`；`new_project.sh` 派生独立项目、`sync_from_source.sh` 从源刷新快照；独立副本构建 + ctest 全绿 + 起服/冒烟/截图验证（计划 `docs/plan-14.md` 两轮审查通过并落地）
 - [ ] 二进制资产格式（可选，JSON 为准）
 
 ## 历史实现阶段记录（非当前 API）

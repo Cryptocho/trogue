@@ -1,0 +1,14 @@
+# 构建产物
+build/
+build-release/
+
+# 运行期生成的截图
+screenshot_*.png
+
+# clangd / 编译数据库
+compile_commands.json
+build-asan/
+
+# Python
+__pycache__/
+*.pyc

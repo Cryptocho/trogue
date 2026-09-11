@@ -14,12 +14,5 @@ reference/
 # Godot 本地视觉素材（美术源文件与导入元数据，不入仓库）
 editor/assets/
 
-# agent 工具状态
-.mimocode/
-
 compile_commands.json
 build-asan/
-
-# Python
-__pycache__/
-*.pyc
