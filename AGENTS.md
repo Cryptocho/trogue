@@ -93,6 +93,7 @@
 │  OOP 对象或 ECS、输入、规则、碰撞策略、相机、HUD │
 │  场景 descriptor 导入、运行时状态、IPC 命令语义  │
 │  动画/Tween 的触发与状态切换决策               │
+│  地形指派与程序生成（噪声/生物群系 = 玩法决策）  │
 ├──────────────────────────────────────────────┤
 │         trogue_engine (engine/ 可复用静态库)    │
 │  scene_asset  tro-* 资产解析与只读 descriptor    │
@@ -101,6 +102,7 @@
 │  collision   tile 层查询（调用方选择如何使用）   │
 │  animation   帧动画播放器（消费 tro-animations）│
 │  tween       数值/位置/颜色补间执行原语          │
+│  terrain     autotile 匹配表 TerrainTable/pick_tile│
 │  hotreload   文件变化通知（不自行替换游戏状态）   │
 │  ipc         JSON-lines 传输/事件推送/callback 分发│
 ├──────────────────────────────────────────────┤
@@ -111,6 +113,7 @@
 设计约定：
 - **使用者拥有运行时模型**：引擎公共 API 不定义 `TgWorld`、`TgEntity`、ECS registry、component、system 或对象生命周期；game 可以选择 OOP、ECS，或两者并存。
 - **通用表现原语归 engine、触发决策归 game**：engine 的 `animation`/`tween` 模块只负责按数据推进与采样（fps/loop/补间/缓动/回调）；「何时播哪条、何时切换、怎么组合」由 game 决定。这既保证任何对象模型都开箱即用，又不侵犯玩法控制权。
+- **功能准入判据（2026-09-11 拍板）**：引擎只收**机制性、确定性、可无头测试**的执行原语（帧采样、补间、bits→tile id 选择、JSON 校验、watcher、IPC）；音频总线/混音、shader 管理、粒子等**美学/玩法决策载体**由 game 直调 raylib 实现（沿「游戏概念不得流入引擎」的反方向流动）。公共 API 薄到能完整装进 Agent 上下文——使用者熟悉 raylib 甚于本引擎 API，能用 raylib 直达的不进引擎。
 - **场景资产不是游戏世界**：引擎加载的是不可变/只读的 `tg::SceneAsset` 与 `tg::SceneEntity` 快照，只描述 tilemap、资源和通用 spawn descriptor；运行时对象由 game 自己定义和维护。
 - **绘制采用显式输入**：引擎绘制 tile 层和调用方传入的 sprite/变换，不隐式遍历或修改 game 对象；descriptor 的 `type`、`solid` 不触发引擎玩法分支。
 - **碰撞是低层查询，不是规则系统**：引擎提供 tile 层查询；是否把 descriptor 或 OOP/ECS 对象纳入碰撞、如何处理动态碰撞，由 game 决定。
@@ -128,6 +131,8 @@
 - 渲染：`tg::render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语，传入快照/变换/tint。对象排序、相机与 UI 属 game。
 - **动画**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer`（播放器）消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、暂停/恢复与查询（`paused()`）、帧事件与完成回调、`co_await` 完成；**它输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。实体 descriptor 的 `animations` 由 asset 解析为可查询的动画集；game 把播放器绑定到自己的对象并决定触发/切换。
 - **Tween**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。
+- **Autotile**：`tg::TerrainTable`（tro-tileset terrain 数据的只读匹配表，`tg::load_terrain_table` 加载）+ `tg::pick_tile`（无状态纯函数：8 方向 pattern → tile id；确定性评分降级 + 同分取最小 id，语义对齐 Godot 评分匹配）。它输出 tile id 供 game 拼装场景；**地形指派、程序生成、动态改图的触发归 game**，engine 不保存地形状态、不做扩散式重排（复刻 AnimationPlayer 边界模式）。
+- **内存加载**：`SceneAsset::load_json(text, name)` 与 `load(path)` 同一解析/校验路径（程序生成场景的一等公民入口；name 进错误诊断；tileset/texture 仍按 assets/ 约定读盘，plan-12 §4.4）。
 - `tg::Ipc` 不持有 scene/world 指针；只负责 JSON-lines 分帧、响应顺序、包络、**事件通道**（传输层保留命令 `subscribe`/`unsubscribe`/`connections` + `publish`/`disconnect`/`connections()` API，语义见「IPC 协议」）与 game callback。命令语义由 game 注册和实现；事件是纯传输——engine 不识事件名与 filter 键的任何语义。
 - `tg::Watcher` 只报告监听目录内安全的 `.json` basename 变化；game 决定何时加载新资产、是否 reconcile、如何保留或删除运行时状态。
 
@@ -150,8 +155,8 @@ trogue/
 ├── engine/                # trogue_engine 库（自包含，可整体取走复用/拆库）
 │   ├── CMakeLists.txt     # 依赖查找 + TROGUE_DEBUG option + 库定义
 │   ├── include/trogue/    # 目标公共头：trogue.hpp(伞) config.hpp scene.hpp render.hpp
-│   │                      #   animation.hpp tween.hpp hotreload.hpp ipc.hpp（.hpp，C++）
-│   └── src/               # 目标：scene_asset.cpp render.cpp animation.cpp tween.cpp
+│   │                      #   animation.hpp tween.hpp terrain.hpp hotreload.hpp ipc.hpp（.hpp，C++）
+│   └── src/               # 目标：scene_asset.cpp render.cpp animation.cpp tween.cpp terrain.cpp
 │                          #   hotreload.cpp ipc.cpp + 私有资源模块
 ├── game/                  # 游戏层（引擎消费方；游戏概念禁止流入 engine/）
 │   ├── CMakeLists.txt     # 可执行 trogue + anim_viewer（输出到 build/bin/）
@@ -297,7 +302,7 @@ python3 tools/ipc_smoke.py
 - **多格 tile 与原点（只增可选字段，`version` 仍为 2，旧资产零迁移；2026-09-09）**：`tiles[]` 条目可选 `size_in_atlas: [w,h]`（各 ∈ [1,4096]，缺省 `[1,1]`——tile 覆盖的图集格子数，region = `(col*tw, row*th, sw*tw, sh*th)`）、`texture_origin: [x,y]`（int 可负，缺省 `[0,0]`——Godot 纹理原点透传）、`y_sort_origin: y`（int，缺省 `0`——Godot y-sort 排序键偏移透传）。校验：数组长度 2 且元素为 int，origin/sort 绝对值 ≤65536；region 越界不在 load 期校验（与 col/row 同——load 不读纹理文件）。导出插件非缺省才写（单格 tile 零 diff）；margins/separation 非 0 图集不支持，插件 warning（明确损失）。
 - **tile 绘制语义（对齐 Godot 4.7.2，绘制位置 dest 左上 = cell 中心 − region.size/2 − texture_origin）**：1×1 且 origin=0 时精确退化为「格子左上角」。多格 tile 逻辑上仍只占一个 cell（solid 查询/tile_at 语义不变）；同层多格 tile 重叠覆盖次序 = 行主序扫描序（Godot 关闭 y-sort 时也不逐 tile 保证次序）。`y_sort_origin` 引擎解析存储、**暂不消费**（无逐 tile y-sort，未来按需消费/暴露公共查询）；实体图集形态 sprite 的 Godot 居中摆放由 game 经 `SpriteDesc.offset` 自行表达。
 - texture 单贴图；**一个场景的多张贴图由 tro-scene v2 的 `tilesets` 数组表达**（每贴图一个 tro-tileset JSON）。
-- `terrain_sets`：Godot terrain set 透传（`mode`: sides / corners / corners_and_sides）；`peering_bits` 仅导出该 mode 用到的邻位、值 = terrain 序号（未连接的邻位省略）。引擎 v2 忽略，autotile 阶段消费。
+- `terrain_sets`：Godot terrain set 透传（`mode`: sides / corners / corners_and_sides）；`peering_bits` 仅导出该 mode 用到的邻位、值 = terrain 序号（未连接的邻位省略）。引擎解析 + 校验并消费：autotile 选择器（`tg::load_terrain_table`/`tg::pick_tile`）按 peering_bits 把地形 pattern 确定性映射为 tile id（plan-12）。
 - `custom_data` 透传，引擎忽略。
 
 ### tro-animations v1
@@ -371,6 +376,7 @@ python3 tools/ipc_smoke.py
 | `solid_at` | `x` `y`（像素） | `{solid}`（仅判定 solid tile 层；实体不参与，见「引擎公共 API 边界」） |
 | `get_tile` | `x` `y`（像素） | `{tiles:[{layer,value}]（仅非空格）, solid}` |
 | `reload` | — | `{reloaded:true, reloads:N}` |
+| `genmap` | `seed` 必填 int；`w`/`h` 可选（缺省 40，∈[1,64]） | `{generated:true, seed, w, h, nonempty, reloads}`（程序生成地图：game 噪声指派 → pick_tile → load_json → swap；同 seed 同尺寸逐位一致，plan-12 §4.5；生成后 watcher/F5/reload 会以 scene_path 覆盖之——预期行为） |
 | `screenshot` | `path?`（缺省 `screenshot_<时间戳>.png`） | `{path}`；文件在下一帧绘制后写出 |
 | `log` | `msg` | `{logged:true}`（打印进引擎日志） |
 | `quit` | — | `{bye:true}`（引擎退出主循环） |
@@ -506,7 +512,7 @@ python3 tools/ipc_smoke.py
 - [x] **C++ 引擎里程碑（原 M5A 扩展，2026-09-07 完成）**：C++20/纯 C++ API/RAII + nlohmann+json 替换 + 无 `TgWorld`/实体池边界重构 + 引擎内置帧动画播放器（消费 tro-animations）+ Tween 补间原语 + C++ game demo（计划 `docs/plan-5.md` 已通过审查并落地）
 - [x] **移植 trogue-orign 最小闭环（2026-09-09 完成）**：回合制（玩家回合 → 敌方回合 → 回合+1）+ 单格 8 向移动/碰撞（tile solid + 实体互斥 + 斜切切角）+ 敌方静止策略 + 手写 forest 关卡 + IPC `turn`/`move`/`wait` 回合命令 + 无窗口单测（计划 `docs/plan-6.md` 已通过审查并落地）
 - [x] **IPC 事件通道（2026-09-09 完成）**：engine `tg::Ipc` 新增 subscribe/unsubscribe/connections 传输层保留命令 + publish/disconnect/connections() API + subscribe 可选 filter 顶层等值匹配（单实体观测）；断开即订阅清零、事件超限无兜底直接断开（判别式保护）；game `events` 目录命令（注册表当前为空，不实现任何具体 game 事件）；计划 `docs/plan-7.md` 三轮审查通过并落地
-- [ ] autotile/bitmask 渲染（tileset v2 的 peering_bits 已透传）
+- [x] **autotile 机制与内存加载（2026-09-11 完成）**：engine `TerrainTable`/`pick_tile`（peering_bits 解析校验 + 确定性评分选择器，AnimationPlayer 边界模式：采样归 engine、指派/生成归 game）+ `SceneAsset::load_json` 内存加载 + demo IPC `genmap`（game 噪声指派 → 选择器 → 内存加载 → 渲染；同 seed 像素级一致）（计划 `docs/plan-12.md` 两轮审查通过并落地）
 - [x] **敌人 AI + RuleEngine 最小子集 + 首批事件（2026-09-09 完成）**：game 层 EventBus（tg::Json 载荷，桥接 IPC）+ 三态状态机/视野（chebyshev≤5+Bresenham LOS）/A* 寻路（ALERT_DELAY=1、70% 游走、固定种子）+ punch→damage 管线（冷却/死亡延迟销毁/GameOver 相位）+ 首批 6 对外事件 + hp/ai 快照注入（计划 `docs/plan-9.md` 两轮审查通过并落地）
 - [x] **帧动画消费（2026-09-10 完成）**：`AnimationSet::name()` 返回所属 entity id + game `Actor::anim_set` 导入绑定 + 绘制循环采样 `current_frame()` 组合 offset + IPC 快照 `anim:{clip,frame}`；E2E 帧序列/像素比对验证（计划 `docs/plan-10.md` 已通过审查并落地）
 - [x] **动画查看器（2026-09-10 完成）**：game 层触发/切换首个消费者——独立可执行 `anim_viewer`（任意键暂停/恢复、左键轮转 clip、相机 zoom 3x 观察、自带 IPC 端点 48765）+ 引擎 `AnimationPlayer::paused()` 查询；E2E 轮转/冻结/像素比对全过（计划 `docs/plan-11.md` 已通过审查并落地）

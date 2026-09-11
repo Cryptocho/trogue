@@ -72,6 +72,7 @@ set(ENGINE_SOURCES
     src/tween.cpp
     src/hotreload.cpp
     src/ipc.cpp
+    src/terrain.cpp
     src/util/json_check.cpp
     src/util/path_check.cpp
     src/util/color_check.cpp

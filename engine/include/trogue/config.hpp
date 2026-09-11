@@ -38,6 +38,10 @@ inline constexpr int kLayerDimMax = 4096;         // 层 width/height ∈ [1,409
 inline constexpr int kTileSizeInAtlasMax = 4096;  // tro-tileset size_in_atlas 元素 ∈ [1,4096]（plan-8 §3.1）
 inline constexpr int kTileOriginMax = 65536;      // tro-tileset texture_origin/y_sort_origin 绝对值上限（防御）
 
+// ── tro-tileset terrain 限额（plan-12 §4.1） ──
+inline constexpr int kTerrainSetsMax = 4;      // terrain_sets 组数 ≤4
+inline constexpr int kTerrainsPerSetMax = 16;  // 单 set terrains 1..16
+
 // ── payload 限额（plan-5.2 §2.6，多级、一常量一语义） ──
 inline constexpr std::size_t kPayloadBytesMax = 256 * 1024;   // 单 payload 紧凑序列化字节
 inline constexpr int kJsonDepthMax = 32;                      // 任一 JSON 嵌套深度

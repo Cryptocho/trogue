@@ -25,6 +25,7 @@
 #include "util/json_check.hpp"
 #include "util/path_check.hpp"
 #include "scene_impl.hpp"  // detail::SceneImpl 等私有数据载体（render.cpp 共享）
+#include "tileset_parse.hpp"  // tro-tileset 共享解析核心声明（plan-12 §4.1）
 
 namespace tg {
 
@@ -175,89 +176,224 @@ expected<void, Error> parse_meta(const json& root, detail::SceneImpl& out) {
     return {};
 }
 
-// 读取并解析 tro-tileset v2 元数据（load 期；不读纹理文件）。
-expected<void, Error> load_tileset_meta(const std::string& rel_path,
-                                        int scene_tile_w, int scene_tile_h,
-                                        detail::SceneImpl& out) {
-    const std::string full = assets_path(rel_path);
-    auto text_or = read_text_file(full, "tileset 引用 " + rel_path);
-    if (!text_or) return tl::unexpected(text_or.error());
-    auto j_or = parse_json_text(*text_or, full);
-    if (!j_or) return tl::unexpected(j_or.error());
-    const json& ts = *j_or;
+}  // namespace（匿名段暂闭：下方共享解析核心属 tg::detail，plan-12 §4.1）
 
+// ── tro-tileset 文档解析（场景与 TerrainTable 共用核心，plan-12 §4.1）──
+// 声明见 tileset_parse.hpp。terrain 字段此前宽容路过、零解析，本期起解析 + 校验；
+// 文档级未知键宽容策略不变。
+namespace detail {
+
+namespace {
+
+// peering_bits 键名 → 方向位（8 名 = Godot CELL_NEIGHBOR_ENUM_TO_TEXT square 合法名）
+std::optional<TerrainBit> terrain_bit_from_name(std::string_view name) {
+    if (name == "top_side") return TerrainBit::top_side;
+    if (name == "top_right_corner") return TerrainBit::top_right_corner;
+    if (name == "right_side") return TerrainBit::right_side;
+    if (name == "bottom_right_corner") return TerrainBit::bottom_right_corner;
+    if (name == "bottom_side") return TerrainBit::bottom_side;
+    if (name == "bottom_left_corner") return TerrainBit::bottom_left_corner;
+    if (name == "left_side") return TerrainBit::left_side;
+    if (name == "top_left_corner") return TerrainBit::top_left_corner;
+    return std::nullopt;
+}
+
+// terrain_sets：可选键；缺省/空数组 = 无 terrain 数据；≤kTerrainSetsMax 组。
+// 元素 {mode, terrains:[{name,color}]}（terrains 1..kTerrainsPerSetMax）。
+expected<void, Error> parse_terrain_sets(const json& ts, std::string_view src,
+                                         std::vector<TerrainSetInfo>& out) {
+    const auto it = ts.find("terrain_sets");
+    if (it == ts.end()) return {};  // 缺省 = 无
+    if (!it->is_array()) return tl::unexpected(
+        err(ErrorCode::kSchemaViolation, at(src, "terrain_sets 必须为 array")));
+    if (it->empty()) return {};  // 空数组 ≡ 缺省
+    if (static_cast<int>(it->size()) > kTerrainSetsMax) return tl::unexpected(
+        err(ErrorCode::kSchemaViolation, at(src, "terrain_sets 超过 kTerrainSetsMax")));
+    for (std::size_t i = 0; i < it->size(); ++i) {
+        const std::string where = "terrain_sets[" + std::to_string(i) + "]";
+        const json& s = (*it)[i];
+        if (!s.is_object()) return tl::unexpected(
+            err(ErrorCode::kSchemaViolation, at(src, where + " 必须为 object")));
+        const auto mode_it = s.find("mode");
+        if (mode_it == s.end() || !mode_it->is_string())
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(src, where + ".mode 必须为 string")));
+        TerrainMode mode{};
+        const std::string& m = mode_it->get_ref<const std::string&>();
+        if (m == "sides") mode = TerrainMode::sides;
+        else if (m == "corners") mode = TerrainMode::corners;
+        else if (m == "corners_and_sides") mode = TerrainMode::corners_and_sides;
+        else return tl::unexpected(
+            err(ErrorCode::kSchemaViolation, at(src, where + ".mode 非法: " + m)));
+        const auto terr = s.find("terrains");
+        if (terr == s.end() || !terr->is_array() || terr->empty())
+            return tl::unexpected(err(
+                ErrorCode::kSchemaViolation,
+                at(src, where + ".terrains 必须为 1..kTerrainsPerSetMax 的数组")));
+        if (static_cast<int>(terr->size()) > kTerrainsPerSetMax)
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(src, where + ".terrains 超过 kTerrainsPerSetMax")));
+        for (std::size_t j = 0; j < terr->size(); ++j) {
+            const std::string twhere = where + ".terrains[" + std::to_string(j) + "]";
+            const json& t = (*terr)[j];
+            if (!t.is_object()) return tl::unexpected(
+                err(ErrorCode::kSchemaViolation, at(src, twhere + " 必须为 object")));
+            const auto name = t.find("name"), color = t.find("color");
+            if (name == t.end() || !name->is_string())
+                return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                          at(src, twhere + ".name 必须为 string")));
+            if (color == t.end() || !color->is_string() ||
+                !parse_hex_color(color->get_ref<const std::string&>()))
+                return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                          at(src, twhere + ".color 必须为 #rrggbb")));
+        }
+        out.push_back(TerrainSetInfo{mode, static_cast<int>(terr->size())});
+    }
+    return {};
+}
+
+// per-tile terrain 字段（terrain_set/terrain/peering_bits；键缺省 = -1/空）。
+expected<void, Error> parse_tile_terrain(const json& t, std::string_view src,
+                                         const std::vector<TerrainSetInfo>& sets,
+                                         int index, TerrainTileEntry& out) {
+    const std::string where = "tiles[" + std::to_string(index) + "]";
+    int tset = -1, terr = -1;
+    if (auto it = t.find("terrain_set"); it != t.end()) {
+        if (!it->is_number_integer()) return tl::unexpected(err(
+            ErrorCode::kSchemaViolation, at(src, where + ".terrain_set 必须为 int")));
+        tset = it->get<int>();
+    }
+    if (auto it = t.find("terrain"); it != t.end()) {
+        if (!it->is_number_integer())
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(src, where + ".terrain 必须为 int")));
+        terr = it->get<int>();
+    }
+    // 负值防御：仅 -1 表示未归属，< -1 一律拒绝（plan §4.1 表；评审阻断项）
+    if (tset < -1 || terr < -1)
+        return tl::unexpected(err(
+            ErrorCode::kSchemaViolation,
+            at(src, where + " terrain_set/terrain 负值非法（仅 -1 表示未归属）")));
+    // 归属一致性：两者同 -1 或同 ≥0
+    if ((tset == -1) != (terr == -1))
+        return tl::unexpected(err(
+            ErrorCode::kSchemaViolation,
+            at(src, where + " terrain_set/terrain 必须同时为 -1 或同时有效")));
+    if (tset >= 0) {
+        if (tset >= static_cast<int>(sets.size()))
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(src, where + ".terrain_set 越界")));
+        if (terr >= sets[static_cast<std::size_t>(tset)].terrain_count)
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(src, where + ".terrain 越界")));
+    }
+    out.terrain_set = tset;
+    out.terrain = terr;
+    // peering_bits：可选 object；需要有效归属（mode/值域都挂在 set 上）
+    if (auto pb = t.find("peering_bits"); pb != t.end()) {
+        if (!pb->is_object()) return tl::unexpected(err(
+            ErrorCode::kSchemaViolation, at(src, where + ".peering_bits 必须为 object")));
+        if (tset < 0) return tl::unexpected(err(
+            ErrorCode::kSchemaViolation,
+            at(src, where + ".peering_bits 需要有效 terrain_set（当前 -1）")));
+        const TerrainMode mode = sets[static_cast<std::size_t>(tset)].mode;
+        const int terr_count = sets[static_cast<std::size_t>(tset)].terrain_count;
+        for (const auto& kv : pb->items()) {
+            const auto bit = terrain_bit_from_name(kv.key());
+            if (!bit) return tl::unexpected(err(
+                ErrorCode::kSchemaViolation,
+                at(src, where + ".peering_bits 未知邻位名 " + kv.key())));
+            if (!terrain_bit_valid(mode, *bit)) return tl::unexpected(err(
+                ErrorCode::kSchemaViolation,
+                at(src, where + ".peering_bits 邻位种类与 mode 不符: " + kv.key())));
+            if (!kv.value().is_number_integer())
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(src, where + ".peering_bits." + kv.key() + " 必须为 int")));
+            const int v = kv.value().get<int>();
+            if (v < 0 || v >= terr_count)
+                return tl::unexpected(err(
+                    ErrorCode::kSchemaViolation,
+                    at(src, where + ".peering_bits." + kv.key() + " 越界")));
+            out.bits[static_cast<std::size_t>(*bit)] = v;
+        }
+    }
+    return {};
+}
+
+}  // namespace
+
+// tro-tileset 文档全量解析（共享核心；source 仅用于错误上下文）。
+expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
+                                                      std::string_view source) {
     // format/version 严格
     const auto fmt = ts.find("format");
     if (fmt == ts.end() || !fmt->is_string() ||
         fmt->get_ref<const std::string&>() != "tro-tileset") {
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(rel_path, "format 必须为 tro-tileset")));
+                                  at(source, "format 必须为 tro-tileset")));
     }
     const auto ver = ts.find("version");
     if (ver == ts.end() || !ver->is_number_integer() || ver->get<int>() != 2) {
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(rel_path, "version 必须为 2")));
+                                  at(source, "version 必须为 2")));
     }
     const auto tw = ts.find("tile_width"), th = ts.find("tile_height");
     if (tw == ts.end() || th == ts.end() || !tw->is_number_integer() ||
         !th->is_number_integer()) {
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(rel_path, "tile_width/height 必须为 int")));
-    }
-    const int tw_v = tw->get<int>(), th_v = th->get<int>();
-    if (tw_v != scene_tile_w || th_v != scene_tile_h) {
-        return tl::unexpected(err(ErrorCode::kSchemaViolation, at(
-            rel_path, "tile 尺寸与场景不一致")));
+                                  at(source, "tile_width/height 必须为 int")));
     }
     const auto tex = ts.find("texture");
     if (tex == ts.end() || !tex->is_string() ||
-        !detail::is_safe_relative_path(tex->get_ref<const std::string&>())) {
+        !is_safe_relative_path(tex->get_ref<const std::string&>())) {
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(rel_path, "texture 路径非法")));
+                                  at(source, "texture 路径非法")));
     }
     const auto tiles = ts.find("tiles");
     if (tiles == ts.end() || !tiles->is_array() || tiles->empty()) {
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(rel_path, "tiles 必须为非空数组")));
+                                  at(source, "tiles 必须为非空数组")));
     }
     const int count = static_cast<int>(tiles->size());
     if (count > 1 << 20) {  // 防御：id 值域不得失控（实际由受限场景宽高约束）
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(rel_path, "tiles 数量超限")));
+                                  at(source, "tiles 数量超限")));
     }
-
-    detail::SceneImpl::TilesetMeta m;
-    m.name = "";  // 由场景端填
-    m.path = rel_path;
-    m.tile_w = tw_v;
-    m.tile_h = th_v;
-    m.tile_count = count;
-    m.texture = tex->get_ref<const std::string&>();
+    TilesetParsed out;
+    out.tile_w = tw->get<int>();
+    out.tile_h = th->get<int>();
+    out.tile_count = count;
+    out.texture = tex->get_ref<const std::string&>();
     // columns：图集每行 tile 数（tile 矩形布局；render 用）。缺省/非法拒绝。
     const auto cols = ts.find("columns");
     if (cols == ts.end() || !cols->is_number_integer() || cols->get<int>() < 1 ||
         cols->get<int>() > 65536) {
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(rel_path, "columns 必须为 1..65536 的 int")));
+                                  at(source, "columns 必须为 1..65536 的 int")));
     }
-    m.columns = cols->get<int>();
+    out.columns = cols->get<int>();
+    // terrain_sets（plan-12 §4.1：此前宽容路过，本期起解析 + 校验）
+    if (auto r = parse_terrain_sets(ts, source, out.terrain_sets); !r)
+        return tl::unexpected(r.error());
     // 逐一解析 tiles[]：数组顺序即 id；每个 tile 自带 col/row（图集内坐标），
     // 建 id → TileVisual 表供渲染（不允许按 id 推公式——Godot 导出的 col/row
     // 可能非顺序排列）。size_in_atlas/texture_origin/y_sort_origin 为 tro-tileset
     // v2 只增可选字段（plan-8 §3.1），缺省 = 单格 1×1 / 原点 0。
-    m.tile_visuals.reserve(static_cast<std::size_t>(count));
+    out.tile_visuals.reserve(static_cast<std::size_t>(count));
+    out.tile_terrains.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i) {
         const json& t = (*tiles)[static_cast<std::size_t>(i)];
         if (!t.is_object()) return tl::unexpected(err(
             ErrorCode::kSchemaViolation,
-            at(rel_path, "tiles[" + std::to_string(i) + "] 必须为 object")));
+            at(source, "tiles[" + std::to_string(i) + "] 必须为 object")));
         // id 字段（若有）必须等于数组下标，防错位（顺序即 id 契约）。
         if (auto id_it = t.find("id"); id_it != t.end()) {
             if (!id_it->is_number_integer() || id_it->get<int>() != i)
                 return tl::unexpected(err(
                     ErrorCode::kSchemaViolation,
-                    at(rel_path, "tiles[" + std::to_string(i)
-                                       + "].id 与数组顺序不符")));
+                    at(source, "tiles[" + std::to_string(i)
+                                   + "].id 与数组顺序不符")));
         }
         const auto col_it = t.find("col"), row_it = t.find("row");
         if (col_it == t.end() || row_it == t.end() || !col_it->is_number_integer() ||
@@ -265,8 +401,8 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
             row_it->get<int>() < 0) {
             return tl::unexpected(err(
                 ErrorCode::kSchemaViolation,
-                at(rel_path, "tiles[" + std::to_string(i)
-                                   + "] 缺少合法的 col/row（非负 int）")));
+                at(source, "tiles[" + std::to_string(i)
+                               + "] 缺少合法的 col/row（非负 int）")));
         }
         const int col = col_it->get<int>(), row = row_it->get<int>();
         // size_in_atlas：可选 [w,h]，各 ∈ [1,4096]——tile 覆盖的图集格子数，缺省 1×1。
@@ -280,7 +416,7 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
                 !(*sz)[0].is_number_integer() || !(*sz)[1].is_number_integer()) {
                 return tl::unexpected(err(
                     ErrorCode::kSchemaViolation,
-                    at(rel_path, where + " 必须为 [w,h] int 数组")));
+                    at(source, where + " 必须为 [w,h] int 数组")));
             }
             sw = (*sz)[0].get<int>();
             sh = (*sz)[1].get<int>();
@@ -288,7 +424,7 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
                 sh > kTileSizeInAtlasMax) {
                 return tl::unexpected(err(
                     ErrorCode::kSchemaViolation,
-                    at(rel_path, where + " 元素必须为 1.."
+                    at(source, where + " 元素必须为 1.."
                                        + std::to_string(kTileSizeInAtlasMax))));
             }
         }
@@ -302,14 +438,14 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
                 !(*to)[0].is_number_integer() || !(*to)[1].is_number_integer()) {
                 return tl::unexpected(err(
                     ErrorCode::kSchemaViolation,
-                    at(rel_path, where + " 必须为 [x,y] int 数组")));
+                    at(source, where + " 必须为 [x,y] int 数组")));
             }
             const int ox = (*to)[0].get<int>(), oy = (*to)[1].get<int>();
             if (ox > kTileOriginMax || ox < -kTileOriginMax ||
                 oy > kTileOriginMax || oy < -kTileOriginMax) {
                 return tl::unexpected(err(
                     ErrorCode::kSchemaViolation,
-                    at(rel_path, where + " 绝对值超限")));
+                    at(source, where + " 绝对值超限")));
             }
             t_origin = Vec2{static_cast<float>(ox), static_cast<float>(oy)};
         }
@@ -322,22 +458,67 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
             if (!ys->is_number_integer()) {
                 return tl::unexpected(err(
                     ErrorCode::kSchemaViolation,
-                    at(rel_path, where + " 必须为 int")));
+                    at(source, where + " 必须为 int")));
             }
             yso = ys->get<int>();
             if (yso > kTileOriginMax || yso < -kTileOriginMax) {
                 return tl::unexpected(err(
                     ErrorCode::kSchemaViolation,
-                    at(rel_path, where + " 绝对值超限")));
+                    at(source, where + " 绝对值超限")));
             }
         }
-        detail::SceneImpl::TilesetMeta::TileVisual tv;
-        tv.region = Rect{static_cast<float>(col * tw_v), static_cast<float>(row * th_v),
-                         static_cast<float>(sw * tw_v), static_cast<float>(sh * th_v)};
+        // terrain 字段（terrain_set/terrain/peering_bits；plan-12 §4.1）
+        TerrainTileEntry entry;
+        if (auto r = parse_tile_terrain(t, source, out.terrain_sets, i, entry); !r)
+            return tl::unexpected(r.error());
+        SceneImpl::TilesetMeta::TileVisual tv;
+        tv.region = Rect{static_cast<float>(col * out.tile_w),
+                         static_cast<float>(row * out.tile_h),
+                         static_cast<float>(sw * out.tile_w),
+                         static_cast<float>(sh * out.tile_h)};
         tv.texture_origin = t_origin;
         tv.y_sort_origin = yso;
-        m.tile_visuals.push_back(tv);
+        out.tile_visuals.push_back(tv);
+        out.tile_terrains.push_back(entry);
     }
+    return out;
+}
+
+// 读文件 + 解析 JSON + parse_tileset_document（诊断与场景侧 tileset 引用一致）。
+expected<TilesetParsed, Error> load_tileset_document(std::string_view rel_path) {
+    const std::string full = assets_path(rel_path);
+    auto text_or = read_text_file(full, "tileset 引用 " + std::string(rel_path));
+    if (!text_or) return tl::unexpected(text_or.error());
+    auto j_or = parse_json_text(*text_or, full);
+    if (!j_or) return tl::unexpected(j_or.error());
+    return parse_tileset_document(*j_or, rel_path);
+}
+
+}  // namespace detail
+
+namespace {
+
+// 读取并解析 tro-tileset v2 元数据（load 期；不读纹理文件）。解析核心
+// detail::parse_tileset_document 与 TerrainTable 加载共用（plan-12 §4.1）。
+expected<void, Error> load_tileset_meta(const std::string& rel_path,
+                                        int scene_tile_w, int scene_tile_h,
+                                        detail::SceneImpl& out) {
+    auto doc = detail::load_tileset_document(rel_path);
+    if (!doc) return tl::unexpected(doc.error());
+    if (doc->tile_w != scene_tile_w || doc->tile_h != scene_tile_h)
+        return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                  at(rel_path, "tile 尺寸与场景不一致")));
+    detail::SceneImpl::TilesetMeta m;
+    m.name = "";  // 由场景端填
+    m.path = rel_path;
+    m.tile_w = doc->tile_w;
+    m.tile_h = doc->tile_h;
+    m.tile_count = doc->tile_count;
+    m.texture = std::move(doc->texture);
+    m.columns = doc->columns;
+    m.tile_visuals = std::move(doc->tile_visuals);
+    m.terrain_sets = std::move(doc->terrain_sets);
+    m.tile_terrains = std::move(doc->tile_terrains);
     out.tilesets.push_back(std::move(m));
     out.atlas_textures.emplace_back();  // 图集贴图懒加载槽与 tilesets 对齐
     return {};
@@ -878,9 +1059,21 @@ class SceneLoader {
 public:
     using Error = SceneAsset::AssetError;
 
+    // 外层入口：source（文件路径或注入名）进诊断前缀（plan-12 §4.4 接通；
+    // 此前 source_path 被 (void) 弃用，schema 错误无来源上下文）。
     static expected<SceneAsset, Error> load(const json& root,
                                             std::string_view source_path) {
-    (void)source_path;  // 保留签名（未来诊断/日志用）；目前诊断来自 JSON 内部路径
+        auto r = load_impl(root);
+        if (!r) {
+            return tl::unexpected(err(
+                r.error().code, std::string(source_path) + ": " + r.error().message));
+        }
+        return r;
+    }
+
+private:
+    // 核心解析（诊断来自 JSON 内部路径；source 前缀由外层 load 注入）。
+    static expected<SceneAsset, Error> load_impl(const json& root) {
     auto impl = std::make_unique<detail::SceneImpl>();
     impl->id = next_asset_id();
     if (impl->id == 0) {
@@ -1056,6 +1249,14 @@ expected<SceneAsset, SceneAsset::AssetError> load_scene_asset(
 }
 
 }  // namespace detail
+
+// 内存加载（plan-12 §4.4）：与 load(path) 同一解析/校验路径，仅文本来源不同。
+expected<SceneAsset, SceneAsset::AssetError> SceneAsset::load_json(
+    std::string_view text, std::string_view name) {
+    auto j_or = parse_json_text(std::string(text), name);
+    if (!j_or) return tl::unexpected(j_or.error());
+    return detail::load_scene_asset(*j_or, name);
+}
 
 // 公共 load：读文件 → parse → detail::load_scene_asset
 expected<SceneAsset, SceneAsset::AssetError> SceneAsset::load(std::string_view path) {

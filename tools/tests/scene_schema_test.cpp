@@ -733,6 +733,62 @@ bool test_animation_names() {
 }  // namespace
 
 // 注意：build/ 目录必须存在（写临时文件用）。ctest working dir = 项目根。
+// ── load_json 内存加载（plan-12 §4.4）：双入口等价 + name 进诊断 ──
+bool test_load_json() {
+    bool ok = true;
+    const std::string atlas_scene =
+        R"({"format":"tro-scene","version":2,"meta":{"name":"mem"},"tilemap":{)"
+        R"("tile_width":16,"tile_height":16,)"
+        R"("tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],)"
+        R"("layers":[{"name":"g","width":1,"height":1,"tileset":"ts","tiles":[0]}]}})";
+    const std::string palette_scene =
+        R"({"format":"tro-scene","version":2,"tilemap":{"tile_width":8,"tile_height":8,)"
+        R"("palette":["#101018","#e94560"],)"
+        R"("layers":[{"name":"g","width":2,"height":1,"tiles":[0,1]}]}})";
+    // 等价性：同一 JSON 走两条入口，可见字段一致、asset_id 单调共享
+    {
+        const std::string p = write_temp_scene2(atlas_scene);
+        auto a = SceneAsset::load(p);
+        std::remove(p.c_str());
+        auto b = SceneAsset::load_json(atlas_scene, "mem-atlas");
+        CHECK(a.has_value() && b.has_value());
+        if (a && b) {
+            CHECK(a->name() == b->name());
+            CHECK(a->layer_count() == b->layer_count());
+            CHECK(a->entity_count() == b->entity_count());
+            CHECK(a->tile_width() == b->tile_width());
+            CHECK(b->asset_id() > a->asset_id());
+        }
+    }
+    // palette 模式双入口等价（plan-12 §7：两模式覆盖）
+    {
+        const std::string p = write_temp_scene2(palette_scene);
+        auto a = SceneAsset::load(p);
+        std::remove(p.c_str());
+        auto b = SceneAsset::load_json(palette_scene, "mem-palette");
+        CHECK(a.has_value() && b.has_value());
+        if (a && b) {
+            CHECK(a->palette_count() == b->palette_count());
+            CHECK(a->layer_count() == b->layer_count());
+            CHECK(b->asset_id() > a->asset_id());
+        }
+    }
+    // 缺省名 "<memory>"：语法错误 → kParseError 且消息带名
+    {
+        auto r = SceneAsset::load_json("{not json");
+        CHECK(!r.has_value() && r.error().code == tg::ErrorCode::kParseError);
+        CHECK(r.error().message.find("<memory>") != std::string::npos);
+    }
+    // 注入名：schema 违规 → kSchemaViolation 且消息带名（plan-12 §4.4 接通诊断）
+    {
+        auto r = SceneAsset::load_json(R"({"format":"tro-scene","version":3})",
+                                       "注入名B");
+        CHECK(!r.has_value() && r.error().code == tg::ErrorCode::kSchemaViolation);
+        CHECK(r.error().message.find("注入名B") != std::string::npos);
+    }
+    return ok;
+}
+
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
 
@@ -749,6 +805,7 @@ int main() {
     test_positive_regressions();
     test_atlas_col_row_meta();
     test_tileset_visual_fields();
+    test_load_json();
 
     std::printf("[schema test] checks=%d failures=%d\n", ::tg_test::g_checks,
                 ::tg_test::g_failures);

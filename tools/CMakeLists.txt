@@ -58,6 +58,14 @@ add_test(NAME anim_tween_test COMMAND trogue_anim_tween_test)
 set_tests_properties(anim_tween_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── terrain 匹配表/选择器单测（plan-12 §7；纯公共 API，链接生产库） ──
+add_executable(trogue_terrain_test tests/terrain_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_terrain_test PRIVATE trogue_engine
+                                                 ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME terrain_test COMMAND trogue_terrain_test)
+set_tests_properties(terrain_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── Watcher 分类纯函数 + Release 桩 + Ipc 集成（plan-5.5 §4） ──
 add_executable(trogue_watcher_ipc_test tests/watcher_ipc_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_watcher_ipc_test PRIVATE trogue_engine

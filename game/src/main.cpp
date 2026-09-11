@@ -17,6 +17,7 @@
 //
 // 命令归属表见 docs/plan-5.6.md §1 与 docs/plan-6.md §3.4。
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -260,14 +261,9 @@ tg::Json actor_to_json(const Demo& d, const game::Actor& a) {
     return j;
 }
 
-// candidate load → 帧外 swap（失败保留旧 asset/旧 state，失败安全）
-void reload_scene(Demo& d, const std::string& path) {
-    auto loaded = tg::SceneAsset::load(path);
-    if (!loaded) {
-        TraceLog(LOG_WARNING, "[demo] 加载失败（保留旧场景）: %s",
-                 loaded.error().message.c_str());
-        return;
-    }
+// 场景交换核心（candidate 已成功加载；keep_player + reloads 自增 + 动画重绑。
+// reload 与 genmap 共用，plan-12 §4.5）
+void swap_scene(Demo& d, std::unique_ptr<tg::SceneAsset> loaded) {
     // 保留玩家运行时位置与回合数（game 策略：reload 后玩家位置/回合不变；
     // 其它 actor 全部按新 descriptor 重建）。旧 C demo 曾有等价行为。
     std::optional<game::TilePos> keep_player;
@@ -275,7 +271,7 @@ void reload_scene(Demo& d, const std::string& path) {
     const int keep_turn = d.gs.turn_count;
 
     d.anim.bind(tg::AnimationSet{});   // 解绑旧播放器（旧 asset 即将析构）
-    d.asset = std::make_unique<tg::SceneAsset>(std::move(*loaded));
+    d.asset = std::move(loaded);
     game::import_scene(d.gs, *d.asset);
     if (keep_player) {
         if (game::Actor* p = d.gs.player()) p->pos = *keep_player;
@@ -305,6 +301,17 @@ void reload_scene(Demo& d, const std::string& path) {
         d.anim.bind(tg::AnimationSet{});
     }
     TraceLog(LOG_INFO, "[demo] 场景已交换（reloads=%d）", d.reloads);
+}
+
+// candidate load → 帧外 swap（失败保留旧 asset/旧 state，失败安全）
+void reload_scene(Demo& d, const std::string& path) {
+    auto loaded = tg::SceneAsset::load(path);
+    if (!loaded) {
+        TraceLog(LOG_WARNING, "[demo] 加载失败（保留旧场景）: %s",
+                 loaded.error().message.c_str());
+        return;
+    }
+    swap_scene(d, std::make_unique<tg::SceneAsset>(std::move(*loaded)));
 }
 
 // ── 玩家移动 + 视觉 tween（引擎 TweenManager 驱动，不重复造轮子） ──
@@ -405,6 +412,139 @@ tg::Json turn_json(const Demo& d) {
     return j;
 }
 
+// ── 程序生成地图（plan-12 §4.5）：地形指派是玩法决策（本节全部逻辑归 game），
+// 引擎只提供 pick_tile 采样与 load_json 内存加载。生成流程：
+//   噪声指派 → pick_tile 填 id → 拼 tro-scene JSON → load_json → swap_scene。
+// 噪声为最小确定性 value-noise（粗网格双线性插值）：同 seed 同 w/h 逐位一致。
+
+std::uint64_t gen_hash(std::uint64_t x, std::uint64_t y, std::uint64_t seed) {
+    std::uint64_t h = seed;
+    h ^= x * 0x9E3779B97F4A7C15ULL;
+    h ^= y * 0xC2B2AE3D27D4EB4FULL;
+    h ^= h >> 33;
+    h *= 0xFF51AFD7ED558CCDULL;
+    h ^= h >> 33;
+    h *= 0xC4CEB9FE1A85EC53ULL;
+    h ^= h >> 33;
+    return h;
+}
+
+float gen_value_noise(int x, int y, std::uint64_t seed, int period) {
+    const int x0 = x / period, y0 = y / period;
+    const float fx = static_cast<float>(x % period) / static_cast<float>(period);
+    const float fy = static_cast<float>(y % period) / static_cast<float>(period);
+    const auto v = [&](int gx, int gy) {
+        return static_cast<float>(gen_hash(static_cast<std::uint64_t>(gx),
+                                           static_cast<std::uint64_t>(gy),
+                                           seed) >> 40) / 16777216.0f;  // [0,1)
+    };
+    const auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+    return lerp(lerp(v(x0, y0), v(x0 + 1, y0), fx),
+                lerp(v(x0, y0 + 1), v(x0 + 1, y0 + 1), fx), fy);
+}
+
+// genmap 生成上限（格）：远小于引擎 kLayerDimMax=4096——演示级的 JSON 体积与
+// 生成耗时约束（plan-12 §4.5；更大需求由调用方分片）
+inline constexpr int kGenMapDimMax = 64;
+
+tg::IpcStatus handle_genmap(Demo& d, const tg::Json& req,
+                            std::optional<tg::Json>& data, std::string& error) {
+    if (!req.contains("seed") || !req["seed"].is_number_integer()) {
+        error = "genmap needs integer seed";
+        return tg::IpcStatus::error;
+    }
+    const auto seed =
+        static_cast<std::uint64_t>(req["seed"].get<std::int64_t>());
+    int w = 40, h = 40;
+    for (const auto& kv : {std::pair<const char*, int*>{"w", &w}, {"h", &h}}) {
+        if (!req.contains(kv.first)) continue;
+        if (!req[kv.first].is_number_integer()) {
+            error = "genmap w/h must be integers";
+            return tg::IpcStatus::error;
+        }
+        *kv.second = req[kv.first].get<int>();
+    }
+    if (w < 1 || w > kGenMapDimMax || h < 1 || h > kGenMapDimMax) {
+        error = "genmap w/h out of range (1..64)";
+        return tg::IpcStatus::error;
+    }
+    // 匹配表现读（文件小、保持无状态；失败如实报错，旧场景不受影响）
+    auto table = tg::load_terrain_table("tilesets/test_tileset_1.json");
+    if (!table) {
+        error = "terrain table load failed: " + table.error().message;
+        return tg::IpcStatus::error;
+    }
+    // ① 地形指派（game 决策：噪声阈值 → ground/空）
+    std::vector<std::vector<bool>> ground(h, std::vector<bool>(w, false));
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+            ground[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)] =
+                gen_value_noise(x, y, seed, 6) >= 0.55f;
+    // ② 引擎选择器填 id（8 邻位：同指派才连；corners_and_sides 模式 8 位全参与）
+    static constexpr int kDx[8] = {0, 1, 1, 1, 0, -1, -1, -1};  // t,tr,r,br,b,bl,l,tl
+    static constexpr int kDy[8] = {-1, -1, 0, 1, 1, 1, 0, -1};
+    tg::Json tiles = tg::Json::array();
+    int nonempty = 0;
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (!ground[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)]) {
+                tiles.push_back(-1);
+                continue;
+            }
+            std::array<int, 8> pat{};
+            pat.fill(-1);
+            for (int k = 0; k < 8; ++k) {
+                const int nx = x + kDx[k], ny = y + kDy[k];
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h &&
+                    ground[static_cast<std::size_t>(ny)][static_cast<std::size_t>(nx)])
+                    pat[static_cast<std::size_t>(k)] = 0;
+            }
+            auto id = tg::pick_tile(*table, 0, 0, pat);
+            tiles.push_back(id.value_or(-1));  // 采样失败兜底空格（不该发生）
+            if (id) ++nonempty;
+        }
+    }
+    // ③ 拼 tro-scene JSON → ④ load_json → swap（复用 keep_player/reloads 语义）
+    tg::Json tileset_ref = tg::Json::object();
+    tileset_ref["name"] = "terrain";
+    tileset_ref["path"] = "tilesets/test_tileset_1.json";
+    tg::Json layer = tg::Json::object();
+    layer["name"] = "gen";
+    layer["width"] = w;
+    layer["height"] = h;
+    layer["solid"] = false;  // 生成层纯视觉；solid 语义留玩法接管时再定
+    layer["tileset"] = "terrain";
+    layer["tiles"] = tiles;
+    tg::Json tilemap = tg::Json::object();
+    tilemap["tile_width"] = 16;
+    tilemap["tile_height"] = 16;
+    tilemap["tilesets"] = tg::Json::array({tileset_ref});
+    tilemap["layers"] = tg::Json::array({layer});
+    tg::Json scene = tg::Json::object();
+    scene["format"] = "tro-scene";
+    scene["version"] = 2;
+    scene["meta"] = tg::Json{{"name", "genmap"}, {"background", "#101018"}};
+    scene["tilemap"] = tilemap;
+    scene["entities"] = tg::Json::array();
+    const std::string name = "genmap(seed=" + std::to_string(seed) + ")";
+    auto loaded = tg::SceneAsset::load_json(scene.dump(), name);
+    if (!loaded) {
+        TraceLog(LOG_WARNING, "[demo] genmap 场景加载失败: %s",
+                 loaded.error().message.c_str());
+        error = loaded.error().message;
+        return tg::IpcStatus::error;
+    }
+    swap_scene(d, std::make_unique<tg::SceneAsset>(std::move(*loaded)));
+    data = tg::Json::object();
+    (*data)["generated"] = true;
+    (*data)["seed"] = req["seed"];
+    (*data)["w"] = w;
+    (*data)["h"] = h;
+    (*data)["nonempty"] = nonempty;
+    (*data)["reloads"] = d.reloads;
+    return tg::IpcStatus::handled;
+}
+
 // ── IPC handler（全部命令归属 game；engine 只传 ping） ──
 
 tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
@@ -414,7 +554,7 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
             "ping", "help", "status", "list_entities", "get_entity",
             "query_entities", "set_entity", "spawn", "despawn",
             "layers", "solid_at", "get_tile", "reload", "screenshot",
-            "log", "quit", "turn", "move", "wait",
+            "log", "quit", "turn", "move", "wait", "genmap",
             "subscribe", "unsubscribe", "connections", "events",
         };
         tg::Json arr = tg::Json::array();
@@ -680,6 +820,7 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         (*data)["solid"] = solid;
         return tg::IpcStatus::handled;
     }
+    if (cmd == "genmap") return handle_genmap(d, req, data, error);
     if (cmd == "reload") {
         reload_scene(d, d.scene_path);
         data = tg::Json::object();

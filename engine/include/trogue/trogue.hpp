@@ -7,6 +7,7 @@
 #include "trogue/types.hpp"
 #include "trogue/coro.hpp"
 #include "trogue/scene.hpp"
+#include "trogue/terrain.hpp"
 #include "trogue/render.hpp"
 #include "trogue/animation.hpp"
 #include "trogue/tween.hpp"

@@ -16,6 +16,7 @@
 
 #include "trogue/animation.hpp"  // AnimationSet（动画集视图）
 #include "trogue/scene.hpp"      // LayerInfo/SceneEntity/SpriteDesc（公共值类型）
+#include "trogue/terrain.hpp"    // TerrainSetInfo/TerrainTileEntry（tileset terrain 数据）
 #include "trogue/types.hpp"      // Color
 
 namespace tg::detail {
@@ -73,6 +74,11 @@ struct SceneImpl {
         // 契约：tiles[] 数组顺序即 id，每个 tile 自带 col/row（非顺序排列可能，
         // 不能按 id 推公式）。region 越界不在 load 期校验（load 不读纹理文件）。
         std::vector<TileVisual> tile_visuals;
+        // terrain 数据（plan-12 §4.1）：tro-tileset terrain_sets/peering_bits 解析
+        // 校验后的结果（此前宽容路过、零解析）。空 terrain_sets = 无 terrain 数据
+        //（手写/纯装饰 tileset）。渲染不读；TerrainTable 加载共用解析核心。
+        std::vector<TerrainSetInfo> terrain_sets;
+        std::vector<TerrainTileEntry> tile_terrains;  // 与 tile_visuals 对齐（下标即 id）
     };
     std::vector<TilesetMeta> tilesets;
     std::vector<Color> palette;

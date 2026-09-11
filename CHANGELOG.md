@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### autotile 机制与内存加载（TerrainTable / pick_tile / load_json / genmap）
+
+- 影响的文件: `engine/include/trogue/terrain.hpp`（新增）、`engine/src/terrain.cpp`（新增）、`engine/src/tileset_parse.hpp`（新增）、`engine/src/scene_asset.cpp`、`engine/src/scene_impl.hpp`、`engine/include/trogue/scene.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`tools/tests/terrain_test.cpp`（新增）、`tools/tests/scene_schema_test.cpp`、`tools/CMakeLists.txt`、`AGENTS.md`、`docs/plan-12.md`（新增）
+
+#### Added
+- tro-tileset terrain 数据解析 + 校验并消费（此前宽容路过、零解析）：`terrain_sets`/`terrain`/`peering_bits` 按 mode 白名单、bit 种类↔mode 一致性、序号值域校验（键缺省 = -1/空，文档级未知键宽容不变）；解析核心抽出为场景与匹配表两条加载路径共用（杜绝双解析漂移）
+- `tg::TerrainTable` + `tg::load_terrain_table`（tro-tileset 只读匹配表，v1 限单 terrain_set）+ `tg::pick_tile`（无状态纯函数：8 方向 pattern → tile id；评分 = Σ合法位 mismatch 取最小分、同分取最小 tile id——Godot 评分匹配语义的确定性化，同 seed/资产热重载无视觉抽签）；错误分层 kInvalidArgument（参数非法）/ kNotFound（terrain 无候选）
+- `SceneAsset::load_json(text, name="<memory>")`：内存加载与 `load(path)` 同一解析/校验路径（程序生成场景的一等公民入口）；SceneLoader 接通 source 诊断前缀（schema 错误携带文件路径或注入名，此前 source_path 被弃用）
+- demo IPC `genmap`（seed/w/h）：game 层确定性 value-noise 地形指派 → `pick_tile` 填 id → 拼 tro-scene JSON → `load_json` → swap（复用 keep_player/reloads 语义）；同 seed 同尺寸逐位一致（E2E 截图像素比对验证）；`swap_scene` 从 `reload_scene` 抽出共用
+- AGENTS.md 固化引擎定位判据：机制性、确定性、可无头测试的执行原语进引擎；音频总线/混音、shader 管理、粒子等美学/玩法决策载体归 game 直调 raylib
+
+#### Tests
+- `terrain_test` 新增：合法加载 + 键缺省语义、16-blob 全集精确命中、残缺集降级（手算期望表）、同 bits tie 最小 id、均匀 +1（未标注位不改排序）、kNotFound/kInvalidArgument 分层、terrain 解析拒绝全集（含负非 -1）、真实资产回归（test_tileset_1.json 标注抽查）
+- `scene_schema_test` 加 load_json 双入口等价（atlas + palette）与诊断名断言
+
 ### 引擎：实体 props 透传字段容忍（导出器-引擎契约矛盾修复）
 
 - 影响的文件: `engine/src/scene_asset.cpp`、`tools/tests/scene_schema_test.cpp`、`AGENTS.md`

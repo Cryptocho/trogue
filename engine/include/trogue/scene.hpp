@@ -87,6 +87,13 @@ public:
     // 单一加载路径：失败返回带诊断的错误，不产生半成品、不修改任何既有 asset。
     static expected<SceneAsset, AssetError> load(std::string_view path);
 
+    // 内存加载（plan-12 §4.4）：与 load(path) 同一解析/校验路径，仅文本来源不同
+    //（程序生成场景：game 拼tro-scene JSON → 本入口 → render_scene）。
+    // name 仅用于错误诊断（kParseError/kSchemaViolation 消息前缀）；tileset/texture
+    // 路径仍按 assets/ 约定从磁盘解析。不参与 watcher（内存场景无文件可监听）。
+    static expected<SceneAsset, AssetError> load_json(
+        std::string_view text, std::string_view name = "<memory>");
+
     SceneAsset(const SceneAsset&) = delete;
     SceneAsset& operator=(const SceneAsset&) = delete;
     SceneAsset(SceneAsset&&) noexcept;
