@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### PixelLab 资产管线（pixellab/ → tro-* 转换层）
+
+- 影响的文件: `pixellab/pxlab.py`（新增）、`pixellab/api.py`（新增）、`pixellab/mapping.py`（新增）、`pixellab/tileset.py`（新增）、`pixellab/character.py`（新增）、`pixellab/scene.py`（新增）、`pixellab/gridcheck.py`（新增）、`pixellab/manifest.py`（新增）、`pixellab/tests/test_mapping.py`（新增）、`pixellab/fixtures/`（新增）、`tools/scene_gen.cpp`（新增）、`tools/CMakeLists.txt`、`tools/tests/terrain_test.cpp`、`assets/tilesets/pixellab/wang_grass_dirt.json`（新增）、`assets/textures/pixellab/wang_grass_dirt.png`（新增）、`assets/textures/pixellab/pxlab_soldier.png`（新增）、`assets/animations/pxlab_soldier.json`（新增）、`assets/pixellab_manifest.json`（新增）、`pixellab/fixtures/wang_pattern.json`（新增）、`pixellab/tests/test_scene_gen.py`（新增）、`.gitignore`、`AGENTS.md`、`docs/plan-13.md`（新增）
+
+#### Added
+- PixelLab MCP → tro-* 上游转换层（与 editor/ Godot 管线平级；引擎与 game 零 PixelLab 概念）：CLI `pixellab/pxlab.py` 三子命令 `import-character` / `import-tileset` / `import-map` + `verify`
+- Wang 16-tile 4×4 → tro-tileset v2（corners mode）：映射三要素实测锁定——PixelLab `corners{NW,NE,SW,SE}` ↔ 引擎 4 角位、归池 = 多数角（平分归 lower，16/16 组合精确命中零降级）、顶点采样 = 四邻格多数投票（平分 self 优先）；metadata 端点的 `bounding_box` 为切片权威（`wang_N` 名与 `original_position` 不可用）
+- 角色/动画 → tro-animations v1 + spritesheet（每 clip 一行确定性布局、region 互不重叠、4096px 上界）；fps/loop 为显式 CLI 参数（PixelLab 不提供）
+- 地图 ASCII 网格 → tro-scene（地形指派/顶点采样归 pixellab/，bits→tile id 归 `tools/scene_gen` 复用引擎 `pick_tile`，落盘前 `load_json` 回读自检；场景 tiles 烤死）
+- `assets/pixellab_manifest.json`：按 (源类型, 源 id) upsert 的来源 manifest（下载 URL + 产物 sha256）；`verify` 子命令复核；同输入重跑产物 byte-identical（已验证）
+- 像素网格检测（本地 Pillow）：检测到 ≥2× 整数倍放大自动还原真实网格；未检测到按原生图接受（非整数倍放大无法用块一致性证明，为检测能力边界）；尺寸 <8px 拒绝
+
+#### Tests
+- `pixellab/tests/test_mapping.py`（入 ctest）：归池/peering 映射/顶点采样 6 组用例
+- `terrain_test` 新增 corners mode 全组合用例：16 角组合精确命中 + 残缺集降级手算表 + 非法边位 kInvalidArgument 契约
+- E2E（手动）：tileset/角色 fixture 全管线跑通；场景渲染与图集逐像素零差异（9216px 比对）；内嵌动画场景帧序推进验证（frame 2→1→3 循环）；ipc_smoke 61/61 回归
+
 ### autotile 机制与内存加载（TerrainTable / pick_tile / load_json / genmap）
 
 - 影响的文件: `engine/include/trogue/terrain.hpp`（新增）、`engine/src/terrain.cpp`（新增）、`engine/src/tileset_parse.hpp`（新增）、`engine/src/scene_asset.cpp`、`engine/src/scene_impl.hpp`、`engine/include/trogue/scene.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`tools/tests/terrain_test.cpp`（新增）、`tools/tests/scene_schema_test.cpp`、`tools/CMakeLists.txt`、`AGENTS.md`、`docs/plan-12.md`（新增）

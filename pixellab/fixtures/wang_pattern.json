@@ -1,0 +1,119 @@
+{
+ "tileset": "tilesets/pixellab/wang_grass_dirt.json",
+ "w": 4,
+ "h": 4,
+ "patterns": [
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 0,
+   "br": 0,
+   "bl": 0,
+   "terrain": 0
+  },
+  {
+   "tl": 0,
+   "tr": 1,
+   "br": 0,
+   "bl": 0,
+   "terrain": 0
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 0,
+   "tr": 0,
+   "br": 0,
+   "bl": 1,
+   "terrain": 0
+  },
+  {
+   "tl": 0,
+   "tr": 0,
+   "br": 1,
+   "bl": 0,
+   "terrain": 0
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  },
+  {
+   "tl": 1,
+   "tr": 1,
+   "br": 1,
+   "bl": 1,
+   "terrain": 1
+  }
+ ]
+}

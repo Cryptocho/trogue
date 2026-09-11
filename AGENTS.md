@@ -171,7 +171,9 @@ trogue/
 ├── docs/                  # 里程碑计划书（plan-<M>.md，开工前闭环送审）+ 历史归档 history.md
 ├── tools/
 │   ├── ipc_smoke.py       # IPC 冒烟测试（61 项断言）
+│   ├── scene_gen.cpp      # 离线场景生成 CLI（pixellab 管线数据流 C 机制半，复用 pick_tile）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
+├── pixellab/              # PixelLab MCP → tro-* 转换层（上游资产管线，与 editor/ 平级；见「PixelLab 资产管线」）
 ├── build/  build-release/ # 构建产物（gitignore）
 ├── reference/             # 引擎源码参考副本（gitignore；Godot 4.7.2 + raylib 6.0，查证行为用，见「依赖与环境」）
 └── trogue-orign/          # 只读参考（gitignore）
@@ -329,6 +331,21 @@ python3 tools/ipc_smoke.py
 - Godot 导出场景：全部由 scene_exporter v3 重导出，无需手改。
 - **v2 → v2.1 零迁移**：v2.1 只增可选字段与 bare 形态，v2 资产原样可读（`version` 仍为 2）。
 
+## PixelLab 资产管线（pixellab/，plan-13）
+
+> **定位**：PixelLab MCP（外部像素美术生成服务）→ tro-* 运行时资产的**上游转换层**，与 `editor/`（Godot 导出管线）平级——都是「上游创作输入 → assets/ 中的 tro-*」。引擎与 game 运行时零 PixelLab 概念；本层是纯离线工具（Python，依赖仅 Pillow + stdlib）+ `tools/scene_gen.cpp`（复用引擎 `pick_tile`）。
+
+- **MCP 调用纪律**：调用任何 PixelLab 工具前先查官方文档 `https://api.pixellab.ai/mcp/docs`；批量生成前 `get_balance`；pro 模式必须走 confirm_cost 报价流程（先报价 → 用户确认 → 再调）。全局 skill `pixellab-mcp`（`~/.agents/skills/`）承载操作指南。
+- **数据流**（三条，产物全部落 `assets/`）：
+  - **A 角色/动画**：`create_character`/`animate_character` → Agent 保存 `get_character` 响应为元数据 JSON → `python3 pixellab/pxlab.py import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle]` → `assets/textures/pixellab/<n>.png`（spritesheet，每 clip 一行）+ `assets/animations/<n>.json`。fps/loop 为显式参数（PixelLab 不提供）。
+  - **B Wang 瓦片集**：`create_topdown_tileset`（16-tile 4×4，standard）→ 保存 metadata JSON（`.../metadata` 端点，含每 tile `corners`+`bounding_box`）→ `pxlab.py import-tileset --meta <json> --image-url <png URL> --lower <名> --upper <名>` → `assets/tilesets/pixellab/<n>.json`（corners mode + peering_bits + 归池 terrain）+ 贴图。
+  - **C 地图**：`get_map` ASCII terrain 网格 → `pxlab.py import-map --grid <文件|-> --tileset <tro-tileset> --scene <名> --out <assets 相对路径>` → 顶点采样（`mapping.vertex_corners`）→ 候选池 = **顶点 pattern 的归池**（`mapping.pool_of_vertices`，与 tile 归池同规则；不用格自身 terrain——少数角格会落错池降级）→ `tools/scene_gen`（引擎 `pick_tile` 按该池烤 tile id + `load_json` 回读自检）→ `assets/scenes/<n>.json`（tiles 烤死）。
+- **映射三要素（W2 实测锁定，fixture `pixellab/fixtures/`）**：① PixelLab tile `corners{NW,NE,SW,SE}`（字面枚举 lower/upper）↔ 引擎 4 角位（NW→top_left 等）；② 归池 = 多数角（≥3 upper → upper 池，平分归 lower）——16/16 组合精确命中零降级；③ 顶点采样 = 四邻格（含自身）多数投票，平分取 self 优先。单测 `pixellab/tests/`（入 ctest）。
+- **确定性**：同输入重跑产物 byte-identical（已验证）；`assets/pixellab_manifest.json` 按 (源类型, 源 id) upsert 记录来源 URL + 产物 sha256；`pxlab.py verify` 复核。下载 URL 可能过期——**产物 + sha256 为权威**，重导入需重新提供 MCP 元数据。
+- **明确损失**：25-tile（transition_size=1.0）4×8 Wang 集、tile_size 非 16/32、spritesheet 边 > 4096px、图像尺寸 <8px → 一律拒绝导入并报错，不静默伪造兼容。像素网格检测只做**整数倍放大还原**（检测到 ≥2× 则还原真实网格）；未检测到 = 按原生图接受（无法用块一致性证明非整数倍放大，不做拒绝）——这是检测能力边界，非静默伪造。
+- **独立 tro-animations 无运行时加载器**：引擎只消费场景实体**内嵌** `animations`（动画集名 = entity id）；`assets/animations/*.json` 是转换中间产物，消费时把 `textures`/`animations` 两键内嵌进场景实体（同构 `assets/scenes/soldier_animated_sprite_2d.json`）。
+- **双路径不变**：规则明确的资产仍直接手写 tro-*；PixelLab 路径只在需要美术生成力时使用。
+
 ## 热重载规范
 
 - **监听**：`assets/scenes/*.json` 的 CLOSE_WRITE/MOVED_TO/CREATE/MODIFY（inotify），150ms 防抖抑制编辑器原子保存连发。非 Linux 为 no-op。
@@ -424,6 +441,7 @@ python3 tools/ipc_smoke.py
 3. 调试循环：`status`/`list_entities` 观测 → 改 `assets/scenes/*.json` → 0.5s 后 `status.reloads` 自增即为生效 → `screenshot` 拿画面 → `set_entity`/`spawn` 做运行时实验
 4. 收尾：`{"cmd":"quit"}` 让引擎干净退出
 5. 日志在 stdout（TraceLog 格式），解析失败原因可在其中检索 `[scene]`
+6. 美术资产生成走 PixelLab MCP（见「PixelLab 资产管线」）；转换产物用 `python3 pixellab/pxlab.py verify` 校验
 
 > **截图视觉验收（2026-09-10 修订，取代 2026-09-09 的分工版）**：当前对话模型**已支持图片输入**——read 工具可直接读图（PNG/JPEG/WebP 等），视觉验收应由 **Agent 自己读截图并下结论**，不再默认推给用户目测。约定：
 > ① read 工具**不接受项目外路径**（如 `/tmp`）与 `build/` 等目录——截图写在这些位置时，先用 terminal 拷进项目内可读路径（用完即删，避免污染仓库）再 read；

@@ -19,3 +19,7 @@ editor/assets/
 
 compile_commands.json
 build-asan/
+
+# Python
+__pycache__/
+*.pyc

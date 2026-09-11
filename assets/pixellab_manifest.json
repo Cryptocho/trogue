@@ -1,0 +1,47 @@
+{
+ "entries": [
+  {
+   "name": "pxlab_soldier",
+   "download_urls": [
+    "https://backblaze.pixellab.ai/file/pixellab-characters/25ec8a9c-421b-4729-a37a-5a3beff591a4/f268b557-7a4a-4cd7-9acb-c030d56c66fa/animations/27cd3ce1-5c53-4d65-a4d9-3daf143164c9/south/0.png?t=1789107594653",
+    "https://backblaze.pixellab.ai/file/pixellab-characters/25ec8a9c-421b-4729-a37a-5a3beff591a4/f268b557-7a4a-4cd7-9acb-c030d56c66fa/animations/27cd3ce1-5c53-4d65-a4d9-3daf143164c9/south/1.png?t=1789107594653",
+    "https://backblaze.pixellab.ai/file/pixellab-characters/25ec8a9c-421b-4729-a37a-5a3beff591a4/f268b557-7a4a-4cd7-9acb-c030d56c66fa/animations/27cd3ce1-5c53-4d65-a4d9-3daf143164c9/south/2.png?t=1789107594653",
+    "https://backblaze.pixellab.ai/file/pixellab-characters/25ec8a9c-421b-4729-a37a-5a3beff591a4/f268b557-7a4a-4cd7-9acb-c030d56c66fa/animations/27cd3ce1-5c53-4d65-a4d9-3daf143164c9/south/3.png?t=1789107594653"
+   ],
+   "outputs": [
+    "textures/pixellab/pxlab_soldier.png",
+    "animations/pxlab_soldier.json"
+   ],
+   "sha256": {
+    "textures/pixellab/pxlab_soldier.png": "f6935007c1ba7d4bb3ff1fc955704facd5aed4be3e12edf6fed50e749ba76e74",
+    "animations/pxlab_soldier.json": "a00545d57af5b3b2eef5c698ba69c1f7149234a597d9588f4b2e07fd23e1e6e6"
+   },
+   "fps": 8,
+   "loop": [
+    "walk"
+   ],
+   "source_type": "character",
+   "source_id": "f268b557-7a4a-4cd7-9acb-c030d56c66fa",
+   "imported_at": "2026-09-11T14:30:01"
+  },
+  {
+   "name": "wang_grass_dirt",
+   "download_urls": [
+    "https://api.pixellab.ai/mcp/tilesets/3bf63d26-eaca-4b62-bd9f-bed96da8fbac/image"
+   ],
+   "outputs": [
+    "textures/pixellab/wang_grass_dirt.png",
+    "tilesets/pixellab/wang_grass_dirt.json"
+   ],
+   "sha256": {
+    "textures/pixellab/wang_grass_dirt.png": "dab877a3cfa6c203eb3fe365a3362732ca35aeda7ca0deca634fc9e2ba78e7a2",
+    "tilesets/pixellab/wang_grass_dirt.json": "11c2aca10c3fde1bbfed8d36e51cc761abecfa307ff8b0ff95d7228512ff7ebf"
+   },
+   "lower": "dark dirt soil",
+   "upper": "green grass",
+   "source_type": "tileset",
+   "source_id": "3bf63d26-eaca-4b62-bd9f-bed96da8fbac",
+   "imported_at": "2026-09-11T14:24:35"
+  }
+ ]
+}

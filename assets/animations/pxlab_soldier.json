@@ -1,0 +1,52 @@
+{
+ "format": "tro-animations",
+ "version": 1,
+ "textures": [
+  "textures/pixellab/pxlab_soldier.png"
+ ],
+ "animations": [
+  {
+   "name": "walk",
+   "fps": 8,
+   "loop": true,
+   "frames": [
+    {
+     "texture": 0,
+     "region": [
+      0,
+      0,
+      68,
+      68
+     ]
+    },
+    {
+     "texture": 0,
+     "region": [
+      68,
+      0,
+      68,
+      68
+     ]
+    },
+    {
+     "texture": 0,
+     "region": [
+      136,
+      0,
+      68,
+      68
+     ]
+    },
+    {
+     "texture": 0,
+     "region": [
+      204,
+      0,
+      68,
+      68
+     ]
+    }
+   ]
+  }
+ ]
+}

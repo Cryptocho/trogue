@@ -1,0 +1,234 @@
+{
+ "format": "tro-tileset",
+ "version": 2,
+ "texture": "textures/pixellab/wang_grass_dirt.png",
+ "tile_width": 16,
+ "tile_height": 16,
+ "columns": 4,
+ "rows": 4,
+ "terrain_sets": [
+  {
+   "mode": "corners",
+   "terrains": [
+    {
+     "name": "dark dirt soil",
+     "color": "#000000"
+    },
+    {
+     "name": "green grass",
+     "color": "#ffffff"
+    }
+   ]
+  }
+ ],
+ "tiles": [
+  {
+   "id": 0,
+   "col": 0,
+   "row": 0,
+   "terrain_set": 0,
+   "terrain": 1,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 1,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 1
+   }
+  },
+  {
+   "id": 1,
+   "col": 1,
+   "row": 0,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 0,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 2,
+   "col": 2,
+   "row": 0,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 1,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 3,
+   "col": 3,
+   "row": 0,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 1,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 4,
+   "col": 0,
+   "row": 1,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 1,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 5,
+   "col": 1,
+   "row": 1,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 0,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 6,
+   "col": 2,
+   "row": 1,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 0,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 7,
+   "col": 3,
+   "row": 1,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 0,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 1
+   }
+  },
+  {
+   "id": 8,
+   "col": 0,
+   "row": 2,
+   "terrain_set": 0,
+   "terrain": 1,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 0,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 1
+   }
+  },
+  {
+   "id": 9,
+   "col": 1,
+   "row": 2,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 0,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 1
+   }
+  },
+  {
+   "id": 10,
+   "col": 2,
+   "row": 2,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 0,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 11,
+   "col": 3,
+   "row": 2,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 1,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 1
+   }
+  },
+  {
+   "id": 12,
+   "col": 0,
+   "row": 3,
+   "terrain_set": 0,
+   "terrain": 1,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 1,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 1
+   }
+  },
+  {
+   "id": 13,
+   "col": 1,
+   "row": 3,
+   "terrain_set": 0,
+   "terrain": 1,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 1,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 0
+   }
+  },
+  {
+   "id": 14,
+   "col": 2,
+   "row": 3,
+   "terrain_set": 0,
+   "terrain": 0,
+   "peering_bits": {
+    "top_left_corner": 1,
+    "top_right_corner": 0,
+    "bottom_left_corner": 0,
+    "bottom_right_corner": 1
+   }
+  },
+  {
+   "id": 15,
+   "col": 3,
+   "row": 3,
+   "terrain_set": 0,
+   "terrain": 1,
+   "peering_bits": {
+    "top_left_corner": 0,
+    "top_right_corner": 1,
+    "bottom_left_corner": 1,
+    "bottom_right_corner": 1
+   }
+  }
+ ]
+}

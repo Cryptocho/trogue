@@ -66,6 +66,20 @@ add_test(NAME terrain_test COMMAND trogue_terrain_test)
 set_tests_properties(terrain_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── pixellab 映射单测（plan-13 §7；无网络 Python 单测包一层 ctest） ──
+add_test(NAME pixellab_mapping_test
+    COMMAND python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/pixellab/tests
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/pixellab)
+# scene_gen 确定性回归依赖已构建的 trogue_scene_gen 二进制
+set_tests_properties(pixellab_mapping_test PROPERTIES
+    ENVIRONMENT "TROGUE_SCENE_GEN=$<TARGET_FILE:trogue_scene_gen>")
+
+# ── scene_gen 离线场景生成 CLI（plan-13 §5.1；数据流 C 机制半，复用 pick_tile） ──
+add_executable(trogue_scene_gen scene_gen.cpp)
+target_link_libraries(trogue_scene_gen PRIVATE trogue_engine
+                                              ${TROGUE_TOOLS_NLOHMANN})
+# 无窗口纯离线工具；不注册 ctest（E2E 由 pixellab/ 侧驱动）
+
 # ── Watcher 分类纯函数 + Release 桩 + Ipc 集成（plan-5.5 §4） ──
 add_executable(trogue_watcher_ipc_test tests/watcher_ipc_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_watcher_ipc_test PRIVATE trogue_engine
