@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 文档：重新对齐「引擎是交付物，game 是验证台」的项目目标
+
+- 影响的文件: `AGENTS.md`
+
+#### Architecture
+- 项目目标章首新增成功标准引用块：**交付物是引擎本身，不是任何一款游戏**（成功标准 = 使用者能像用 LÖVE2D 一样用 trogue 从零写出一款 2D 游戏）
+- 新增「交付物与验证台（2026-09-11 拍板）」小节，修正目标漂移：`engine/` 是唯一交付物；`game/` 是引擎能力的验证台（reference consumer），玩法系统为验证副产品、可替换可丢弃；Roadmap 每项须自检「补齐/验证了引擎哪项通用能力」
+- 修掉四处与目标矛盾的措辞：「与 trogue-orign 的关系」改为验证载体（移植非项目目标）、「架构分层·设计约定」与「当前架构结论」补「引擎交付、game 验证」条、目录结构 `game/src/` 注释由「将成长为 roguelike 本体」改为「引擎能力验证台，非交付物」、角色分工 Agent 行终点由「游戏功能完成」改为「引擎能力被实现并验证」
+- Roadmap 拆分「引擎能力线（交付物）」与「引擎能力验证线（探针，非交付物）」两小节；「移植路线」表新增「验证映射参考，不代表移植是交付物」前言并修正表内 C 时代残留符号（`(C)`→`(C++)`、`TgEntity`→`tg::SceneEntity`、移除 `M9` 阶段号）；里程碑开工门禁①补「计划书须说明本里程碑补齐/验证的引擎能力」
+
 ### 项目模板（template/ → 派生新游戏项目）
 
 - 影响的文件: `template/`（新增：`README.md`、`AGENTS.md`、`.gitignore`、`CMakeLists.txt`、`scripts/new_project.sh`、`scripts/sync_from_source.sh`、`game/CMakeLists.txt`、`game/src/main.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`，及 vendored 快照 `engine/`/`pixellab/*.py`/`editor/`/`tools/scene_gen.cpp`）、`engine/src/render.cpp`、`engine/CMakeLists.txt`、`AGENTS.md`、`docs/plan-14.md`（新增）

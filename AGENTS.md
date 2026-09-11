@@ -4,11 +4,24 @@
 
 ## 项目目标
 
-**trogue** 是一个基于 raylib 的轻量 2D 游戏引擎库，服务三个目标：
+> **交付物是 trogue 引擎本身，不是任何一款游戏。** 成功标准 = 使用者能像用 LÖVE2D 一样，用 trogue 从零写出一款 2D 游戏，而无需自行重造渲染、资产、动画、补间、传输等通用机制——而不是某一款游戏被做得多完整。
+
+**trogue** 是一个基于 raylib 的轻量、通用的 2D 游戏引擎库（C++20），服务三个支撑目标：
 
 1. **schema-first**：资产是固定格式的 JSON（`tro-*`）。Godot 只是可替换的视觉数据生产前端，Agent 也可以直接生成运行时资产；游戏运行时不依赖 Godot。
 2. **Agent-first**：Agent 负责把游戏实现、构建、生成场景、导出资产、运行验证和迭代调试串成闭环；人主要负责讨论游戏设计，以及在需要视觉判断时使用 Godot 做标注。
 3. **轻量与可扩展**：引擎实现语言为 **C++20**，公共 API 为**纯 C++**（namespace + 不透明类型 + RAII）；运行时只依赖 raylib + nlohmann/json；渲染层薄，未来接入 Live2D/Rive2D 等外部 API 时不与引擎核心耦合。
+
+### 交付物与验证台（2026-09-11 拍板，重新对齐早期目标）
+
+> 本节修正开发过程中的**目标漂移**：早期路线图一度把「移植 trogue-orign 玩法」当成交付物，使 game 层玩法系统挤占了引擎能力的推进主线。现重新对齐——**引擎优先，game 是探针**。
+
+- **引擎（`engine/`）是唯一交付物**：路线图主线 = 按「功能准入判据」逐项补齐引擎的通用能力，而不是把某款游戏做完整。
+- **`game/` 是引擎能力的验证台（reference consumer），不是交付物**：
+  - 它的意义是「为每项引擎能力提供一个真实、可运行、可 E2E 验证的消费方」——**边做引擎边用它验证**，而不是把某款游戏做完整。
+  - game 层已长出的玩法系统（回合、AI、RuleEngine、战斗）是**验证副产品**；只要验证目的达成，它们可被替换或丢弃。
+  - 因此「把某款游戏做完整」不是目标；「引擎被验证为像 LÖVE2D 一样可用」才是。
+- **判据一致性（路线图自检）**：Roadmap 每一项都应能回答「它补齐/验证了引擎的哪项通用能力」。若某项只能回答「它让某款游戏更好玩」，它就只是 `game/` 的可选内容，不进引擎、不进主线。
 
 ### 引擎实现语言决策（2026-09-07 拍板）
 
@@ -28,7 +41,7 @@
 | 角色 | 职责边界 |
 |------|----------|
 | 人 | 讨论游戏目标、规则、体验和美术方向；在机器难以替代视觉判断时，用 Godot 做必要的视觉标注、编排和确认 |
-| Agent | 理解设计、决定实现路径、编写引擎与游戏代码、生成/修改场景和测试资产、调用导出器、运行验证、观察 IPC/截图并迭代，直到游戏功能完成 |
+| Agent | 理解设计、决定实现路径、编写引擎与游戏代码、生成/修改场景和测试资产、调用导出器、运行验证、观察 IPC/截图并迭代，直到目标引擎能力被实现并验证（`game/` 为探针，非交付物） |
 | Godot | 提供可视化资源整理、TileSet/Terrain 标注、动画帧编排、场景预览和少量 metadata 标注；不承载游戏玩法 |
 | scene_exporter | 将 Godot 中实际需要的视觉数据编译为稳定的 `tro-*` 运行时资产；负责校验、资源复制、确定性输出和机器可读诊断 |
 | trogue engine/game | 运行游戏；引擎提供低层数据、渲染、查询与**通用表现原语**（帧动画播放器、补间 Tween），游戏层负责 OOP/ECS、输入、状态、AI、战斗、玩法以及「何时播放哪条动画/哪个补间、如何切换」 |
@@ -73,6 +86,7 @@
 
 ### 当前架构结论
 
+- **引擎交付、game 验证**：路线图主线是引擎通用能力的补齐；game 层只在「验证某引擎能力」时演进，本身不是交付物。
 - `tro-scene` 可以由 Agent 直接生成；场景搭建不要求人打开 Godot。
 - **通用表现原语由 engine 提供**（语言决策已拍板）：帧动画播放器消费 `tro-animations`/实体 `animations` 帧表，Tween 提供数值/位置/颜色的补间；engine 负责**推进与采样**，game 决定**触发、切换、组合**。M4 的「导出但暂不播放」是历史事实，C++ 里程碑起由引擎内置播放器消费（见 Roadmap）。
 - C++/RAII 里程碑的目标运行时是 `tg::SceneAsset` 资产对象 + game-owned OOP/ECS；engine 不根据 `type` 判断 player，不保留运行时实体位置，不把 descriptor `solid` 自动加入 engine 碰撞，也不提供实体池。
@@ -82,7 +96,7 @@
 
 ## 与 trogue-orign 的关系
 
-- `trogue-orign/` 是**只读参考**：原 LÖVE2D 回合制 Roguelike（ECS + RuleEngine），后续将其玩法移植到本引擎。禁止修改该目录。
+- `trogue-orign/` 是**只读参考 + 验证载体**：原 LÖVE2D 回合制 Roguelike（ECS + RuleEngine）。它的用途是**压测引擎**——用一款真实游戏验证 trogue 能否复现 LÖVE2D 级别的开发与运行工作流；**移植它本身不是项目目标**，其玩法系统不进入引擎交付范围。禁止修改该目录。
 - 其 Godot 导出插件（`tools/addons/tileset_exporter/tileset_exporter.gd`）产出的 tileset JSON（bitmask、custom_data）是资产管线的上游，对接方式见 [移植路线](#移植路线trogue-origin--trogue)。
 
 ## 架构分层
@@ -111,6 +125,7 @@
 ```
 
 设计约定：
+- **引擎是交付物、game 是验证台（2026-09-11 拍板）**：`engine/` 是唯一交付物，其能力范围由「功能准入判据」逐项裁定；`game/` 是引擎能力的参考消费方与验证台，其玩法代码不构成交付内容（详见「项目目标」）。
 - **使用者拥有运行时模型**：引擎公共 API 不定义 `TgWorld`、`TgEntity`、ECS registry、component、system 或对象生命周期；game 可以选择 OOP、ECS，或两者并存。
 - **通用表现原语归 engine、触发决策归 game**：engine 的 `animation`/`tween` 模块只负责按数据推进与采样（fps/loop/补间/缓动/回调）；「何时播哪条、何时切换、怎么组合」由 game 决定。这既保证任何对象模型都开箱即用，又不侵犯玩法控制权。
 - **功能准入判据（2026-09-11 拍板）**：引擎只收**机制性、确定性、可无头测试**的执行原语（帧采样、补间、bits→tile id 选择、JSON 校验、watcher、IPC）；音频总线/混音、shader 管理、粒子等**美学/玩法决策载体**由 game 直调 raylib 实现（沿「游戏概念不得流入引擎」的反方向流动）。公共 API 薄到能完整装进 Agent 上下文——使用者熟悉 raylib 甚于本引擎 API，能用 raylib 直达的不进引擎。
@@ -160,7 +175,7 @@ trogue/
 │                          #   hotreload.cpp ipc.cpp + 私有资源模块
 ├── game/                  # 游戏层（引擎消费方；游戏概念禁止流入 engine/）
 │   ├── CMakeLists.txt     # 可执行 trogue + anim_viewer（输出到 build/bin/）
-│   └── src/               # main.cpp + anim_viewer.cpp + 游戏自有模块（将成长为 roguelike 本体）
+│   └── src/               # main.cpp + anim_viewer.cpp + 游戏自有模块（引擎能力验证台，非交付物）
 ├── assets/                # 游戏资产（引擎按 CWD assets/ 约定读取）
 │   ├── scenes/            # demo.json（手写示例）+ test.json/tile_map_layer.json（Godot 导出）
 │   ├── animations/        # tro-animations v1 独立动画资产（导出产物）
@@ -483,7 +498,7 @@ python3 tools/ipc_smoke.py
 
 **里程碑开工门禁（用户 2026-09-07 拍板）**：每个里程碑正式开工前必须走完闭环——
 
-1. ① 写计划书 `docs/plan-<M>.md`（含目的/范围/步骤/验证/遗留）
+1. ① 写计划书 `docs/plan-<M>.md`（含目的/范围/步骤/验证/遗留；须说明本里程碑**补齐/验证引擎哪项通用能力**，仅让某款游戏更好玩的内容不进主线）
 2. ② 交 subagent 审查
 3. ③ 停下等待审查结果（不得并行开工）
 4. ④ PASS 才开工；不 PASS 则按审查意见修改后重新送审，循环至 PASS
@@ -520,15 +535,17 @@ python3 tools/ipc_smoke.py
 
 ## 移植路线（trogue-origin → trogue）
 
-| 原项目 (Lua) | 本引擎 (C) | 备注 |
+> **本表是验证映射参考**：把原版概念对应到本引擎，用于压测「引擎能否复现原版工作量」。它**不代表移植是交付物**——映射到的玩法系统属于 `game/`，不进引擎。
+
+| 原项目 (Lua) | 本引擎 (C++) | 备注 |
 |--------------|-----------|------|
 | TILE_SIZE=16 / SCALE=2 | tile_width/height=16 + 相机 zoom 2 | 对齐 |
 | 1-based tile 坐标 | 0-based 像素 | 换算：`px = (tx-1)*16, py = (ty-1)*16` |
-| Position/Stats/Actor 组件 | `game/` ECS；`TgEntity` 只作为场景描述/渲染投影 | 通过统一 spawn descriptor 与 SceneImporter/RenderBinding 对接，组件数据仍为纯 struct |
-| Solid 组件 | game ECS 的动态碰撞 + engine 的静态 solid 查询 | `tro-scene.entities[].solid` 是通用初始/静态属性，不等价于 ECS 组件 |
-| autotile 4-bit bitmask | tro-tileset 透传 `terrain_set`/`terrain`（最终格式待 autotile 阶段定义） | 对接点 |
-| custom_data `Ground` (bool) | 透传至 tileset `custom_data`（v1 引擎忽略） | solid 语义改由场景分层表达 |
-| RuleEngine 事件管线 | M9 最小子集落地：EventBus + punch→damage→death 管线（game 层，冷却/延迟销毁） | 见 Roadmap |
+| Position/Stats/Actor 组件 | `game/` OOP/ECS；`tg::SceneEntity` 只作为只读 spawn descriptor 快照 | 组件数据仍为纯 struct，由 game 自己导入 |
+| Solid 组件 | game 的动态碰撞 + engine 的静态 solid 查询 | `tro-scene.entities[].solid` 是通用初始/静态属性，不等价于 ECS 组件 |
+| autotile 4-bit bitmask | tro-tileset `terrain_sets`/`peering_bits` + engine `pick_tile` | 对接点 |
+| custom_data `Ground` (bool) | 透传至 tileset `custom_data`（引擎忽略） | solid 语义改由场景分层表达 |
+| RuleEngine 事件管线 | game 层最小子集：EventBus + punch→damage→death 管线（冷却/延迟销毁） | 属验证线，见 Roadmap |
 
 ## 历史实现（非当前 API）：阶段 2 设计：Godot → tro-scene 资产管线（定稿，原文归档 docs/history.md）
 
@@ -540,20 +557,29 @@ python3 tools/ipc_smoke.py
 
 ## Roadmap
 
+> **两条线（2026-09-11 对齐）**：**引擎能力线**是交付物；**引擎能力验证线**用 `game/` 作探针，其玩法代码非交付物。新里程碑一律先问「它补齐/验证引擎哪项通用能力」——若只能回答「让某款游戏更好玩」，则不进主线。
+
+### 引擎能力线（交付物：`engine/` + 资产管线）
+
 - [x] MVP：world/scene/render + tro-scene v1 + 热重载 + tro-ipc + 冒烟测试
 - [x] Godot 导出插件 v2：TileMapLayer → tro-scene 场景导出（含 headless runner）
 - [x] 纹理/图集支持：tro-tileset v1 + 图集渲染（palette 双轨兼容）
 - [x] tro-scene/tro-tileset v2：多 tileset + 实体 sprite/z/solid + 场景 tile → 实体（导出插件 v3）
 - [x] 动画资产与插件统一：tro-scene v2.1（实体 animations + bare 三态）+ tro-animations v1 + 插件 v4（AnimatedSprite2D 导出/纯实体场景/独立动画导出）+ 删 tileset_exporter
 - [x] **C++ 引擎里程碑（原 M5A 扩展，2026-09-07 完成）**：C++20/纯 C++ API/RAII + nlohmann+json 替换 + 无 `TgWorld`/实体池边界重构 + 引擎内置帧动画播放器（消费 tro-animations）+ Tween 补间原语 + C++ game demo（计划 `docs/plan-5.md` 已通过审查并落地）
-- [x] **移植 trogue-orign 最小闭环（2026-09-09 完成）**：回合制（玩家回合 → 敌方回合 → 回合+1）+ 单格 8 向移动/碰撞（tile solid + 实体互斥 + 斜切切角）+ 敌方静止策略 + 手写 forest 关卡 + IPC `turn`/`move`/`wait` 回合命令 + 无窗口单测（计划 `docs/plan-6.md` 已通过审查并落地）
 - [x] **IPC 事件通道（2026-09-09 完成）**：engine `tg::Ipc` 新增 subscribe/unsubscribe/connections 传输层保留命令 + publish/disconnect/connections() API + subscribe 可选 filter 顶层等值匹配（单实体观测）；断开即订阅清零、事件超限无兜底直接断开（判别式保护）；game `events` 目录命令（注册表当前为空，不实现任何具体 game 事件）；计划 `docs/plan-7.md` 三轮审查通过并落地
 - [x] **autotile 机制与内存加载（2026-09-11 完成）**：engine `TerrainTable`/`pick_tile`（peering_bits 解析校验 + 确定性评分选择器，AnimationPlayer 边界模式：采样归 engine、指派/生成归 game）+ `SceneAsset::load_json` 内存加载 + demo IPC `genmap`（game 噪声指派 → 选择器 → 内存加载 → 渲染；同 seed 像素级一致）（计划 `docs/plan-12.md` 两轮审查通过并落地）
-- [x] **敌人 AI + RuleEngine 最小子集 + 首批事件（2026-09-09 完成）**：game 层 EventBus（tg::Json 载荷，桥接 IPC）+ 三态状态机/视野（chebyshev≤5+Bresenham LOS）/A* 寻路（ALERT_DELAY=1、70% 游走、固定种子）+ punch→damage 管线（冷却/死亡延迟销毁/GameOver 相位）+ 首批 6 对外事件 + hp/ai 快照注入（计划 `docs/plan-9.md` 两轮审查通过并落地）
 - [x] **帧动画消费（2026-09-10 完成）**：`AnimationSet::name()` 返回所属 entity id + game `Actor::anim_set` 导入绑定 + 绘制循环采样 `current_frame()` 组合 offset + IPC 快照 `anim:{clip,frame}`；E2E 帧序列/像素比对验证（计划 `docs/plan-10.md` 已通过审查并落地）
-- [x] **动画查看器（2026-09-10 完成）**：game 层触发/切换首个消费者——独立可执行 `anim_viewer`（任意键暂停/恢复、左键轮转 clip、相机 zoom 3x 观察、自带 IPC 端点 48765）+ 引擎 `AnimationPlayer::paused()` 查询；E2E 轮转/冻结/像素比对全过（计划 `docs/plan-11.md` 已通过审查并落地）
 - [x] **项目模板（template/，2026-09-11 完成）**：最小自包含骨架——vendored 快照（engine/pixellab/editor/tools/scene_gen）+ 起步 game 骨架（内置内存场景）+ 模板自有 `AGENTS.md`（不含本仓库测试套件/fixture）；`new_project.sh` 派生独立项目、`sync_from_source.sh` 从源刷新快照；独立副本构建零告警 + 起服/冒烟/截图验证（计划 `docs/plan-14.md`）
 - [ ] 二进制资产格式（可选，JSON 为准）
+
+### 引擎能力验证线（探针：`game/`；非交付物）
+
+> 以下里程碑的价值是「用一款真实游戏压测引擎能否复现 LÖVE2D 级别的开发与运行工作流」，其玩法系统本身可被替换或丢弃。
+
+- [x] **移植 trogue-orign 最小闭环（2026-09-09 完成）**：回合制（玩家回合 → 敌方回合 → 回合+1）+ 单格 8 向移动/碰撞（tile solid + 实体互斥 + 斜切切角）+ 敌方静止策略 + 手写 forest 关卡 + IPC `turn`/`move`/`wait` 回合命令 + 无窗口单测（计划 `docs/plan-6.md` 已通过审查并落地）
+- [x] **敌人 AI + RuleEngine 最小子集 + 首批事件（2026-09-09 完成）**：game 层 EventBus（tg::Json 载荷，桥接 IPC）+ 三态状态机/视野（chebyshev≤5+Bresenham LOS）/A* 寻路（ALERT_DELAY=1、70% 游走、固定种子）+ punch→damage 管线（冷却/死亡延迟销毁/GameOver 相位）+ 首批 6 对外事件 + hp/ai 快照注入（计划 `docs/plan-9.md` 两轮审查通过并落地）
+- [x] **动画查看器（2026-09-10 完成）**：game 层触发/切换首个消费者——独立可执行 `anim_viewer`（任意键暂停/恢复、左键轮转 clip、相机 zoom 3x 观察、自带 IPC 端点 48765）+ 引擎 `AnimationPlayer::paused()` 查询；E2E 轮转/冻结/像素比对全过（计划 `docs/plan-11.md` 已通过审查并落地）
 
 ## 历史实现阶段记录（非当前 API）
 
