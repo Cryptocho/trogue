@@ -104,9 +104,11 @@ if [ "$(cd "$DEST/.." 2>/dev/null && pwd -P)" = "$SRC" ] && [ "$(basename "$DEST
     SRC_IS_SELF=yes
 fi
 
-# 是否已有项目（决定「新建铺陈」还是「仅刷新快照」；先于任何写入判定）
+# 是否已有项目（决定「新建铺陈」还是「仅刷新快照」；先于任何写入判定）。
+# 仅有空目录不算项目：安装器可能先创建 game/ 等目录，空目录应由模板内容覆盖。
 HAS_PROJECT=no
-if [ -e "$DEST/CMakeLists.txt" ] || [ -e "$DEST/game" ]; then
+if [ -f "$DEST/CMakeLists.txt" ] ||
+   [ -n "$(find "$DEST/game" -type f -print -quit 2>/dev/null)" ]; then
     HAS_PROJECT=yes
 fi
 
