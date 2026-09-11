@@ -26,9 +26,6 @@ inline constexpr const char* kSceneDir = "assets/scenes";
 inline constexpr int kNameMax = 64;       // 实体名等名称上限（含结尾 NUL 的字节数）
 inline constexpr int kPathMax = 512;      // 资产相对路径上限
 
-// 实体独立贴图缓存上限（render 模块懒加载，路径去重）
-inline constexpr int kMaxSpriteTextures = 16;
-
 // ── 场景结构限额 ──
 inline constexpr int kLayerMax = 4;               // tilemap.layers ≤4
 inline constexpr int kTilesetMax = 8;             // tilemap.tilesets 1..8
@@ -54,7 +51,7 @@ inline constexpr int kAnimClipsPerEntityMax = 64;      // 单实体 animations.a
 inline constexpr int kAnimFramesPerClipMax = 512;      // 单 clip frames
 inline constexpr int kAssetAnimFramesMax = 4096;       // 资产所有 clip 帧合计
 
-// ── IPC（tro-ipc v1） ──
+// ── IPC（tro-ipc v1：wire 版本号恒为 1；文档修订号不入线上） ──
 inline constexpr int kIpcPortDefault = 48764;
 inline constexpr int kIpcMaxClients = 8;
 inline constexpr std::size_t kIpcLineMax = 64 * 1024;  // 单行上限（含 \r）

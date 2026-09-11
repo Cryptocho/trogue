@@ -1385,6 +1385,82 @@ TileLookupResult tile_at(const SceneAsset& asset, int layer_index, Vec2 world,
     return TileLookupResult::occupied;
 }
 
+// ── 批量查询（tile 坐标区域；行主序输出） ──
+// 参数校验共用：layer 越界 / 空指针 / w,h<=0 / w*h 超层维度上限 → error。
+// w,h 以 int64 相乘避免 int 溢出（上限校验前）。
+namespace {
+bool grid_args_bad(const detail::SceneImpl& impl, int layer_index, int w, int h) {
+    if (layer_index < 0 || layer_index >= static_cast<int>(impl.layers.size()))
+        return true;
+    if (w <= 0 || h <= 0) return true;
+    const auto cells = static_cast<long long>(w) * static_cast<long long>(h);
+    const long long cap = static_cast<long long>(kLayerDimMax) * kLayerDimMax;
+    return cells > cap;
+}
+}  // namespace
+
+TileLookupResult tile_grid(const SceneAsset& asset, int layer_index, int tx,
+                           int ty, int w, int h, int* out_values) {
+    if (out_values == nullptr) return TileLookupResult::error;
+    const auto& impl = *asset.impl_;
+    if (grid_args_bad(impl, layer_index, w, h)) return TileLookupResult::error;
+    const LayerInfo& info = impl.layers[static_cast<std::size_t>(layer_index)];
+    const auto& tiles = impl.layer_tiles[static_cast<std::size_t>(layer_index)];
+    bool any = false;
+    for (int j = 0; j < h; ++j) {
+        const int tyi = ty + j;
+        for (int i = 0; i < w; ++i) {
+            const int txi = tx + i;
+            int v = -1;  // 层外/空格
+            if (txi >= 0 && tyi >= 0 && txi < info.width && tyi < info.height)
+                v = tiles[static_cast<std::size_t>(tyi) *
+                              static_cast<std::size_t>(info.width) +
+                          static_cast<std::size_t>(txi)];
+            out_values[static_cast<std::size_t>(j) * static_cast<std::size_t>(w) +
+                       static_cast<std::size_t>(i)] = v;
+            if (v != -1) any = true;
+        }
+    }
+    return any ? TileLookupResult::occupied : TileLookupResult::empty;
+}
+
+TileQueryResult solid_mask(const SceneAsset& asset, int tx, int ty, int w,
+                           int h, std::uint8_t* out_mask) {
+    if (out_mask == nullptr) return TileQueryResult::error;
+    const auto& impl = *asset.impl_;
+    if (w <= 0 || h <= 0) return TileQueryResult::error;
+    const auto cells = static_cast<long long>(w) * static_cast<long long>(h);
+    const long long cap = static_cast<long long>(kLayerDimMax) * kLayerDimMax;
+    if (cells > cap) return TileQueryResult::error;
+    const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    for (std::size_t k = 0; k < n; ++k) out_mask[k] = 0;
+    bool any_solid = false;
+    for (int j = 0; j < h; ++j) {
+        const int tyi = ty + j;
+        for (int i = 0; i < w; ++i) {
+            const int txi = tx + i;
+            bool solid = false;
+            for (std::size_t li = 0; li < impl.layers.size(); ++li) {
+                const LayerInfo& info = impl.layers[li];
+                if (!info.solid) continue;
+                if (txi < 0 || tyi < 0 || txi >= info.width || tyi >= info.height)
+                    continue;
+                const int v = impl.layer_tiles[li]
+                    [static_cast<std::size_t>(tyi) *
+                         static_cast<std::size_t>(info.width) +
+                     static_cast<std::size_t>(txi)];
+                if (v != -1) { solid = true; break; }  // 多 solid 层短路
+            }
+            if (solid) {
+                out_mask[static_cast<std::size_t>(j) * static_cast<std::size_t>(w) +
+                         static_cast<std::size_t>(i)] = 1;
+                any_solid = true;
+            }
+        }
+    }
+    return any_solid ? TileQueryResult::solid : TileQueryResult::clear;
+}
+
 // ════════════════════ 测试 seam（仅 TROGUE_TEST_SEAMS） ════════════════════
 
 #ifdef TROGUE_TEST_SEAMS

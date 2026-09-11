@@ -43,8 +43,6 @@ struct Viewer {
     int zoom = kDefaultZoom;
     int port = kDefaultPort;
     bool quit = false;
-    bool shot_requested = false;
-    std::string shot_path;
     tg::Ipc ipc;
 };
 
@@ -72,6 +70,41 @@ void next_clip(Viewer& v) {
     const int n = v.set.clip_count();
     if (n <= 0) return;  // 无动画场景防模零（不崩目标）
     play_clip(v, (v.clip_index + 1 + n) % n);
+}
+
+// ── 帧绘制（屏幕与离屏截图共用；调用方负责 BeginDrawing/BeginTextureMode） ──
+void draw_viewer(const Viewer& v) {
+    // 相机：target 世界原点 + zoom N（已知假设：士兵视觉中心
+    // 恰为原点；POINT 过滤整数倍 = 最近邻无损放大）
+    BeginMode2D(Camera2D{{kWindowW / 2.0f, kWindowH / 2.0f},
+                         {0.0f, 0.0f},
+                         0.0f,
+                         static_cast<float>(v.zoom)});
+
+    if (v.asset) tg::render_scene(*v.asset);
+
+    // 士兵绘制（共享工具 anim_util）：动画集已绑定 → 采样当前帧；
+    // 机制（offset 组合 + 静态回退 + 色块兜底）在 game::draw_entity_sprite
+    if (v.asset)
+        game::draw_entity_sprite(*v.asset,
+                                 v.set.clip_count() > 0 ? &v.anim : nullptr,
+                                 v.ent.sprite, tg::Vec2{v.ent.x, v.ent.y},
+                                 v.ent.color, v.ent.w, v.ent.h);
+
+    EndMode2D();
+
+    // HUD（屏幕空间；DrawFPS 20px + 3 行 16px 全部 y<96 <120——不侵入
+    // 士兵 3x 比对区 screen (330,120)..(630,420)，像素比对不受 HUD 干扰）
+    DrawFPS(10, 10);
+    DrawText(TextFormat("clip=%s [%d/%d] %s", v.anim.clip_name().c_str(),
+                        v.clip_index + 1, v.set.clip_count(),
+                        v.anim.paused() ? "PAUSED" : "PLAYING"),
+             10, 30, 16, v.anim.paused() ? YELLOW : WHITE);
+    DrawText(TextFormat("zoom=%d scene=%s", v.zoom,
+                        v.asset ? std::string(v.asset->name()).c_str() : "-"),
+             10, 50, 16, WHITE);
+    DrawText("any key: play/pause | click: next clip | ESC: quit",
+             10, 70, 16, GRAY);
 }
 
 // status 数据（IPC 返回与调试一致）
@@ -142,9 +175,19 @@ tg::IpcStatus ipc_handler(Viewer& v, const std::string& cmd,
         const std::string def =
             "anim_view_" + std::to_string(static_cast<long long>(GetTime())) +
             ".png";
-        v.shot_path = req.value("path", def);
-        v.shot_requested = true;
-        data = tg::Json{{"path", v.shot_path}};
+        const std::string path = req.value("path", def);
+        // 同步离屏截图（复用同一 draw_viewer；不依赖屏幕缓冲，可无头）
+        const game::ShotResult sr = game::capture_offscreen_png(
+            kWindowW, kWindowH, path, [&v] { draw_viewer(v); });
+        data = tg::Json{{"path", path},
+                        {"ok", sr.ok},
+                        {"w", sr.w},
+                        {"h", sr.h},
+                        {"bytes", sr.bytes}};
+        if (sr.ok)
+            TraceLog(LOG_INFO, "[viewer] 截图已写出: %s", path.c_str());
+        else
+            TraceLog(LOG_WARNING, "[viewer] 截图失败: %s", path.c_str());
         return tg::IpcStatus::handled;
     }
     if (cmd == "quit") {
@@ -236,46 +279,7 @@ int main(int argc, char** argv) {
 
         BeginDrawing();
         ClearBackground(BLACK);
-
-        // 相机：target 世界原点 + zoom N（已知假设：士兵视觉中心
-        // 恰为原点；POINT 过滤整数倍 = 最近邻无损放大）
-        BeginMode2D(Camera2D{{kWindowW / 2.0f, kWindowH / 2.0f},
-                             {0.0f, 0.0f},
-                             0.0f,
-                             static_cast<float>(v.zoom)});
-
-        if (v.asset) tg::render_scene(*v.asset);
-
-        // 士兵绘制（共享工具 anim_util）：动画集已绑定 → 采样当前帧；
-        // 机制（offset 组合 + 静态回退 + 色块兜底）在 game::draw_entity_sprite
-        game::draw_entity_sprite(*v.asset,
-                                 v.set.clip_count() > 0 ? &v.anim : nullptr,
-                                 v.ent.sprite, tg::Vec2{v.ent.x, v.ent.y},
-                                 v.ent.color, v.ent.w, v.ent.h);
-
-        EndMode2D();
-
-        // HUD（屏幕空间；DrawFPS 20px + 3 行 16px 全部 y<96 <120——不侵入
-        // 士兵 3x 比对区 screen (330,120)..(630,420)，像素比对不受 HUD 干扰）
-        DrawFPS(10, 10);
-        DrawText(TextFormat("clip=%s [%d/%d] %s", v.anim.clip_name().c_str(),
-                            v.clip_index + 1, v.set.clip_count(),
-                            v.anim.paused() ? "PAUSED" : "PLAYING"),
-                 10, 30, 16, v.anim.paused() ? YELLOW : WHITE);
-        DrawText(TextFormat("zoom=%d scene=%s", v.zoom,
-                            v.asset ? std::string(v.asset->name()).c_str()
-                                    : "-"),
-                 10, 50, 16, WHITE);
-        DrawText("any key: play/pause | click: next clip | ESC: quit",
-                 10, 70, 16, GRAY);
-
-        // 帧末截图（game 排队；管线见 game::export_screenshot：flush 批 → 读屏 → 导出）
-        if (v.shot_requested) {
-            v.shot_requested = false;
-            if (game::export_screenshot(v.shot_path))
-                TraceLog(LOG_INFO, "[viewer] 截图已写出: %s", v.shot_path.c_str());
-        }
-
+        draw_viewer(v);
         EndDrawing();
     }
 

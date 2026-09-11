@@ -29,6 +29,7 @@
 #include <vector>
 
 #include <raylib.h>
+#include <rlgl.h>  // rlDrawRenderBatchActive（离屏截图取像前 flush）
 
 #include "trogue/trogue.hpp"
 #include "ai.hpp"
@@ -170,8 +171,7 @@ struct Demo {
     tg::Ipc ipc;
     int port = tg::kIpcPortDefault;
 
-    bool shot_requested = false;
-    std::string shot_path;
+    bool headless = false;  // --headless：隐藏窗口（仍建 GL 上下文，供离屏截图）
 
     tg::Watcher watcher;
     std::string scene_path = "assets/scenes/demo.json";  // 当前场景（reload 目标）
@@ -381,6 +381,88 @@ void poll_key_presses(Demo& d) {
 void tick_input_buffer(Demo& d, float dt) {
     if (auto step = game::input_buffer_tick(d.input, dt))
         handle_move(d, *step);
+}
+
+// ── 帧绘制（相机跟随 + 场景 tile + 实体 + HUD） ──
+//
+// 抽为独立函数的原因：既要给主循环用（屏幕目标），又要给**同步截图**用
+// （离屏 FBO 目标）——两条路径必须绘制同一内容。调用方负责
+// BeginDrawing/BeginTextureMode 与 ClearBackground（本函数不触及目标切换）。
+void draw_frame(const Demo& d) {
+    // 相机跟随玩家
+    const float cam_px = d.gs.player()
+                             ? d.view_x + game::kTileSize / 2.0f
+                             : d.cam.x;
+    const float cam_py = d.gs.player()
+                             ? d.view_y + game::kTileSize / 2.0f
+                             : d.cam.y;
+    BeginMode2D(Camera2D{{d.window_w / 2.0f, d.window_h / 2.0f},
+                         {cam_px, cam_py}, 0.0f, 2.0f});
+
+    if (d.asset) tg::render_scene(*d.asset);
+
+    // 实体显式绘制（按 y 再 z 排序，稳定；玩家用插值位置）
+    std::vector<const game::Actor*> order;
+    order.reserve(d.gs.actors.size());
+    for (const auto& [id, a] : d.gs.actors) order.push_back(&a);
+    std::stable_sort(order.begin(), order.end(),
+                     [](const game::Actor* l, const game::Actor* r) {
+                         if (l->pos.y != r->pos.y) return l->pos.y < r->pos.y;
+                         return l->z < r->z;
+                     });
+    for (const game::Actor* a : order) {
+        float wx = a->pos.x * game::kTileSize;
+        float wy = a->pos.y * game::kTileSize;
+        if (a->is_player) {
+            wx = d.view_x;
+            wy = d.view_y;
+        } else {
+            // 敌人：tween 插值中的视觉位置（静止 == 逻辑格像素）
+            const auto vit = d.enemy_view.find(a->id);
+            if (vit != d.enemy_view.end()) {
+                wx = vit->second.vx;
+                wy = vit->second.vy;
+            }
+        }
+        // 绘制（共享工具 anim_util，采样公式所在处）：该 actor 的
+        // 动画集已绑定 → 传播放器采样当前帧；触发/绑定策略在此调用方，
+        // 机制（offset 组合 + 静态回退 + 色块兜底）在 game::draw_entity_sprite。
+        // *d.asset 解引用依赖不变量：actors 非空 ⟹ 某次加载成功且 asset
+        // 存活（初始加载失败则无 actor；reload 失败保留旧 asset）。
+        game::draw_entity_sprite(
+            *d.asset,
+            (a->anim_set >= 0 && d.has_anim && d.bound_anim_set == a->anim_set)
+                ? &d.anim
+                : nullptr,
+            a->sprite, tg::Vec2{wx, wy}, a->color, game::kTileSize,
+            game::kTileSize);
+    }
+
+    EndMode2D();
+
+    // HUD
+    DrawFPS(10, 10);
+    DrawText(TextFormat("scene=%s actors=%d reloads=%d turn=%d phase=%s",
+                        d.asset ? std::string(d.asset->name()).c_str() : "-",
+                        static_cast<int>(d.gs.actors.size()), d.reloads,
+                        d.gs.turn_count,
+                        d.gs.phase == game::Phase::PlayerTurn ? "player"
+                        : d.gs.phase == game::Phase::EnemyTurn ? "enemy"
+                                                               : "game_over"),
+             10, 36, 16, WHITE);
+    if (d.gs.phase == game::Phase::GameOver)
+        DrawText("GAME OVER - F5 reload to restart", 10, 60, 20, RED);
+}
+
+// ── 同步截图：离屏 FBO 渲染同一 draw_frame 并导出 PNG ──
+//
+// 关键：**不用** LoadImageFromScreen。窗口模式下帧后读屏会拿到已交换的
+// 黑帧（实测）；且 headless（隐藏窗口）下屏幕路径不可靠。改用共享工具
+// game::capture_offscreen_png：同一 draw_frame 渲染到离屏 RenderTexture，
+// 同步落盘（响应时文件已存在）、含实体/HUD、窗口与无头共用一条绘制路径。
+game::ShotResult capture_frame_png(const Demo& d, const std::string& path) {
+    return game::capture_offscreen_png(d.window_w, d.window_h, path,
+                                       [&d] { draw_frame(d); });
 }
 
 // 玩家视觉位置：无 tween 时（静止）与逻辑格严格一致；有 tween 时由引擎采样写入
@@ -827,10 +909,20 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         return tg::IpcStatus::handled;
     }
     if (cmd == "screenshot") {
-        d.shot_requested = true;
-        d.shot_path = req.value("path", "screenshot.png");
+        // 同步语义：本 handler 内完成渲染+落盘，响应返回时文件已存在。
+        // 走离屏 FBO（capture_frame_png）——不依赖屏幕缓冲，headless 亦可。
+        const std::string path = req.value("path", "screenshot.png");
+        const game::ShotResult sr = capture_frame_png(d, path);
         data = tg::Json::object();
-        (*data)["path"] = d.shot_path;
+        (*data)["path"] = path;
+        (*data)["ok"] = sr.ok;
+        (*data)["w"] = sr.w;
+        (*data)["h"] = sr.h;
+        (*data)["bytes"] = sr.bytes;
+        if (sr.ok)
+            TraceLog(LOG_INFO, "[demo] 截图已写出: %s", path.c_str());
+        else
+            TraceLog(LOG_WARNING, "[demo] 截图失败: %s", path.c_str());
         return tg::IpcStatus::handled;
     }
     if (cmd == "events") {
@@ -895,6 +987,8 @@ int main(int argc, char** argv) {
             scene_path = argv[++i];
         else if (std::strcmp(argv[i], "--port") == 0 && i + 1 < argc)
             d.port = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--headless") == 0)
+            d.headless = true;
     }
     d.scene_path = scene_path;
 
@@ -920,6 +1014,7 @@ int main(int argc, char** argv) {
     // 生命周期 = Demo（热重载只换 asset，指针恒有效），绑定一次即可。
     d.rules.bind(d.gs, d.bus);
 
+    if (d.headless) SetConfigFlags(FLAG_WINDOW_HIDDEN);
     InitWindow(d.window_w, d.window_h, "[trogue] C++ demo");
     SetTargetFPS(60);
 
@@ -1028,79 +1123,7 @@ int main(int argc, char** argv) {
         // ── 渲染（引擎在调用方 BeginMode2D 区间内绘制） ──
         BeginDrawing();
         ClearBackground(BLACK);
-
-        // 相机跟随玩家
-        const float cam_px = d.gs.player()
-                                 ? d.view_x + game::kTileSize / 2.0f
-                                 : d.cam.x;
-        const float cam_py = d.gs.player()
-                                 ? d.view_y + game::kTileSize / 2.0f
-                                 : d.cam.y;
-        BeginMode2D(Camera2D{{d.window_w / 2.0f, d.window_h / 2.0f},
-                             {cam_px, cam_py}, 0.0f, 2.0f});
-
-        if (d.asset) tg::render_scene(*d.asset);
-
-        // 实体显式绘制（按 y 再 z 排序，稳定；玩家用插值位置）
-        std::vector<const game::Actor*> order;
-        order.reserve(d.gs.actors.size());
-        for (const auto& [id, a] : d.gs.actors) order.push_back(&a);
-        std::stable_sort(order.begin(), order.end(),
-                         [](const game::Actor* l, const game::Actor* r) {
-                             if (l->pos.y != r->pos.y) return l->pos.y < r->pos.y;
-                             return l->z < r->z;
-                         });
-        for (const game::Actor* a : order) {
-            float wx = a->pos.x * game::kTileSize;
-            float wy = a->pos.y * game::kTileSize;
-            if (a->is_player) {
-                wx = d.view_x;
-                wy = d.view_y;
-            } else {
-                // 敌人：tween 插值中的视觉位置（静止 == 逻辑格像素）
-                const auto vit = d.enemy_view.find(a->id);
-                if (vit != d.enemy_view.end()) {
-                    wx = vit->second.vx;
-                    wy = vit->second.vy;
-                }
-            }
-            // 绘制（共享工具 anim_util，采样公式所在处）：该 actor 的
-            // 动画集已绑定 → 传播放器采样当前帧；触发/绑定策略在此调用方，
-            // 机制（offset 组合 + 静态回退 + 色块兜底）在 game::draw_entity_sprite。
-            // *d.asset 解引用依赖不变量：actors 非空 ⟹ 某次加载成功且 asset
-            // 存活（初始加载失败则无 actor；reload 失败保留旧 asset）。
-            game::draw_entity_sprite(
-                *d.asset,
-                (a->anim_set >= 0 && d.has_anim &&
-                 d.bound_anim_set == a->anim_set)
-                    ? &d.anim
-                    : nullptr,
-                a->sprite, tg::Vec2{wx, wy}, a->color, game::kTileSize,
-                game::kTileSize);
-        }
-
-        EndMode2D();
-
-        // HUD
-        DrawFPS(10, 10);
-        DrawText(TextFormat("scene=%s actors=%d reloads=%d turn=%d phase=%s",
-                            d.asset ? std::string(d.asset->name()).c_str() : "-",
-                            static_cast<int>(d.gs.actors.size()), d.reloads,
-                            d.gs.turn_count,
-                            d.gs.phase == game::Phase::PlayerTurn ? "player"
-                            : d.gs.phase == game::Phase::EnemyTurn ? "enemy"
-                                                                   : "game_over"),
-                 10, 36, 16, WHITE);
-        if (d.gs.phase == game::Phase::GameOver)
-            DrawText("GAME OVER - F5 reload to restart", 10, 60, 20, RED);
-
-        // 帧末截图（game 排队；管线见 game::export_screenshot：flush 批 → 读屏 → 导出）
-        if (d.shot_requested) {
-            d.shot_requested = false;
-            if (game::export_screenshot(d.shot_path))
-                TraceLog(LOG_INFO, "[demo] 截图已写出: %s", d.shot_path.c_str());
-        }
-
+        draw_frame(d);
         EndDrawing();
     }
 

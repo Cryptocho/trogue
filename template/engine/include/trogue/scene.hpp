@@ -140,6 +140,11 @@ private:
     friend TileQueryResult rect_hits_solid(const SceneAsset& asset, Rect world_rect);
     friend TileLookupResult tile_at(const SceneAsset& asset, int layer_index,
                                     Vec2 world, int* out_value);
+    friend TileLookupResult tile_grid(const SceneAsset& asset, int layer_index,
+                                      int tx, int ty, int w, int h,
+                                      int* out_values);
+    friend TileQueryResult solid_mask(const SceneAsset& asset, int tx, int ty,
+                                      int w, int h, std::uint8_t* out_mask);
     // 渲染自由函数需要读 Impl（tile 数据 / 图集槽位）：friend。
     friend RenderResult render_scene(const SceneAsset& asset);
     friend RenderResult render_sprite(const SceneAsset& asset,
@@ -152,6 +157,10 @@ private:
 // 固定语义：只查 solid==true 的层；层矩形外 = 无数据 = 不阻挡；
 // 像素→tile = 世界坐标减层 origin 后 floor（负坐标同样 floor）；
 // 矩形用半开区间 [x,x+w)×[y,y+h)；多 solid 层按层序短路；无 solid 层 → clear。
+//
+// **与 autotile 的衔接**：tile 的 solid 标记与 autotile（顶点 pattern → tile id）
+// 是两条独立判据。用 autotile 烘碰撞层时，布点与碰撞层必须用同源的可行走
+// 判据（同一规则），否则会出现「视觉上可走、查询判 solid」的错位。
 //
 // error 条件：坐标/尺寸非有限、矩形 w/h 非正、layer 越界。
 // 全部查询为 const 自由函数、无锁，单线程调用方推进。
@@ -166,5 +175,27 @@ TileQueryResult rect_hits_solid(const SceneAsset& asset, Rect world_rect);
 // 非法参数（layer 越界 / out==nullptr / 坐标非有限）→ error，不写 out。
 TileLookupResult tile_at(const SceneAsset& asset, int layer_index, Vec2 world,
                          int* out_value);
+
+// ── 批量查询（物化碰撞网格/贴图网格用；避免逐格单点调用） ──
+//
+// 区域以 **tile 坐标**表达（与 LayerInfo.width/height 同源；非像素）：
+//   (tx, ty) = 区域左上 tile 坐标（可负）；w/h = 区域 tile 数（各 ≥1）。
+// 输出为行主序：out[j*w + i] 对应 tile (tx+i, ty+j)。
+// 选 tile 坐标而非像素矩形：输出尺寸恒为 w*h（无需 ceil 换算），无浮点，
+// 与层网格直接对齐。
+
+// 取某层一批 tile 值：层内空格与越出层外的位置写 -1。
+// 非法参数（layer 越界 / out==nullptr / w<=0 / h<=0 / w*h 超层维度上限）
+//   → error 且不写。合法但全部区域都在层外 → empty（仍写满 -1）。
+TileLookupResult tile_grid(const SceneAsset& asset, int layer_index, int tx,
+                           int ty, int w, int h, int* out_values);
+
+// 将全部 solid 层的可走性合成到一张行主序掩码：
+//   out_mask[j*w + i] != 0 ⇔ tile (tx+i, ty+j) 被任一 solid 层占据（不可走）。
+// 语义 = 对每个格跑 is_solid_at 的批量形态（多 solid 层短路）；
+// 无 solid 层 → 全 0（clear）。非法参数同 tile_grid。
+// 返回 error（参数非法）/ clear（扫完无阻挡）/ solid（至少一格阻挡）。
+TileQueryResult solid_mask(const SceneAsset& asset, int tx, int ty, int w,
+                           int h, std::uint8_t* out_mask);
 
 }  // namespace tg

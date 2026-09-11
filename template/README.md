@@ -6,15 +6,39 @@
 ## 创建新项目
 
 ```bash
-# 在 trogue 仓库内：
-./template/scripts/new_project.sh ../my-game
-cd ../my-game
+# 在任意空目录（不需要先克隆整个仓库）：
+mkdir my-game && cd my-game
+# 取到本脚本（二选一）：
+#   A. 直接下载：
+curl -fsSL https://raw.githubusercontent.com/Cryptocho/trogue/trogue-raylib/template/scripts/sync_from_source.sh -o sync_from_source.sh
+#   B. 或从已克隆的 trogue 仓库拷：cp <repo>/template/scripts/sync_from_source.sh .
+chmod +x sync_from_source.sh
+./sync_from_source.sh                      # 拉取上游模板铺到当前目录
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
-./build/bin/trogue            # 从项目根运行（资产按 CWD assets/ 约定读取）
+./build/bin/trogue                         # 从项目根运行（资产按 CWD assets/ 约定读取）
 ```
 
-`new_project.sh` 复制模板并剥离仅服务模板本体的文件（`scripts/`、`README.md`），
-产出的项目保留 `AGENTS.md`（Agent 开发指南）与全部引擎/编辑器/资产管线。
+脚本从上游仓库**临时克隆**（`--depth 1`，用完即删）取模板，你无需克隆整个仓库、
+也无需事后清理。常用选项：
+
+| 选项 | 作用 |
+|------|------|
+| `--url <repo>` | 上游仓库 URL（缺省内置；私有库可传带凭证的 URL） |
+| `--ref <ref>` | 上游分支/标签（缺省 `trogue-raylib`） |
+| `--source <dir>` | 用本地 trogue 源仓库代替克隆（离线/开发） |
+| `--full` | 连项目自有文件也覆盖（整份模板重置；慎用） |
+
+## 更新到最新引擎
+
+上游修了引擎后，在你的项目根直接重跑同一个脚本：
+
+```bash
+./scripts/sync_from_source.sh
+```
+
+它只刷新 vendored 快照（`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp`
+与更新器自身），**不动**你的 `game/`、`assets/`、`CMakeLists.txt`、`README.md`、
+`.gitignore`、`AGENTS.md`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`。
 
 ## 目录
 
@@ -30,8 +54,8 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 ## 快照与同步
 
 `engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp` 是**从 trogue 仓库复制来的
-快照**，权威源是 trogue 仓库——**不要在本项目里手改**；上游更新后，在 trogue 仓库内
-重跑 `template/scripts/sync_from_source.sh` 刷新。
+快照**，权威源是 trogue 仓库——**不要在本项目里手改**；上游更新后，在项目根重跑
+`./scripts/sync_from_source.sh` 刷新（见上「更新到最新引擎」）。
 
 模板自有（可自由修改）：`CMakeLists.txt`、`.gitignore`、`tools/CMakeLists.txt`、
 `tools/ipc_smoke.py`、`game/**`、`assets/**`。

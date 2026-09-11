@@ -7,6 +7,7 @@
 #pragma once
 
 #include <string>
+#include <functional>  // std::function（capture_offscreen_png 的 draw 回调）
 
 #include "trogue/animation.hpp"  // AnimationPlayer（指针透传，可为 null）
 #include "trogue/scene.hpp"      // SceneAsset / SpriteDesc
@@ -28,6 +29,21 @@ bool draw_entity_sprite(const tg::SceneAsset& asset,
 
 // 帧末截图（调用方排队、本函数执行）：先强制 flush 渲染批再读屏导出。
 // 返回是否导出成功（失败已记 warning 日志）。
+// 注：读屏路径依赖**屏幕缓冲**（窗口模式帧后读会得黑帧）——需同步/无头
+// 截图时用 capture_offscreen_png（离屏 FBO，不依赖屏幕）。
 bool export_screenshot(const std::string& path);
+
+// 离屏截图：把 draw 回调（应执行完整一帧绘制，含相机/实体/HUD）渲染到
+// w×h 的 RenderTexture 并导出为 PNG。**不依赖屏幕缓冲**，窗口/隐藏窗口皆可
+// （需 GL 上下文就绪）。导正垂直翻转（离屏取像不翻转，与屏幕路径相反）。
+// 同步：返回时文件已落盘。
+// 返回 {ok, w, h, bytes}；ok=false 时其余字段仍为请求尺寸/0。
+struct ShotResult {
+    bool ok = false;
+    int w = 0, h = 0;
+    long long bytes = 0;
+};
+ShotResult capture_offscreen_png(int w, int h, const std::string& path,
+                                 const std::function<void()>& draw);
 
 }  // namespace game

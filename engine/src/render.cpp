@@ -20,20 +20,17 @@
 #include <vector>
 
 #include "raylib.h"  // TraceLog / Texture2D / LoadTexture 等（engine 内部）
+#include "rlgl.h"    // rlDrawRenderBatchActive（取像前 flush 渲染批）
 
 #include "scene_impl.hpp"       // detail::SceneImpl（含图集槽位）
+#include "scene_test_seams.hpp" // detail::RenderStats（seam 转发声明）
 #include "util/path_check.hpp"  // is_safe_relative_path
 
 namespace tg {
 
-// 三段计数 seam 数据（进程内单调累计，不随调用清零；类型与 seam 头一致）
-namespace detail {
-struct RenderStats {
-    int param_failures = 0;
-    int window_checks = 0;
-    int texture_attempts = 0;
-};
-}  // namespace detail
+// ── 渲染三段计数（定义见 render.hpp 公共 RenderStats；进程内单调累计） ──
+// 注意：计数结构类型即公共 tg::RenderStats——测试 seam 的 render_test_stats()
+// 直接转发到 render_stats()，两者共享同一份 g_render_stats（单一事实源）。
 
 namespace {
 
@@ -101,7 +98,7 @@ detail::SceneImpl::TilesetMeta::TileVisual atlas_tile_visual(
     return ts.tile_visuals[static_cast<std::size_t>(tile_id)];
 }
 
-detail::RenderStats g_render_stats;
+RenderStats g_render_stats;
 
 // 图集贴图装载（asset 槽位，懒）：成功返回非空 void*；失败置哨兵并只记一次日志。
 void* load_atlas_texture(detail::SceneImpl& impl, std::size_t ts_index) {
@@ -299,16 +296,75 @@ void shutdown_render() {
     g_texture_failed.clear();
 }
 
+RenderResult render_scene_to_png(const SceneAsset& asset, int w, int h,
+                                 std::string_view path) {
+    // ① 参数校验（与其它原语一致：失败计入 param_failures）
+    if (w <= 0 || h <= 0) {
+        ++g_render_stats.param_failures;
+        TraceLog(LOG_ERROR, "[render] render_scene_to_png 尺寸非法");
+        return RenderResult::Invalid;
+    }
+    if (path.empty() || !detail::is_safe_relative_path(path)) {
+        ++g_render_stats.param_failures;
+        TraceLog(LOG_ERROR, "[render] render_scene_to_png 路径不安全");
+        return RenderResult::Invalid;
+    }
+
+    // ② 窗口/GL 上下文就绪（隐藏窗口也满足——离屏不依赖可见窗口）
+    ++g_render_stats.window_checks;
+    if (!IsWindowReady()) return RenderResult::WindowUnavailable;
+
+    // ③ 离屏 FBO → 绘制 → 取像 → 导出
+    ++g_render_stats.texture_attempts;
+    RenderTexture rt = LoadRenderTexture(w, h);
+    if (rt.id == 0) {
+        TraceLog(LOG_ERROR, "[render] render_scene_to_png FBO 创建失败");
+        return RenderResult::TextureMissing;
+    }
+    BeginTextureMode(rt);
+    ClearBackground(::Color{0, 0, 0, 0});  // 透明底（无背景语义）
+    // 复用同一绘制路径（render_scene）：恒等变换下绘制 tile 层
+    const RenderResult drawn = render_scene(asset);
+    EndTextureMode();
+
+    RenderResult result = RenderResult::Drawn;
+    if (drawn != RenderResult::Drawn) {
+        result = drawn;  // 窗口检查在 render_scene 内已计；此处传播（不应发生）
+    } else {
+        rlDrawRenderBatchActive();  // 取像前 flush 批（既有截图纪律）
+        Image img = LoadImageFromTexture(rt.texture);
+        if (!img.data) {
+            TraceLog(LOG_ERROR, "[render] render_scene_to_png 取像失败");
+            result = RenderResult::TextureMissing;
+        } else {
+            // 离屏路径（glGetTexImage）不翻转，而屏幕路径翻转——导正（官方示例同）
+            ImageFlipVertical(&img);
+            if (!ExportImage(img, std::string(path).c_str())) {
+                TraceLog(LOG_WARNING, "[render] render_scene_to_png 导出失败: %.*s",
+                         static_cast<int>(path.size()), path.data());
+                result = RenderResult::TextureMissing;
+            }
+            UnloadImage(img);
+        }
+    }
+    UnloadRenderTexture(rt);
+    return result;
+}
+
+RenderStats render_stats() { return g_render_stats; }
+
+void render_reset_stats() { g_render_stats = RenderStats{}; }
+
 // ════════════════════ 测试 seam（仅 TROGUE_TEST_SEAMS） ════════════════════
+// render_test_stats/render_test_reset_stats 已公共化（即 render_stats/
+// render_reset_stats）；seam 符号保留为转发，保持既有测试零改动。
 
 #ifdef TROGUE_TEST_SEAMS
 
 namespace detail {
 
-RenderStats render_test_stats() {
-    return g_render_stats;
-}
-void render_test_reset_stats() { g_render_stats = RenderStats{}; }
+RenderStats render_test_stats() { return render_stats(); }
+void render_test_reset_stats() { render_reset_stats(); }
 
 }  // namespace detail
 

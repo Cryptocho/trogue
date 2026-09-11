@@ -151,6 +151,12 @@
 - `tg::Ipc` 不持有 scene/world 指针；只负责 JSON-lines 分帧、响应顺序、包络、**事件通道**（传输层保留命令 `subscribe`/`unsubscribe`/`connections` + `publish`/`disconnect`/`connections()` API，语义见「IPC 协议」）与 game callback。命令语义由 game 注册和实现；事件是纯传输——engine 不识事件名与 filter 键的任何语义。
 - `tg::Watcher` 只报告监听目录内安全的 `.json` basename 变化；game 决定何时加载新资产、是否 reconcile、如何保留或删除运行时状态。
 
+> **2026-09-11 新增（里程碑 15）**：
+> - **渲染可观测性**：`tg::RenderStats` + `tg::render_stats()`/`render_reset_stats()`（公共只读快照：参数失败/窗口检查/贴图尝试三项计数；供 Agent/调试断言「渲染确实发生」及失败类别）。
+> - **离屏渲染**：`tg::render_scene_to_png(asset, w, h, path)`（把 tile 层渲染到离屏 FBO 并导出 PNG；恒等相机，**不含实体/HUD**；需 GL 上下文（隐藏窗口即可）；离屏取像不翻转→内部 `ImageFlipVertical`）。含实体的完整帧截图由 game 自建离屏区间（demo 的 `capture_offscreen_png` 是范例）。
+> - **批量 tile 查询**：`tg::tile_grid`（某层一块 tile 值，行主序；层外写 -1）/ `tg::solid_mask`（全部 solid 层可走性合成掩码）；区域以 **tile 坐标**表达（非像素）。
+> - **协程推进**：`tg::TaskRunner`（启动/回收 `tg::task<>` 的容器；**不**每帧重 resume 挂起协程——等待由事件同步驱动；析构不隐式 cancel，调用方需显式 `cancel_all()`）。补全了「引擎返回 `task` 却无推进器」的缺口。
+
 > `world.c`/`TgWorld`/`TgEntity`/`tg_*` 等历史 C API 已在 **里程碑 5（2026-09-07）** 整体删除/迁移到 `game/`（见「文档有效性与历史实现降级」），引擎不再拥有这些类型；不得再以兼容名义把它们引回 engine。
 
 ### 文档有效性与历史实现降级
@@ -190,7 +196,7 @@ trogue/
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── pixellab/              # PixelLab MCP → tro-* 转换层（上游资产管线，与 editor/ 平级；见「PixelLab 资产管线」）
 ├── template/             # 新游戏项目模板（最小自包含骨架；见「项目模板」）
-│   ├── scripts/          # new_project.sh（派生新项目）/ sync_from_source.sh（刷新快照）
+│   ├── scripts/          # sync_from_source.sh（安装/更新：临时克隆上游 → 铺到目标项目）
 │   ├── engine/ pixellab/ editor/ tools/   # 快照（权威源=本仓库，勿在模板内手改）
 │   ├── game/             # 起步游戏骨架（内置内存场景；模板自有）
 │   └── AGENTS.md README.md CMakeLists.txt # 模板自有
@@ -372,9 +378,9 @@ python3 tools/ipc_smoke.py
 
 - **内容（最小起点，不含框架自用测试）**：`engine/`、`pixellab/`（仅转换脚本）、`editor/`、`tools/scene_gen.cpp` 的 **vendored 快照** + **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`tools/CMakeLists.txt`/`tools/ipc_smoke.py`。
 - **不含本仓库的测试套件与 fixture**：`tools/tests/`（引擎单测）与 `pixellab/tests/`、`pixellab/fixtures/` 是本仓库验证 trogue 引擎自用，**不进模板**（游戏项目另建自己的测试）。
-- **权威源**：vendored 文件的权威源是**本仓库**；模板内 vendored 文件禁止手改，上游更新后在仓库内重跑 `template/scripts/sync_from_source.sh` 刷新（engine/pixellab/editor 整目录替换 + tools 逐文件；永不触碰模板自有文件）。
-- **派生项目**：`./template/scripts/new_project.sh <目标目录>` 复制并剥离模板专属文件（`scripts/`、`README.md`），保留 `AGENTS.md`（新项目的 Agent 指南）。
-- **验证**：`new_project.sh` 产出的独立副本构建零告警、起服 + `tools/ipc_smoke.py` 全过、截图视觉与数值（像素色值）验收一致。
+- **权威源**：vendored 文件的权威源是**本仓库**；模板内 vendored 文件禁止手改，上游更新后在仓库内重跑 `template/scripts/sync_from_source.sh` 刷新（维护者模式：engine/pixellab/editor 整目录替换 + tools 逐文件；永不触碰模板自有文件）。
+- **派生与更新（一份脚本）**：`template/scripts/sync_from_source.sh` 随模板分发给派生项目——在**空目录**运行=新建项目（铺入模板并剥离 `README.md`/引导脚本）；在**已有项目根**运行=更新引擎（从上游临时克隆取快照，只刷新 vendored 集合，保留 `game/`/`assets/`/项目自有文件）。在源仓库的 `template/` 内运行=维护者模式（源仓库根 → 模板快照）。上游 URL/分支可用 `--url`/`--ref` 覆盖（私有库可传带凭证 URL；日志内凭证自动遮盖）；`--source <dir>` 用本地源仓库代替克隆。
+- **验证**：空目录运行→独立副本构建零告警、起服 + `tools/ipc_smoke.py` 全过；已有项目运行→`game/`/`README.md` 不被覆盖、engine 被刷新。
 - **非目标**：不改 engine 公共 API / tro-* schema；不把 roguelike 玩法或框架测试带入模板；不做参数化脚手架；不自动建 git。
 - **遗留**：模板 `AGENTS.md` 的 schema 段落与根 `AGENTS.md` 双份维护（模板顶部已声明权威源）；模板 `tools/CMakeLists.txt`/`ipc_smoke.py` 随上游变化需手工跟进。
 
@@ -387,7 +393,9 @@ python3 tools/ipc_smoke.py
 - **失败安全**：资产加载失败不修改旧 asset（C++ 用返回 `expected`/空 optional + 日志，历史 C 返回 NULL）；game candidate import/swap 失败也保留旧 asset 与旧 game state。
 - 手动触发：F5、watcher、IPC `reload` 的合并、节流和 candidate coordinator 属于 game。
 
-## IPC 协议：tro-ipc v1.2（仅 DEBUG 构建）
+## IPC 协议：tro-ipc v1（仅 DEBUG 构建）
+
+> **版本号说明（消除误读）**：wire 协议版本号**恒为 1**——`hello` 的 `data.version` 与 `ping` 响应的 `version` 均为 `1`，此值为能力探测契约、**只增不改**。下方 `v1.1`/`v1.2` 指**文档修订号**（协议只增内容的记录），**不是** wire 版本、不在线上传输。客户端按 `version:1` 判兼容即可。
 
 > **当前边界（里程碑 5 落地）**：本节命令表最初是历史 demo wire protocol，保留作兼容迁移参考；当前 engine 只提供无 world 的 JSON-lines transport/callback，命令语义、实体快照、截图和退出状态全部由 `game/src/main.cpp` 的 game handler 实现，engine 不再拥有或理解实体命令。
 
@@ -426,7 +434,7 @@ python3 tools/ipc_smoke.py
 | `get_tile` | `x` `y`（像素） | `{tiles:[{layer,value}]（仅非空格）, solid}` |
 | `reload` | — | `{reloaded:true, reloads:N}` |
 | `genmap` | `seed` 必填 int；`w`/`h` 可选（缺省 40，∈[1,64]） | `{generated:true, seed, w, h, nonempty, reloads}`（程序生成地图：game 噪声指派 → pick_tile → load_json → swap；同 seed 同尺寸逐位一致，plan-12 §4.5；生成后 watcher/F5/reload 会以 scene_path 覆盖之——预期行为） |
-| `screenshot` | `path?`（缺省 `screenshot_<时间戳>.png`） | `{path}`；文件在下一帧绘制后写出 |
+| `screenshot` | `path?`（缺省 `screenshot_<时间戳>.png`） | `{path, ok, w, h, bytes}`；**同步**——响应返回时文件已落盘（game 层离屏 FBO 渲染完整帧，不依赖屏幕缓冲；`--headless` 下同样可用） |
 | `log` | `msg` | `{logged:true}`（打印进引擎日志） |
 | `quit` | — | `{bye:true}`（引擎退出主循环） |
 
@@ -570,7 +578,7 @@ python3 tools/ipc_smoke.py
 - [x] **IPC 事件通道（2026-09-09 完成）**：engine `tg::Ipc` 新增 subscribe/unsubscribe/connections 传输层保留命令 + publish/disconnect/connections() API + subscribe 可选 filter 顶层等值匹配（单实体观测）；断开即订阅清零、事件超限无兜底直接断开（判别式保护）；game `events` 目录命令（注册表当前为空，不实现任何具体 game 事件）；计划 `docs/plan-7.md` 三轮审查通过并落地
 - [x] **autotile 机制与内存加载（2026-09-11 完成）**：engine `TerrainTable`/`pick_tile`（peering_bits 解析校验 + 确定性评分选择器，AnimationPlayer 边界模式：采样归 engine、指派/生成归 game）+ `SceneAsset::load_json` 内存加载 + demo IPC `genmap`（game 噪声指派 → 选择器 → 内存加载 → 渲染；同 seed 像素级一致）（计划 `docs/plan-12.md` 两轮审查通过并落地）
 - [x] **帧动画消费（2026-09-10 完成）**：`AnimationSet::name()` 返回所属 entity id + game `Actor::anim_set` 导入绑定 + 绘制循环采样 `current_frame()` 组合 offset + IPC 快照 `anim:{clip,frame}`；E2E 帧序列/像素比对验证（计划 `docs/plan-10.md` 已通过审查并落地）
-- [x] **项目模板（template/，2026-09-11 完成）**：最小自包含骨架——vendored 快照（engine/pixellab/editor/tools/scene_gen）+ 起步 game 骨架（内置内存场景）+ 模板自有 `AGENTS.md`（不含本仓库测试套件/fixture）；`new_project.sh` 派生独立项目、`sync_from_source.sh` 从源刷新快照；独立副本构建零告警 + 起服/冒烟/截图验证（计划 `docs/plan-14.md`）
+- [x] **项目模板（template/，2026-09-11 完成）**：最小自包含骨架——vendored 快照（engine/pixellab/editor/tools/scene_gen）+ 起步 game 骨架（内置内存场景）+ 模板自有 `AGENTS.md`（不含本仓库测试套件/fixture）；单份 `sync_from_source.sh` 兼顾安装（空目录运行→铺模板）/更新（项目根运行→临时克隆上游、只刷新 vendored 快照、保留 game/）/维护者模式（template 内运行→刷新快照）；独立副本构建零告警 + 起服/冒烟/截图验证（计划 `docs/plan-14.md`）
 - [ ] 二进制资产格式（可选，JSON 为准）
 
 ### 引擎能力验证线（探针：`game/`；非交付物）

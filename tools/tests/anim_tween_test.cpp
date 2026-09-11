@@ -355,6 +355,54 @@ bool test_player_pause() {
     return ok;
 }
 
+// ── loop 覆盖跨 play() 粘连回归（B1）──
+// 显式 looping() 覆盖仅作用于当前 clip；play() 切换 clip 必须复位为
+// clip 自身 loop，否则上一段的覆盖会粘到下一段（非循环动画永不完成、
+// 循环动画播完即停）。
+bool test_player_loop_override_switch() {
+    bool ok = true;
+    const SceneAsset& asset = inline_asset();
+    REQUIRE(asset.animation_set_count() == 1);
+    const auto& set = asset.animation_set(0);
+
+    // ① 过覆盖 false 不得粘到「自身 loop=true」的 clip
+    AnimationPlayer p;
+    p.bind(set);
+    CHECK(p.play("loop3"));       // 自身 loop=true
+    CHECK(p.looping(false));      // 覆盖为不循环（仅本 clip）
+    p.advance(1000);              // 覆盖生效：播完
+    CHECK(!p.playing());
+
+    CHECK(p.play("two"));         // 非循环 clip
+    p.advance(1000);
+    CHECK(!p.playing());
+
+    CHECK(p.play("loop3"));       // 重新播循环 clip，未显式 looping()
+    CHECK(p.playing());
+    p.advance(3.5);               // 越过一个 3s 周期
+    CHECK(p.playing());           // 修复前：粘住的 false → 停在末帧（回归钉）
+
+    // ② 过覆盖 true 不得粘到「自身 loop=false」的 clip
+    AnimationPlayer q;
+    q.bind(set);
+    CHECK(q.play("loop3"));
+    CHECK(q.looping(true));
+    q.advance(0.5);
+    CHECK(q.play("two"));         // 切到非循环 clip
+    q.advance(1000);
+    CHECK(!q.playing());          // 修复前：粘住的 true → 永不完成
+
+    // ③ restart_if_same=false 且同名在播：不清覆盖（同一 clip 继续）
+    AnimationPlayer r;
+    r.bind(set);
+    CHECK(r.play("loop3"));
+    CHECK(r.looping(false));
+    CHECK(r.play("loop3", /*restart_if_same=*/false));  // 同名继续
+    r.advance(1000);
+    CHECK(!r.playing());          // 覆盖 false 保留（仅真正切 clip 才复位）
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -363,6 +411,7 @@ int main() {
     test_player_current_frame();
     test_player_empty_clip();
     test_player_pause();
+    test_player_loop_override_switch();
     test_tween_float();
     test_tween_delay_repeat();
     test_tween_cancel_wait();

@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+### 引擎：缺口修复与 Agent-first 原语补全（plan-15，实战反馈驱动）
+
+- 影响的文件: `engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/task_runner.hpp`（新增）、`engine/src/task_runner.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/src/scene_test_seams.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`game/src/anim_viewer.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`tools/tests/anim_tween_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/task_runner_test.cpp`（新增）、`tools/CMakeLists.txt`、`AGENTS.md`、`docs/plan-15.md`（新增）
+
+#### Bug Fixes
+- `AnimationPlayer::play()` 现在复位显式 loop 覆盖（`has_loop_override_`/`loop_override_`）——此前跨 clip 粘连：同一播放器播多种 loop 语义的 clip 时，上一段的 `looping()` 覆盖会粘到下一段，导致循环动画播完即停、非循环动画永不完成（`done()` 永久挂起）。回归用例先复现后修复
+- `config.hpp` 删除死常量 `kMaxSpriteTextures`（文档承诺缓存上限但实现为无界 map）；`render.hpp` 如实声明独立贴图缓存**无上限**、生命周期 = 进程
+
+#### Added
+- `tg::render_scene_to_png(asset, w, h, path)`：离屏 FBO 渲染 tile 层并导出 PNG（恒等相机、不含实体/HUD；需 GL 上下文（隐藏窗口即可）；离屏取像不翻转 → 内部 `ImageFlipVertical`）
+- `tg::RenderStats` + `tg::render_stats()`/`render_reset_stats()`：渲染可观测性提升为公共只读 API（原锁在 `TROGUE_TEST_SEAMS` 后）；seam 符号保留为转发，既有测试零改动
+- `tg::tile_grid`（批量取某层一块 tile 值，行主序，层外写 -1）/ `tg::solid_mask`（全部 solid 层可走性合成掩码）；区域以 **tile 坐标**表达
+- `tg::TaskRunner`（`task_runner.hpp`）：启动/回收 `tg::task<>` 的容器，补全「引擎返回 `task` 却无推进器」的缺口；不每帧重 resume 挂起协程（等待由事件同步驱动），析构不隐式 cancel
+- demo/anim_viewer `screenshot` 改为**同步**（离屏 FBO 渲染完整帧，响应返回时文件已落盘，回 `{path,ok,w,h,bytes}`）；绘制抽出 `draw_frame`/`draw_viewer` 供屏幕与离屏共用；demo 新增 `--headless`（隐藏窗口）
+
+#### Tests
+- `anim_tween_test`：loop 覆盖跨 play 回归 3 用例（确认修复前失败）
+- `scene_query_test`：`tile_grid`/`solid_mask` 与逐格单点查询逐位等价 + error 条件
+- `task_runner_test`（新增）：启动/回收/多 task/取消契约 + 与 `AnimationPlayer::done()`/`TweenManager::wait()` 协程联合回归（含 B1 联合验证）
+- E2E：窗口模式与 `--headless` 截图**逐像素一致**（960×540 全 518400 像素零差异）；Debug + Release 零告警、ctest 12/12、`ipc_smoke` 61/61
+
+### 工程：模板安装/更新脚本（sync_from_source.sh 一键化）
+
+- 影响的文件: `template/scripts/sync_from_source.sh`、`template/scripts/new_project.sh`（删除）、`template/README.md`、`template/AGENTS.md`、`template/engine/**`、`AGENTS.md`
+
+#### Added
+- `template/scripts/sync_from_source.sh` 重写为**安装/更新二合一**：从上游仓库**临时克隆**（`--depth 1`，用完即删）取模板，派生项目无需克隆整仓、无需事后清理
+  - **空目录运行** = 新建项目（铺入模板，剥离 `README.md`/引导脚本）
+  - **已有项目根运行** = 更新引擎（只刷新 vendored 快照 `engine/`/`pixellab/`/`editor/`/`tools/scene_gen.cpp` + 更新器自身，**保留** `game/`、`assets/`、`CMakeLists.txt`、`README.md`、`.gitignore`、`AGENTS.md`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`）
+  - **源仓库 `template/` 内运行** = 维护者模式（源仓库根 → 模板快照）
+  - 选项 `--url`/`--ref`（上游 URL/分支，可用环境变量 `TROGUE_URL`/`TROGUE_REF`）、`--source <dir>`（本地源代替克隆）、`--full`（连项目自有文件一并重置）；日志内嵌凭证自动遮盖
+- 安全护栏：拒绝在源仓库根运行（同时含 `engine/` 与 `template/`），避免把快照反向写回真实源码树
+- 更新器随派生项目分发（不再被剥离），使项目可自更新到最新引擎
+
+#### Breaking Changes
+- 删除 `template/scripts/new_project.sh`（其职责并入 `sync_from_source.sh` 的「空目录运行」模式）
+
+#### Tests
+- 空目录运行 → 独立副本构建零告警、起服 + `tools/ipc_smoke.py` 10/10
+- 已有项目运行 → `game/`/`README.md`/`assets/` 不被覆盖、engine 被刷新（md5 比对）
+- 真实上游克隆路径（`--url`）与本地 `--source` 路径均验证；源仓库根护栏与维护者模式验证
+
 ### 文档：重新对齐「引擎是交付物，game 是验证台」的项目目标
 
 - 影响的文件: `AGENTS.md`

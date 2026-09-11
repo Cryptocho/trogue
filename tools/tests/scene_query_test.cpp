@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -265,11 +266,83 @@ bool test_asset_id_exhaustion_seam() {
 
 }  // namespace
 
+// ── 批量查询：与逐格单点等价（D4） ──
+bool test_batch_grid_and_mask() {
+    bool ok = true;
+    const std::string p = write_scene(two_solid_scene());  // 层0(0,0)、层1(3,3)
+    auto r = SceneAsset::load(p);
+    std::remove(p.c_str());
+    REQUIRE(r.has_value());
+    const SceneAsset& a = *r;
+
+    // tile_grid：与逐格 tile_at 等价（含负/越界格写 -1）
+    const int tx = -1, ty = -1, w = 6, h = 6;
+    std::vector<int> grid(static_cast<std::size_t>(w) * h, 12345);
+    CHECK(tile_grid(a, 0, tx, ty, w, h, grid.data()) == TileLookupResult::occupied);
+    for (int j = 0; j < h; ++j) {
+        for (int i = 0; i < w; ++i) {
+            int expect = -1;
+            if (tx + i >= 0 && ty + j >= 0 && tx + i < 4 && ty + j < 4) {
+                const auto v = tile_at(a, 0,
+                    tg::Vec2{static_cast<float>(tx + i) * 16.0f + 8.0f,
+                             static_cast<float>(ty + j) * 16.0f + 8.0f}, &expect);
+                (void)v;
+            }
+            CHECK(grid[static_cast<std::size_t>(j) * w + i] == expect);
+        }
+    }
+
+    // 全区域层外 → empty（仍写满 -1）
+    std::vector<int> outside(4, 7);
+    CHECK(tile_grid(a, 0, 100, 100, 2, 2, outside.data()) == TileLookupResult::empty);
+    for (int v : outside) CHECK(v == -1);
+
+    // solid_mask：与逐格 is_solid_at 等价
+    std::vector<std::uint8_t> mask(static_cast<std::size_t>(w) * h, 9);
+    CHECK(solid_mask(a, tx, ty, w, h, mask.data()) == TileQueryResult::solid);
+    for (int j = 0; j < h; ++j) {
+        for (int i = 0; i < w; ++i) {
+            const auto q = is_solid_at(a,
+                tg::Vec2{static_cast<float>(tx + i) * 16.0f + 8.0f,
+                         static_cast<float>(ty + j) * 16.0f + 8.0f});
+            CHECK(mask[static_cast<std::size_t>(j) * w + i] ==
+                  (q == TileQueryResult::solid ? 1 : 0));
+        }
+    }
+
+    // 两 solid 层命中位置不同：(0,0) 与 (3,3) 均应标 1
+    CHECK(mask[1 * w + 1] == 1);   // tile(0,0)
+    CHECK(mask[4 * w + 4] == 1);   // tile(3,3)
+
+    // 无 solid 层 → clear（全 0）
+    const std::string p2 = write_scene(no_solid_scene());
+    auto r2 = SceneAsset::load(p2);
+    std::remove(p2.c_str());
+    REQUIRE(r2.has_value());
+    std::vector<std::uint8_t> mask2(16, 9);
+    CHECK(solid_mask(*r2, 0, 0, 4, 4, mask2.data()) == TileQueryResult::clear);
+    for (std::uint8_t v : mask2) CHECK(v == 0);
+
+    // error 条件：空指针 / 非正尺寸 / 层越界 / 网格超层维度上限
+    CHECK(tile_grid(a, 0, 0, 0, 2, 2, nullptr) == TileLookupResult::error);
+    CHECK(tile_grid(a, 0, 0, 0, 0, 2, grid.data()) == TileLookupResult::error);
+    CHECK(tile_grid(a, 0, 0, 0, 2, -1, grid.data()) == TileLookupResult::error);
+    CHECK(tile_grid(a, 9, 0, 0, 2, 2, grid.data()) == TileLookupResult::error);
+    CHECK(tile_grid(a, -1, 0, 0, 2, 2, grid.data()) == TileLookupResult::error);
+    CHECK(tile_grid(a, 0, 0, 0, 5000, 5000, grid.data()) ==
+          TileLookupResult::error);  // 25e6 > 4096^2
+    CHECK(solid_mask(a, 0, 0, 2, 2, nullptr) == TileQueryResult::error);
+    CHECK(solid_mask(a, 0, 0, 0, 2, mask.data()) == TileQueryResult::error);
+    CHECK(solid_mask(a, 0, 0, 4097, 4097, mask.data()) == TileQueryResult::error);
+    return ok;
+}
+
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
     test_is_solid_at();
     test_rect_hits_solid();
     test_tile_at();
+    test_batch_grid_and_mask();
     test_asset_id_and_safety();
     test_asset_id_exhaustion_seam();
     std::printf("[query test] checks=%d failures=%d\n", ::tg_test::g_checks,

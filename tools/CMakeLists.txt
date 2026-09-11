@@ -58,6 +58,15 @@ add_test(NAME anim_tween_test COMMAND trogue_anim_tween_test)
 set_tests_properties(anim_tween_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── TaskRunner 容器单测（纯公共 API，链接生产库） ──
+add_executable(trogue_task_runner_test tests/task_runner_test.cpp
+                                       tests/test_util.hpp)
+target_link_libraries(trogue_task_runner_test PRIVATE trogue_engine
+                                                     ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME task_runner_test COMMAND trogue_task_runner_test)
+set_tests_properties(task_runner_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── terrain 匹配表/选择器单测（纯公共 API，链接生产库） ──
 add_executable(trogue_terrain_test tests/terrain_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_terrain_test PRIVATE trogue_engine

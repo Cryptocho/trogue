@@ -22,10 +22,10 @@ project/
 ```
 
 快照（`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp`）由上游同步，
-**不得手改**；要改引擎请改 trogue 仓库，再在 trogue 仓库内重跑
-`template/scripts/sync_from_source.sh` 刷新本项目的快照（同步脚本只存在于
-trogue 仓库的 template/ 中，派生项目不含它）。项目自有：`game/`、`assets/`、
-`CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`。
+**不得手改**；要改引擎请改 trogue 仓库。本项目含更新器 `scripts/sync_from_source.sh`：
+在项目根重跑即从上游**临时克隆**取最新模板，只刷新 vendored 快照，**不动**你的
+`game/`、`assets/` 与项目自有文件。项目自有：`game/`、`assets/`、`CMakeLists.txt`、
+`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`README.md`、`.gitignore`、本文件。
 
 ## 引擎公共 API 边界（重要）
 

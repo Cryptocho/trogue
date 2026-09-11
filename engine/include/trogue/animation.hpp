@@ -12,7 +12,8 @@
 //
 // 协程等待：`player.done()` 可 co_await；同一完成事件至多一个等待协程
 // （single_consumer）；宿主（asset/player/manager）必须先于协程
-// 销毁，或先 stop()/取消使等待即时完成——由 game（spawn_task 属 game 侧辅助）保证。
+// 销毁，或先 stop()/取消使等待即时完成——由 game 保证。推进容器用
+// 引擎的 tg::TaskRunner（启动/回收；见 task_runner.hpp）。
 
 #include <cstdint>   // std::uint64_t
 #include <functional>
@@ -75,7 +76,9 @@ public:
     // 跳到 clip 内某时刻（秒，0..duration 截断）；无 clip → false
     bool seek(double seconds);
 
-    // 覆盖 clip 的 loop 标记（on/off）；无 clip → false
+    // 覆盖 clip 的 loop 标记（on/off）；无 clip → false。
+    // 覆盖仅作用于**当前 clip**：play() 切换到其它 clip 即复位为 clip 自身
+    // loop（不跨 play 保留）——避免上一段动画的 loop 语义粘到下一段。
     bool looping(bool on);
 
     bool valid() const { return set_ != nullptr; }  // 是否已绑定动画集
@@ -104,7 +107,7 @@ public:
     void on_finish(std::function<void()> cb) { on_finish_ = std::move(cb); }
 
     // 完成等待（演出脚本）：非 loop 播完/已停止/无 clip → 立即完成；
-    // co_await 后由 game 的 task pump 推进。single_consumer 纪律。
+    // co_await 后由 tg::TaskRunner 推进。single_consumer 纪律。
     tg::task<> done() const;
 
 private:

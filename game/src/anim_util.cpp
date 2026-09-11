@@ -1,6 +1,8 @@
 // anim_util.cpp —— 见 anim_util.hpp 头注释（game 层共享工具，非引擎 API）。
 #include "anim_util.hpp"
 
+#include <cstdio>  // std::fopen/fseek/ftell（文件字节数）
+
 #include <raylib.h>
 #include <rlgl.h>  // rlDrawRenderBatchActive（截图前强制 flush 渲染批）
 
@@ -47,6 +49,44 @@ bool export_screenshot(const std::string& path) {
     UnloadImage(img);
     if (!ok) TraceLog(LOG_WARNING, "[game] 截图导出失败: %s", path.c_str());
     return ok;
+}
+
+ShotResult capture_offscreen_png(int w, int h, const std::string& path,
+                                 const std::function<void()>& draw) {
+    ShotResult r;
+    r.w = w;
+    r.h = h;
+    if (w <= 0 || h <= 0) return r;
+    RenderTexture rt = LoadRenderTexture(w, h);
+    if (rt.id == 0) {
+        TraceLog(LOG_WARNING, "[game] 离屏截图 FBO 创建失败 (%dx%d)", w, h);
+        return r;
+    }
+    BeginTextureMode(rt);
+    ClearBackground(BLACK);
+    draw();  // 调用方绘制完整一帧
+    EndTextureMode();
+    rlDrawRenderBatchActive();
+    Image img = LoadImageFromTexture(rt.texture);
+    UnloadRenderTexture(rt);
+    if (!img.data) {
+        TraceLog(LOG_WARNING, "[game] 离屏截图取像失败: %s", path.c_str());
+        return r;
+    }
+    // 离屏（glGetTexImage）不翻转，屏幕路径翻转——导正使两路朝向一致。
+    ImageFlipVertical(&img);
+    r.ok = ExportImage(img, path.c_str());
+    UnloadImage(img);
+    if (!r.ok) {
+        TraceLog(LOG_WARNING, "[game] 截图导出失败: %s", path.c_str());
+        return r;
+    }
+    if (FILE* f = std::fopen(path.c_str(), "rb")) {
+        std::fseek(f, 0, SEEK_END);
+        r.bytes = static_cast<long long>(std::ftell(f));
+        std::fclose(f);
+    }
+    return r;
 }
 
 }  // namespace game

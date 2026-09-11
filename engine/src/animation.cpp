@@ -75,6 +75,10 @@ bool AnimationPlayer::play(std::string_view clip, bool restart_if_same) {
         paused_ = false;
         finish_called_ = false;
         last_frame_ = -1;
+        // 显式 loop 覆盖只针对「当前 clip」：换 clip 即复位为 clip 自身 loop，
+        // 不得粘到下一段（否则非循环动画永不完成 → done() 永久挂起）。
+        has_loop_override_ = false;
+        loop_override_ = false;
         return true;
     }
     return false;  // 无效名/空数据

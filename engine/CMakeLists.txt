@@ -70,6 +70,7 @@ set(ENGINE_SOURCES
     src/render.cpp
     src/animation.cpp
     src/tween.cpp
+    src/task_runner.cpp
     src/hotreload.cpp
     src/ipc.cpp
     src/terrain.cpp
