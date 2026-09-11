@@ -1,4 +1,4 @@
-"""character.py —— 角色帧序列 → tro-animations v1 + spritesheet（plan-13 §5.2 A）。
+"""character.py —— 角色帧序列 → tro-animations v1 + spritesheet。
 
 spritesheet 布局（确定性）：每 clip 一行、行高 = 该行最大帧高、帧从左到右
 紧密排列。任一边 > 4096px 拒绝。clip 命名：多方向 <anim>_<direction>，

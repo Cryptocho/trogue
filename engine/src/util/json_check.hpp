@@ -1,5 +1,5 @@
 #pragma once
-// util/json_check.hpp —— JSON 结构校验 detail 工具（plan-5.2 §2）。
+// util/json_check.hpp —— JSON 结构校验 detail 工具。
 //
 // 语义对齐 C 版定案、仅换载体（jansson → nlohmann），禁止因换库放宽：
 //   - 所有 number 有限（finite），转 float 后仍有限，坐标/尺寸绝对值 ≤ FLT_MAX/4

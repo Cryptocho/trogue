@@ -1,4 +1,4 @@
-// scene_query_test.cpp —— tile 查询 / asset_id / 失败安全单测（plan-5.2 §4/§6）。
+// scene_query_test.cpp —— tile 查询 / asset_id / 失败安全单测。
 //
 // 覆盖：负坐标 floor、层外不阻挡、半开矩形、多 solid 层短路、无 solid 层 clear、
 // tile_at 边界、查询 error 条件、asset_id 单调与跨 asset 快照归属、坏输入不影响
@@ -92,7 +92,7 @@ bool test_is_solid_at() {
     // 非有限 → error
     CHECK(is_solid_at(a, tg::Vec2{nan_v, 0.0f}) == TileQueryResult::error);
     CHECK(is_solid_at(a, tg::Vec2{0.0f, inf_v}) == TileQueryResult::error);
-    // 「极大但有限」坐标（M3）：有限非 error，层外 → clear（无 int 转换 UB）
+    // 「极大但有限」坐标：有限非 error，层外 → clear（无 int 转换 UB）
     CHECK(is_solid_at(a, tg::Vec2{1e38f, 1e38f}) != TileQueryResult::error);
     CHECK(is_solid_at(a, tg::Vec2{1e38f, 1e38f}) == TileQueryResult::clear);
 
@@ -143,7 +143,7 @@ bool test_rect_hits_solid() {
     REQUIRE(r2.has_value());
     CHECK(rect_hits_solid(*r2, tg::Rect{0, 0, 64, 64}) == TileQueryResult::clear);
 
-    // 「极大但有限」坐标：不得触发 float→int 未定义转换（门禁 M3）。
+    // 「极大但有限」坐标：不得触发 float→int 未定义转换。
     // 有限 → 非 error；完全层外 → clear（不是 UB/崩溃）。
     const float huge = 1e38f;
     CHECK(rect_hits_solid(a, tg::Rect{huge, huge, 16, 16}) != TileQueryResult::error);
@@ -207,7 +207,7 @@ bool test_asset_id_and_safety() {
 
     // 跨 asset 快照归属：A 的 sprite 携带 A 的 id，与 B 不同
     //（sprite 快照在实体取回时填 asset_id —— 这里用无 sprite 的骨架，
-    //  归属校验的渲染侧（5.3）才断言；此处验证两个 asset id 不同即可）
+    //  归属校验的渲染侧才断言；此处验证两个 asset id 不同即可）
 
     // 坏输入不影响既有 asset：在 r1 上先取一次值，再铺坏文件触发失败
     const int before = static_cast<int>(is_solid_at(*r1, tg::Vec2{8.0f, 8.0f}));

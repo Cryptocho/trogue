@@ -2,7 +2,7 @@ extends SceneTree
 
 # headless 导出入口 v4（Agent 自动化通道）。
 #
-# 用法（在仓库根 trogue/ 下执行）:
+# 用法（在项目根目录执行）:
 #   # 先导入资源（首次或资源变更后）
 #   godot --headless --path editor --import
 #   # 导出场景（可多个，逗号分隔；连同其 TileSet 与实体贴图；纯实体场景 → bare）

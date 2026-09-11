@@ -4,7 +4,7 @@ extends RefCounted
 # trogue 资产序列化核心 v4（tro-scene v2.1 / tro-tileset v2 / tro-animations v1）。
 # 编辑器菜单（scene_exporter.gd）与 headless 导出（headless_export.gd）共用本文件的全部逻辑。
 #
-# 产物（相对引擎仓库根 trogue/）：
+# 产物（相对项目根目录）：
 #   assets/tilesets/<name>.json     tro-tileset v2（每贴图一个）
 #   assets/scenes/<name>.json       tro-scene v2（含 bare 纯实体场景）
 #   assets/animations/<name>.json   tro-animations v1（独立动画帧表）
@@ -32,7 +32,7 @@ const RESERVED_META := ["type", "w", "h", "color", "solid", "background", "z"]
 
 # Godot TileSet.TerrainMode：直接用引擎常量 TileSet.TERRAIN_MODE_MATCH_*，勿本地抄值。
 # 曾有的本地值序副本与 Godot 4.7.2 实际枚举（CORNERS_AND_SIDES=0/CORNERS=1/SIDES=2，
-# 查证 reference/godot-4.7.2-stable tile_set.h）不符，导致 mode 判定走错分支、
+# 查证 Godot 源码 tile_set.h）不符，导致 mode 判定走错分支、
 # peering_bits 漏导（2026-09-10 修复）；按名引用后枚举再变将编译期报错。
 
 
@@ -270,7 +270,7 @@ static func build_tileset_groups(ts: TileSet, base_name: String) -> Dictionary:
 		if tex_path == "":
 			warnings.append("TileSet '%s': source %d 的贴图未保存到磁盘，跳过" % [base_name, sid])
 			continue
-		# 明确损失：引擎 col/row→像素映射不含 margins/separation 偏移（plan-8 §3.2），
+		# 明确损失：引擎 col/row→像素映射不含 margins/separation 偏移，
 		# 非零时导出的 tile 矩形会错位，必须警告而不是静默产出
 		if atlas.margins != Vector2i.ZERO or atlas.separation != Vector2i.ZERO:
 			warnings.append("TileSet '%s': source %d 图集 margins/separation 非 0，引擎映射不含该偏移，导出可能有损" % [base_name, sid])
@@ -297,8 +297,8 @@ static func build_tileset_groups(ts: TileSet, base_name: String) -> Dictionary:
 			var td := atlas.get_tile_data(coords, 0)
 			var id: int = group.data.tiles.size()
 			var entry := {"id": id, "col": coords.x, "row": coords.y}
-			# 多格 tile / 纹理原点 / Y 排序原点透传（tro-tileset v2 只增可选字段，
-			# plan-8 §3.2）：非缺省才写，单格 tile 导出零 diff（与 peering_bits 省略风格一致）
+			# 多格 tile / 纹理原点 / Y 排序原点透传（tro-tileset v2 只增可选字段）：
+			# 非缺省才写，单格 tile 导出零 diff（与 peering_bits 省略风格一致）
 			var size_in_atlas: Vector2i = atlas.get_tile_size_in_atlas(coords)
 			if size_in_atlas != Vector2i.ONE:
 				entry["size_in_atlas"] = [size_in_atlas.x, size_in_atlas.y]

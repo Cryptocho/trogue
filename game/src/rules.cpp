@@ -1,4 +1,4 @@
-// rules.cpp —— 里程碑 9：RuleEngine 最小子集实现（docs/plan-9.md §2.5/§3.4）。
+// rules.cpp —— RuleEngine 最小子集实现。
 //
 // 管线顺序对齐原版 rule_engine.lua：
 //   tryUseAbility（:183-268）：canUse 校验（失败 :232 AbilityUseFailed）→

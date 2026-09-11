@@ -1,4 +1,4 @@
-// oop_client_smoke.cpp —— 面向对象风格 consumer smoke（plan-5.6 §2）。
+// oop_client_smoke.cpp —— 面向对象风格 consumer smoke。
 //
 // 目的：以 game 层 OOP 视角消费**生产库 trogue_engine** 的纯公共 API，
 // 证明无需私有头/测试库即可完成一个典型游戏循环片段——

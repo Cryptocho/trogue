@@ -1,6 +1,6 @@
-// scene_schema_test.cpp —— SceneAsset 解析 schema 拒绝规则全集单测（plan-5.2 §6）。
+// scene_schema_test.cpp —— SceneAsset 解析 schema 拒绝规则全集单测。
 //
-// 每个 §2 拒绝规则各一个反例断言；另测正例（layers 缺省≡空数组、bare 尺寸 0、
+// 每个拒绝规则各一个反例断言；另测正例（layers 缺省≡空数组、bare 尺寸 0、
 // 三态模式、payload 限额边界、路径 grammar 反例）。所有用例通过公共 API
 // SceneAsset::load 走完整文件加载路径（临时文件写于 CWD=CMAKE_SOURCE_DIR）。
 #include <cstdio>
@@ -75,7 +75,7 @@ std::string bare_scene() {
     return R"({"format":"tro-scene","version":2,"tilemap":{"layers":[]},"entities":[]})";
 }
 
-// ════════════ §2 拒绝规则 ════════════
+// ════════════ 拒绝规则 ════════════
 
 bool test_root_and_keys() {
     bool ok = true;
@@ -545,7 +545,7 @@ bool test_positive_regressions() {
     return ok;
 }
 
-// ── 图集 col/row 元数据（评审修复①；plan-5.3 §5 布局契约） ──
+// ── 图集 col/row 元数据（评审修复①） ──
 // tileset path 相对 assets/ 解析（scene_asset.cpp 约定），临时 tileset 写
 // assets/ 根下、场景写 build/；tiles[].col/row 决定图集内矩形位置（非顺序
 // 排列也须精确解析），缺失 col/row 必须拒绝载入。
@@ -604,7 +604,7 @@ bool test_atlas_col_row_meta() {
     return ok;
 }
 
-// tro-tileset 只增可选字段（plan-8 §3.1）：size_in_atlas / texture_origin /
+// tro-tileset 只增可选字段：size_in_atlas / texture_origin /
 // y_sort_origin。正例（全缺省=旧格式 / 部分带 / 全带）可载；非法类型/长度/值域
 // 逐项拒绝（每条校验规则一个反例，含防御性上限）。经公共 SceneAsset::load 完整
 // 路径；region/origin 数值正确性公共 API 不直读私有表，由运行期截图验收兜底。
@@ -673,7 +673,7 @@ bool test_tileset_visual_fields() {
     return ok;
 }
 
-// 动画集名 = 所属 entity id（plan-10 §3.1：entity→动画集映射键）
+// 动画集名 = 所属 entity id（entity→动画集映射键）
 bool test_animation_names() {
     bool ok = true;
     // 真实资产：士兵场景
@@ -695,7 +695,7 @@ bool test_animation_names() {
         }
     }
     // 内嵌最小场景：自定义 id 同步；无动画实体不产生动画集；
-    // 多动画实体按解析序各自配对（plan-10 映射核心场景，审查 M10 补钉）
+    // 多动画实体按解析序各自配对（映射核心场景，审查补钉）
     // 用 nlohmann 构造（同 test_payload_limits），避免手写嵌套括号的转义陷阱
     const json scene = {
         {"format", "tro-scene"}, {"version", 2},
@@ -733,7 +733,7 @@ bool test_animation_names() {
 }  // namespace
 
 // 注意：build/ 目录必须存在（写临时文件用）。ctest working dir = 项目根。
-// ── load_json 内存加载（plan-12 §4.4）：双入口等价 + name 进诊断 ──
+// ── load_json 内存加载：双入口等价 + name 进诊断 ──
 bool test_load_json() {
     bool ok = true;
     const std::string atlas_scene =
@@ -760,7 +760,7 @@ bool test_load_json() {
             CHECK(b->asset_id() > a->asset_id());
         }
     }
-    // palette 模式双入口等价（plan-12 §7：两模式覆盖）
+    // palette 模式双入口等价（两模式覆盖）
     {
         const std::string p = write_temp_scene2(palette_scene);
         auto a = SceneAsset::load(p);
@@ -779,7 +779,7 @@ bool test_load_json() {
         CHECK(!r.has_value() && r.error().code == tg::ErrorCode::kParseError);
         CHECK(r.error().message.find("<memory>") != std::string::npos);
     }
-    // 注入名：schema 违规 → kSchemaViolation 且消息带名（plan-12 §4.4 接通诊断）
+    // 注入名：schema 违规 → kSchemaViolation 且消息带名（接通诊断）
     {
         auto r = SceneAsset::load_json(R"({"format":"tro-scene","version":3})",
                                        "注入名B");

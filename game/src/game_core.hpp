@@ -1,16 +1,15 @@
 // game_core.hpp —— 回合制核心（纯逻辑，无窗口/无渲染依赖）。
 //
-// 里程碑 6（docs/plan-6.md）：玩家移动（8 向 + 斜切约束）→ 敌方回合 → 回合 +1。
-// 里程碑 9（docs/plan-9.md）：敌 AI/战斗接入——
+// 玩家移动（8 向 + 斜切约束）→ 敌方回合 → 回合 +1；敌 AI/战斗接入：
 //   - Actor 增加 Hp/AiState/冷却（按原型门控：仅 goblin 参与战斗）；
 //   - 移动裁决泛化为 try_move（任意 actor，成功发 MoveSucceeded）；
-//   - GameSystems 可空重载：main/IPC 走完整敌方阶段（AI），M6 测试走静止
+//   - GameSystems 可空重载：main/IPC 走完整敌方阶段（AI），旧测试走静止
 //     语义（零改动）；GameOver 相位收尾不推进回合。
 //
-// 设计约束（plan-6 §3.3 / plan-9 §3.3）：
+// 设计约束：
 //   - 不依赖渲染/窗口/输入：可直接进入 tools/tests 无窗口单测；
 //   - 只消费 trogue/scene.hpp 的 tile 查询（tg::is_solid_at）与
-//     trogue/animation.hpp 的动画集名查询（纯声明，plan-10）；
+//     trogue/animation.hpp 的动画集名查询（纯声明）；
 //   - GameState 是 actor 表 + 回合状态的唯一所有权，main.cpp 只读快照；
 //   - 引擎公共 API 不动，本模块全部是 game 层代码。
 
@@ -81,11 +80,11 @@ void input_buffer_flush(InputBuffer& buf);
 // 播完精确落格（无浮点残差 → 静止时与网格严格对齐、无像素抖动）。
 constexpr float kMoveDuration = 0.12f;  // 对齐原版 MOVE_DURATION
 
-// ── 原型门控（plan-9 §3.3）：AI/战斗资格的唯一入口 ──
+// ── 原型门控：AI/战斗资格的唯一入口 ──
 //
 // 对齐原版「AI 只遍历带 Actor+AIState 的实体」（ai.lua:41）：demo.json 的
 // coin 等惰性实体不参与战斗（无 hp/无 AI/不发事件），保留占格阻挡行为。
-bool is_combat_archetype(std::string_view type);  // 本里程碑仅 "goblin"
+bool is_combat_archetype(std::string_view type);  // 战斗原型仅 "goblin"
 
 // ── 实体（game 自有 Actor，非引擎实体） ──
 
@@ -104,12 +103,12 @@ const char* ai_state_name(AiPhase s);  // "idle"/"alerted"/"chasing"（快照/wi
 
 struct AiState {
     AiPhase state = AiPhase::idle;
-    int alerted_turn = 0;   // 进入 alerted 的回合（gs.turn_count 口径，plan-9 §2.2）
+    int alerted_turn = 0;   // 进入 alerted 的回合（gs.turn_count 口径）
     bool has_target = false;
     TilePos target;         // 最后一次看见玩家的位置（丢失视线后的记忆点）
 };
 
-// 原型默认 HP（game 层原型表；tro-scene descriptor 不携带数值，plan-9 §3.3）
+// 原型默认 HP（game 层原型表；tro-scene descriptor 不携带数值）
 constexpr int kPlayerMaxHp = 100;  // 对齐原版 entities.lua player
 constexpr int kGoblinMaxHp = 25;   // 对齐原版 entities.lua goblin
 
@@ -121,14 +120,14 @@ struct Actor {
     tg::Color color{255, 255, 255, 255};
     int z = 0;               // 视觉层级提示（descriptor 透传，渲染排序用）
     tg::SpriteDesc sprite;   // 视觉快照（无贴图时 has==false，渲染为色块）
-    int anim_set = -1;       // 动画集索引（-1=无动画；名=entity id 映射，plan-10）
-    // ── 里程碑 9：战斗/AI 状态（惰性实体一律 nullopt/空） ──
+    int anim_set = -1;       // 动画集索引（-1=无动画；名=entity id 映射）
+    // ── 战斗/AI 状态（惰性实体一律 nullopt/空） ──
     std::optional<Hp> hp;                 // nullopt = 无 hp（不参与战斗）
-    std::map<std::string, int> cooldowns; // 能力冷却（仅 >0 才登记，plan-9 §2.5）
+    std::map<std::string, int> cooldowns; // 能力冷却（仅 >0 才登记）
     AiState ai;                           // 仅战斗原型有效
 };
 
-// ── 回合阶段（GameOver：玩家 hp≤0，收尾不推进回合，plan-9 §3.3） ──
+// ── 回合阶段（GameOver：玩家 hp≤0，收尾不推进回合） ──
 
 enum class Phase {
     PlayerTurn,
@@ -170,9 +169,9 @@ struct GameState {
     }
 };
 
-// ── 系统上下文（plan-9 §3.3）：main/IPC 的完整敌方阶段入口 ──
+// ── 系统上下文：main/IPC 的完整敌方阶段入口 ──
 //
-// sys 为空（nullptr / 缺省重载）时敌方阶段退化为 M6 静止语义（无 AI、无事件）——
+// sys 为空（nullptr / 缺省重载）时敌方阶段退化为静止语义（无 AI、无事件）——
 // 单一代码路径，既有测试零改动。指针由 main 持有并保证存活期 ≥ 调用。
 struct GameSystems {
     EventBus* bus = nullptr;
@@ -191,8 +190,8 @@ void import_scene(GameState& gs, const tg::SceneAsset& asset);
 
 bool tile_is_solid(const GameState& gs, int tx, int ty);
 // 地形 solid 判定（仅 solid 层数据；界外/层矩形外 = 无数据 = 不阻挡）。
-// 与 tile_is_solid 的差异：后者界外返回 true（M6 移动边界语义）；本函数
-// 对齐引擎 tg::is_solid_at 原语义，供导航/视野使用（plan-9 §2.3）。
+// 与 tile_is_solid 的差异：后者界外返回 true（移动边界语义）；本函数
+// 对齐引擎 tg::is_solid_at 原语义，供导航/视野使用。
 bool tile_solid_terrain(const GameState& gs, int tx, int ty);
 // 指定实体是否占住该格（排除 exclude_id，如移动者自身）
 bool tile_has_entity(const GameState& gs, int tx, int ty,
@@ -202,9 +201,9 @@ bool tile_has_entity(const GameState& gs, int tx, int ty,
 bool can_diagonal_move(const GameState& gs, int from_x, int from_y, int dx,
                        int dy, const std::string& exclude_id);
 
-// ── 移动裁决（plan-9 §3.3：任意 actor；成功发 MoveSucceeded） ──
+// ── 移动裁决（任意 actor；成功发 MoveSucceeded） ──
 //
-// 与 M6 玩家裁决同一套规则（地形 solid / 实体互斥 / 斜切切角）。bus 非空时
+// 与玩家裁决同一套规则（地形 solid / 实体互斥 / 斜切切角）。bus 非空时
 // 成功 emit `MoveSucceeded{entity, from:[gx,gy], to:[gx,gy]}`；失败无事件。
 ActionResult try_move(GameState& gs, EventBus* bus, const std::string& actor_id,
                       int dx, int dy);
@@ -215,7 +214,7 @@ ActionResult try_move(GameState& gs, EventBus* bus, const std::string& actor_id,
 ActionResult player_move(GameState& gs, int dx, int dy);
 ActionResult player_wait(GameState& gs);
 // GameSystems 版（main/IPC 用）：完整敌方阶段（AI + 事件）；入口带 phase
-// 守卫（非 PlayerTurn，含 GameOver → Invalid，plan-9 §3.3 r2 N1）。
+// 守卫（非 PlayerTurn，含 GameOver → Invalid）。
 ActionResult player_move(GameState& gs, GameSystems& sys, int dx, int dy);
 ActionResult player_wait(GameState& gs, GameSystems& sys);
 

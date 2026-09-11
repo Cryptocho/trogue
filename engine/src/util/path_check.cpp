@@ -1,4 +1,4 @@
-// util/path_check.cpp —— 资产相对路径 grammar 实现（plan-5.2 §2.1）。
+// util/path_check.cpp —— 资产相对路径 grammar 实现。
 #include "util/path_check.hpp"
 
 #include <string>

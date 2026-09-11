@@ -1,8 +1,8 @@
-// scene_asset.cpp —— SceneAsset 解析/校验/tile 查询实现（plan-5.2 §2/§3/§4）。
+// scene_asset.cpp —— SceneAsset 解析/校验/tile 查询实现。
 //
 // schema 校验语义全集对齐 C 版定案（键白名单、三态模式、限额、路径 grammar、
 // 空值边界），仅换载体 jansson→nlohmann；禁止因换库放宽任何规则。
-// 校验顺序固定（§2.2）：root → 模式判定 → 尺寸 → tilesets/palette/layers →
+// 校验顺序固定：root → 模式判定 → 尺寸 → tilesets/palette/layers →
 // entity → sprite/animations → payload 限额。任一失败即整体失败且不产生半成品。
 #include "trogue/scene.hpp"
 
@@ -25,7 +25,7 @@
 #include "util/json_check.hpp"
 #include "util/path_check.hpp"
 #include "scene_impl.hpp"  // detail::SceneImpl 等私有数据载体（render.cpp 共享）
-#include "tileset_parse.hpp"  // tro-tileset 共享解析核心声明（plan-12 §4.1）
+#include "tileset_parse.hpp"  // tro-tileset 共享解析核心声明
 
 namespace tg {
 
@@ -176,10 +176,10 @@ expected<void, Error> parse_meta(const json& root, detail::SceneImpl& out) {
     return {};
 }
 
-}  // namespace（匿名段暂闭：下方共享解析核心属 tg::detail，plan-12 §4.1）
+}  // namespace（匿名段暂闭：下方共享解析核心属 tg::detail）
 
-// ── tro-tileset 文档解析（场景与 TerrainTable 共用核心，plan-12 §4.1）──
-// 声明见 tileset_parse.hpp。terrain 字段此前宽容路过、零解析，本期起解析 + 校验；
+// ── tro-tileset 文档解析（场景与 TerrainTable 共用核心）──
+// 声明见 tileset_parse.hpp。terrain 字段全量解析 + 校验；
 // 文档级未知键宽容策略不变。
 namespace detail {
 
@@ -269,7 +269,7 @@ expected<void, Error> parse_tile_terrain(const json& t, std::string_view src,
                                       at(src, where + ".terrain 必须为 int")));
         terr = it->get<int>();
     }
-    // 负值防御：仅 -1 表示未归属，< -1 一律拒绝（plan §4.1 表；评审阻断项）
+    // 负值防御：仅 -1 表示未归属，< -1 一律拒绝
     if (tset < -1 || terr < -1)
         return tl::unexpected(err(
             ErrorCode::kSchemaViolation,
@@ -373,13 +373,13 @@ expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
                                   at(source, "columns 必须为 1..65536 的 int")));
     }
     out.columns = cols->get<int>();
-    // terrain_sets（plan-12 §4.1：此前宽容路过，本期起解析 + 校验）
+    // terrain_sets（全量解析 + 校验）
     if (auto r = parse_terrain_sets(ts, source, out.terrain_sets); !r)
         return tl::unexpected(r.error());
     // 逐一解析 tiles[]：数组顺序即 id；每个 tile 自带 col/row（图集内坐标），
     // 建 id → TileVisual 表供渲染（不允许按 id 推公式——Godot 导出的 col/row
     // 可能非顺序排列）。size_in_atlas/texture_origin/y_sort_origin 为 tro-tileset
-    // v2 只增可选字段（plan-8 §3.1），缺省 = 单格 1×1 / 原点 0。
+    // v2 只增可选字段，缺省 = 单格 1×1 / 原点 0。
     out.tile_visuals.reserve(static_cast<std::size_t>(count));
     out.tile_terrains.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i) {
@@ -407,7 +407,7 @@ expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
         const int col = col_it->get<int>(), row = row_it->get<int>();
         // size_in_atlas：可选 [w,h]，各 ∈ [1,4096]——tile 覆盖的图集格子数，缺省 1×1。
         // region 越界（col+sw > columns / 超出贴图）不在 load 期校验：与 col/row 同
-        // （load 不读纹理文件），绘制期采样行为由 raylib 兜底（plan-8 §3.1）。
+        // （load 不读纹理文件），绘制期采样行为由 raylib 兜底。
         int sw = 1, sh = 1;
         if (auto sz = t.find("size_in_atlas"); sz != t.end()) {
             const std::string where =
@@ -429,7 +429,7 @@ expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
             }
         }
         // texture_origin：可选 [x,y] int（可负），|v| ≤ kTileOriginMax——Godot
-        // 纹理原点，绘制偏移 = −origin（plan-8 §2.2）；缺省 (0,0)。
+        // 纹理原点，绘制偏移 = −origin；缺省 (0,0)。
         Vec2 t_origin{0.0f, 0.0f};
         if (auto to = t.find("texture_origin"); to != t.end()) {
             const std::string where =
@@ -450,7 +450,7 @@ expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
             t_origin = Vec2{static_cast<float>(ox), static_cast<float>(oy)};
         }
         // y_sort_origin：可选 int，|v| ≤ kTileOriginMax——Godot y-sort 排序键偏移
-        // 透传存储，引擎暂不消费（无逐 tile y-sort，plan-8 §3.3）；缺省 0。
+        // 透传存储，引擎暂不消费（无逐 tile y-sort）；缺省 0。
         int yso = 0;
         if (auto ys = t.find("y_sort_origin"); ys != t.end()) {
             const std::string where =
@@ -467,7 +467,7 @@ expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
                     at(source, where + " 绝对值超限")));
             }
         }
-        // terrain 字段（terrain_set/terrain/peering_bits；plan-12 §4.1）
+        // terrain 字段（terrain_set/terrain/peering_bits）
         TerrainTileEntry entry;
         if (auto r = parse_tile_terrain(t, source, out.terrain_sets, i, entry); !r)
             return tl::unexpected(r.error());
@@ -499,7 +499,7 @@ expected<TilesetParsed, Error> load_tileset_document(std::string_view rel_path) 
 namespace {
 
 // 读取并解析 tro-tileset v2 元数据（load 期；不读纹理文件）。解析核心
-// detail::parse_tileset_document 与 TerrainTable 加载共用（plan-12 §4.1）。
+// detail::parse_tileset_document 与 TerrainTable 加载共用。
 expected<void, Error> load_tileset_meta(const std::string& rel_path,
                                         int scene_tile_w, int scene_tile_h,
                                         detail::SceneImpl& out) {
@@ -708,7 +708,7 @@ expected<void, Error> parse_tilemap_layers(const json& tm, bool atlas_mode,
     return {};
 }
 
-// 解析 sprite（两种形态互斥 + 键白名单，plan-5.2 §2.5）。
+// 解析 sprite（两种形态互斥 + 键白名单）。
 expected<void, Error> parse_sprite(const json& s, std::string_view where,
                                    const detail::SceneImpl& out, SpriteDesc& dst) {
     if (!s.is_object()) return tl::unexpected(
@@ -786,7 +786,7 @@ expected<void, Error> parse_sprite(const json& s, std::string_view where,
     return {};
 }
 
-// 解析内嵌 animations（plan-5.2 §2.6 + §2.6b（规则来自 plan-5.4 §2））。
+// 解析内嵌 animations。
 expected<void, Error> parse_animations(const json& a, std::string_view where,
                                        detail::SceneImpl& out) {
     if (!a.is_object()) return tl::unexpected(
@@ -929,7 +929,7 @@ expected<void, Error> parse_animations(const json& a, std::string_view where,
     return {};
 }
 
-// 解析单个 entity（plan-5.2 §2.5/§2.6）。
+// 解析单个 entity。
 expected<void, Error> parse_entity(const json& e, std::size_t index,
                                    int default_w, int default_h,
                                    detail::SceneImpl& out) {
@@ -1036,7 +1036,7 @@ expected<void, Error> parse_entity(const json& e, std::size_t index,
             return tl::unexpected(r.error());
     }
     out.entities.push_back(std::move(ent));
-    // animations（可选；null 拒绝）；动画集名 = 所属 entity id（plan-10 映射键；
+    // animations（可选；null 拒绝）；动画集名 = 所属 entity id（entity→动画集映射键；
     // ent 已被 move，从 entities 取回 id）
     if (auto a = e.find("animations"); a != e.end()) {
         if (auto r = parse_animations(*a, where + ".animations", out); !r)
@@ -1059,8 +1059,7 @@ class SceneLoader {
 public:
     using Error = SceneAsset::AssetError;
 
-    // 外层入口：source（文件路径或注入名）进诊断前缀（plan-12 §4.4 接通；
-    // 此前 source_path 被 (void) 弃用，schema 错误无来源上下文）。
+    // 外层入口：source（文件路径或注入名）进诊断前缀（schema 错误带来源上下文）。
     static expected<SceneAsset, Error> load(const json& root,
                                             std::string_view source_path) {
         auto r = load_impl(root);
@@ -1096,7 +1095,7 @@ private:
                                   "资产序列化字节超过 kAssetPayloadBytesMax"));
     }
 
-    // §2.0 root 键策略：根宽容（未知忽略 + warning）
+    // root 键策略：根宽容（未知忽略 + warning）
     for (const auto& kv : root.items()) {
         const std::string& k = kv.key();
         if (k != "format" && k != "version" && k != "meta" && k != "tilemap" &&
@@ -1126,7 +1125,7 @@ private:
                                   "tilemap 必须存在且为 object"));
     const json& tm = *tm_it;
 
-    // §2.2 模式判定（顺序固定）
+    // 模式判定（顺序固定）
     const bool has_tilesets = tm.contains("tilesets");
     const bool has_palette = tm.contains("palette");
     if (has_tilesets && has_palette)
@@ -1154,7 +1153,7 @@ private:
         case ModeTmp::bare: impl->mode = detail::SceneImpl::Mode::bare; break;
     }
 
-    // §2.2.3 尺寸：非 bare 必须同时 int ∈[1,256]；bare 允许缺省 → 0
+    // 尺寸：非 bare 必须同时 int ∈[1,256]；bare 允许缺省 → 0
     const auto tw_it = tm.find("tile_width"), th_it = tm.find("tile_height");
     if (mode != ModeTmp::bare) {
         if (tw_it == tm.end() || th_it == tm.end() || !tw_it->is_number_integer() ||
@@ -1250,7 +1249,7 @@ expected<SceneAsset, SceneAsset::AssetError> load_scene_asset(
 
 }  // namespace detail
 
-// 内存加载（plan-12 §4.4）：与 load(path) 同一解析/校验路径，仅文本来源不同。
+// 内存加载：与 load(path) 同一解析/校验路径，仅文本来源不同。
 expected<SceneAsset, SceneAsset::AssetError> SceneAsset::load_json(
     std::string_view text, std::string_view name) {
     auto j_or = parse_json_text(std::string(text), name);
@@ -1260,7 +1259,7 @@ expected<SceneAsset, SceneAsset::AssetError> SceneAsset::load_json(
 
 // 公共 load：读文件 → parse → detail::load_scene_asset
 expected<SceneAsset, SceneAsset::AssetError> SceneAsset::load(std::string_view path) {
-    // 外部 scene 路径校验（§2.1）：非空、无 NUL、UTF-8、相对 grammar、长度
+    // 外部 scene 路径校验：非空、无 NUL、UTF-8、相对 grammar、长度
     if (path.empty() || path.size() >= static_cast<std::size_t>(kPathMax) ||
         path.find('\0') != std::string_view::npos ||
         !detail::is_valid_utf8(path) || !detail::is_safe_relative_path(path)) {
@@ -1274,7 +1273,7 @@ expected<SceneAsset, SceneAsset::AssetError> SceneAsset::load(std::string_view p
     return detail::load_scene_asset(*j_or, path);
 }
 
-// ════════════════════ tile-only 查询（plan-5.2 §4） ════════════════════
+// ════════════════════ tile-only 查询 ════════════════════
 
 namespace {
 
@@ -1333,7 +1332,7 @@ TileQueryResult rect_hits_solid(const SceneAsset& asset, Rect world_rect) {
         // 上界用 ceil 保证右边界像素（如 x1=16.1）纳入 tile1，x1 恰为整边界不越）。
         // 全程 double 计算 + 先做"完全层外"剔除，再 saturating clamp 到
         // [0,width] 范围才转 int —— 「极大但有限」坐标（如 1e38）不得触发
-        // float→int 的未定义转换（plan-5.2 §4 范围校验，门禁 M3）。
+        // float→int 的未定义转换（范围校验）。
         const double tx0f = std::floor((x0 - static_cast<double>(info.origin_x)) / tw);
         const double tx1f = std::ceil((x1 - static_cast<double>(info.origin_x)) / tw);
         const double ty0f = std::floor((y0 - static_cast<double>(info.origin_y)) / th);

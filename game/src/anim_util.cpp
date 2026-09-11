@@ -12,7 +12,7 @@ bool draw_entity_sprite(const tg::SceneAsset& asset,
                         const tg::AnimationPlayer* anim,
                         const tg::SpriteDesc& static_sprite, tg::Vec2 pos,
                         tg::Color tint, float fallback_w, float fallback_h) {
-    // ① 帧动画采样（plan-10 §3.2 组合公式）：offset = 实体静态锚点 + 帧自身
+    // ① 帧动画采样（组合公式）：offset = 实体静态锚点 + 帧自身
     // 偏移（士兵 [-50,-50]+[0,0] 居中语义与静态帧一致）。采样成功但绘制失败
     // （贴图缺失 TextureMissing/region 非法 Invalid——asset load 不读纹理，
     // 首次绘制才触发加载）同样回退：旧实现两处一致，实体不可见比色块更糟。

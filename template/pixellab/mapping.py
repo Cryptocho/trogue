@@ -1,4 +1,4 @@
-"""mapping.py —— Wang 16-tile ↔ peering_bits(corners) 显式映射（plan-13 §5.3）。
+"""mapping.py —— Wang 16-tile ↔ peering_bits(corners) 显式映射。
 
 三要素（W2 实测锁定，fixture: wang_grass_dirt）：
 1. 组合映射：PixelLab tile 的 corners{NW,NE,SW,SE}（值 lower/upper）↔ 引擎

@@ -1,4 +1,4 @@
-// terrain_test.cpp —— TerrainTable 加载与 pick_tile 选择器单测（plan-12 §7）。
+// terrain_test.cpp —— TerrainTable 加载与 pick_tile 选择器单测。
 //
 // 覆盖：共享解析核心的 terrain 字段校验全集（经 load_terrain_table 公共入口；
 // 场景加载共用同一核心，正向回归由 scene_schema_test 的真实资产用例承担）、
@@ -133,7 +133,7 @@ bool test_load_valid() {
     CHECK(r->set.mode == TerrainMode::corners_and_sides);
     CHECK(r->set.terrain_count == 1);
     CHECK(static_cast<int>(r->tiles.size()) == 16);
-    // 键缺省语义：无 terrain 键的 tile = {-1,-1,全 -1}（plan-12 §4.1 表）
+    // 键缺省语义：无 terrain 键的 tile = {-1,-1,全 -1}
     {
         const std::string rel2 = write_tileset(tileset_json(
             kOneTerrain,
@@ -161,7 +161,7 @@ bool test_blob_exact() {
         auto id = tg::pick_tile(*t, 0, 0, pattern_from_mask(mask));
         CHECK(id.has_value() && *id == mask);
     }
-    // 均匀 +1（plan-12 §7）：四角位给 0（候选全不标四角）与四角全 -1 结果一致
+    // 均匀 +1：四角位给 0（候选全不标四角）与四角全 -1 结果一致
     for (int mask = 0; mask < 16; ++mask) {
         auto id = tg::pick_tile(*t, 0, 0, pattern_from_mask(mask, 0));
         CHECK(id.has_value() && *id == mask);
@@ -240,7 +240,7 @@ bool test_error_contract() {
         auto bad_pattern = tg::pick_tile(*t, 0, 0, p);
         CHECK(!bad_pattern.has_value() &&
               bad_pattern.error().code == tg::ErrorCode::kInvalidArgument);
-        // pattern 负非 -1（plan §7 点名；评审非阻断 2）
+        // pattern 负非 -1（点名；评审非阻断 2）
         p[static_cast<std::size_t>(TerrainBit::top_side)] = -2;
         bad_pattern = tg::pick_tile(*t, 0, 0, p);
         CHECK(!bad_pattern.has_value() &&
@@ -319,7 +319,7 @@ bool test_load_rejections() {
     expect_schema(tileset_json(
         R"("terrain_sets":[{"mode":"sides","terrains":[{"name":"g","color":"red"}]}],)",
         one_tile), "color 非法");
-    // 负非 -1（plan §7 点名；评审阻断 1）
+    // 负非 -1（点名；评审阻断 1）
     expect_schema(tileset_json(kOneTerrain,
                                "{\"id\":0,\"col\":0,\"row\":0,\"terrain_set\":0,\"terrain\":-2}"),
                   "terrain 负非 -1");

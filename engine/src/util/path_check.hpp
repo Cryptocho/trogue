@@ -1,5 +1,5 @@
 #pragma once
-// util/path_check.hpp —— 资产相对路径 grammar（plan-5.2 §2.1）。
+// util/path_check.hpp —— 资产相对路径 grammar。
 //
 // schema 内资源路径（tileset path / sprite·animation texture）与外部 scene
 // 路径统一过 is_safe_relative_path()，禁止各模块自写路径判定。

@@ -1,8 +1,8 @@
 #pragma once
-// hotreload.hpp —— 文件变化通知（Watcher；plan-5.5 §3）。
+// hotreload.hpp —— 文件变化通知（Watcher）。
 //
 // Watcher 只报告监听目录内安全的 .json basename（裸名，无目录前缀、无 `/`）；
-// 150ms 防抖尾沿补触发（沿用 C 版定案）。engine 不拼路径：path 拼接归 game
+// 150ms 防抖尾沿补触发。engine 不拼路径：path 拼接归 game
 // （game 用自身固定前缀如 assets/scenes + '/' + basename 组 load 路径）。
 //
 // Release / 非 Linux：create 返回 invalid，poll() 恒 nullopt（安全 no-op）。

@@ -1,17 +1,16 @@
 #pragma once
 // coro.hpp —— 自研最小协程原语（header-only，零第三方依赖）。
 //
-// 规格来源：docs/plan-5.1.md §5.2（决策记录）+ docs/plan-5.4.md §5。
-// 选型：原计划 vendor cppcoro，实施前置验证失败——上游停留在 C++17 TS 的
+// 选型：不引入第三方协程库——cppcoro 上游停留在 C++17 TS 的
 // `<experimental/coroutine>`（GCC 12 起移除），GCC 15 下不可编译；
-// 2026-09-07 用户拍板自研本组原语（已通过 GCC 15 + ASan/UBSan 原型验证）。
+// 故自研本组原语（已通过 GCC 15 + ASan/UBSan 原型验证）。
 //
 // 提供：
 //   tg::task<T> / tg::task<>   : lazy 协程载体，单线程显式推进（start/pump）
 //   tg::single_consumer_event  : 单消费者事件（auto-reset），供 co_await 完成信号
 //   tg::generator<T>           : 惰性值产出
 //
-// 使用契约（plan-5.1 §5.2、plan-5.4 §5）：
+// 使用契约：
 // 1. 单线程推进：演出协程由 game 主循环显式推进（start/pump），不另起线程。
 //    数据驱动播放器（Animation/Tween 核心）不依赖协程。
 // 2. 生命周期：等待者持有对宿主（asset/player/manager）的非拥有引用；

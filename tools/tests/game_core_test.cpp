@@ -1,13 +1,13 @@
 // game_core_test.cpp —— 回合制核心无窗口单测。
 //
-// M6（docs/plan-6.md §4.e）：
+// 回合与移动：
 //   1. import_scene：从 forest.json（palette 手写关卡）导入玩家/敌人、边界、回合复位
 //   2. 玩家移动：成功移动消耗回合（+1）、撞墙（地形 solid）不消耗
 //   3. 斜向切角：仅当两相邻正交格都被阻挡时禁止（对齐原版 canDiagonalMove）
 //   4. 实体互斥：目标格被敌人占用 → blocked
 //   5. wait：回合推进
 //   6. 玩家不存在 → invalid（移动/等待都拒绝）
-// M9（docs/plan-9.md §3.7）：
+// AI / 规则 / 导航：
 //   7. EventBus：priority 顺序 / off / emit 内 off 自身与嵌套 emit（快照语义）
 //   8. nav：chebyshev / Bresenham LOS（端点不判定）/ A* 绕墙一步、围死 nullopt
 //   9. AI 状态机：idle→alerted（停）→chasing、贴脸攻击（wire 序 DamageDealt→AbilityUsed）
@@ -231,7 +231,7 @@ static bool test_key_buffer_flush() {
     return true;
 }
 
-// ══════════════ 里程碑 9（docs/plan-9.md §3.7） ══════════════
+// ══════════════ AI / 规则 / 导航 ══════════════
 
 // 便捷构造：带 AI 系统上下文的场景（forest + 规则绑定）。
 // 构造函数不用 REQUIRE（宏含 return，构造函数禁用）；各测试先
@@ -253,7 +253,7 @@ struct AiRig {
     bool ok() const { return asset.has_value(); }
 };
 
-// ── EventBus（plan-9 §3.1） ──
+// ── EventBus ──
 
 bool test_event_bus_priority_and_off() {
     game::EventBus bus;
@@ -297,7 +297,7 @@ bool test_event_bus_snapshot_reentrancy() {
     return true;
 }
 
-// ── nav（plan-9 §3.2） ──
+// ── nav ──
 
 bool test_nav_chebyshev_los() {
     CHECK(game::nav::chebyshev(0, 0, 3, 4) == 4);
@@ -423,7 +423,7 @@ bool test_nav_astar_unreachable() {
     return true;
 }
 
-// ── AI 状态机（plan-9 §2.2；forest：内墙 rect(5,2)-(6,3)） ──
+// ── AI 状态机（forest：内墙 rect(5,2)-(6,3)） ──
 
 bool test_ai_state_transitions() {
     AiRig rig;
@@ -487,7 +487,7 @@ bool test_ai_attack_pipeline_order() {
     gs.actors["goblin_1"].ai.has_target = true;
     gs.actors["goblin_1"].ai.target = game::TilePos{2, 2};
 
-    // 记录 wire 事件序（plan-9 §2.5：DamageDealt 先于 AbilityUsed）
+    // 记录 wire 事件序（DamageDealt 先于 AbilityUsed）
     std::vector<std::string> seq;
     rig.bus.on("DamageDealt", [&](const tg::Json& j) {
         seq.push_back("DamageDealt@" + j.at("target").get<std::string>());
@@ -531,10 +531,10 @@ bool test_ai_death_and_gameover() {
     CHECK(game::player_wait(gs, rig.sys) == game::ActionResult::Waited);
     CHECK(player_died);
     CHECK(gs.phase == game::Phase::GameOver);
-    CHECK(gs.turn_count == 1);      // 收尾不 +1（plan-9 §3.3 r2 M3）
+    CHECK(gs.turn_count == 1);      // 收尾不 +1
     CHECK(!turn_ended);             // 不发 TurnEnded
     CHECK(gs.player() != nullptr);  // 玩家不 despawn
-    // GameOver 下玩家行动被拒（GameSystems 版入口 phase 守卫，r2 N1）
+    // GameOver 下玩家行动被拒（GameSystems 版入口 phase 守卫）
     CHECK(game::player_move(gs, rig.sys, 1, 0) == game::ActionResult::Invalid);
     CHECK(game::player_wait(gs, rig.sys) == game::ActionResult::Invalid);
     return true;
@@ -611,7 +611,7 @@ bool test_ai_wander_deterministic() {
 }
 
 bool test_lazy_entity_gating() {
-    // coin 类惰性实体：无 hp / 无 AI / 敌方阶段不行动（plan-9 §3.3 门控）
+    // coin 类惰性实体：无 hp / 无 AI / 敌方阶段不行动（门控）
     AiRig rig;
     REQUIRE(rig.ok());
     auto& gs = rig.gs;
@@ -644,7 +644,7 @@ int main() {
         test_key_buffer_two_keys_diagonal() &&
         test_key_buffer_opposite_falls_back_to_first() &&
         test_key_buffer_diagonal_key_immediate() && test_key_buffer_flush() &&
-        // ── 里程碑 9 ──
+        // ── AI / 规则 / 导航 ──
         test_event_bus_priority_and_off() &&
         test_event_bus_snapshot_reentrancy() && test_nav_chebyshev_los() &&
         test_nav_astar_around_wall() && test_nav_astar_unreachable() &&

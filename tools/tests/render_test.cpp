@@ -1,4 +1,4 @@
-// render_test.cpp —— render 无窗口安全断言（plan-5.3 §8，经 seam 三段计数）。
+// render_test.cpp —— render 无窗口安全断言（经 seam 三段计数）。
 //
 // 断言（链接 trogue_engine_test，TROGUE_TEST_SEAMS）：
 //   ① 传非法参数/归属不匹配/路径非法 → param_failures 增、window_checks /

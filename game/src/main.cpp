@@ -1,21 +1,19 @@
-// main.cpp —— 回合制 roguelike demo（M6 最小闭环 + M9 敌 AI/规则/事件接入）。
+// main.cpp —— 回合制 roguelike demo（最小闭环 + 敌 AI/规则/事件接入）。
 //
 // 仅使用 trogue/*.hpp 公共 API + game 层模块（game_core/nav/rules/ai/event_bus）。
 // demo 演示：
 //   - 回合制：玩家移动（8 向 + 斜切约束）→ 敌方回合（AI：三态状态机 +
-//     视野 + A*，docs/plan-9.md）→ 回合 +1
+//     视野 + A*）→ 回合 +1
 //   - 键盘：WASD/方向键 4 向、Q/E/Z/C 斜向（对齐原版 input.lua KEY_MOVEMENTS）、
 //     空格等待；玩家/敌人视觉移动均由引擎 TweenManager 驱动
 //   - 规则管线：EventBus（game 层）→ AbilityUse → 伤害结算 → AbilityUsed/
-//     EntityDied（docs/plan-9.md §2.5 原版顺序）
+//     EntityDied（按原版顺序）
 //   - 渲染：render_scene 画 tile 层；实体按 (y, z) 排序后显式绘制（色块/sprite）
 //   - 热重载：Watcher + F5 + IPC reload（candidate load → 帧外 swap，位置+回合保留）
 //   - IPC 命令 handler（全部命令语义在 game；engine 只传 ping）+ 事件桥
-//     （首批 6 个对外事件经 tg::Ipc::publish，docs/plan-9.md §3.6）
-//   - IPC 回合命令 turn/move/wait（docs/plan-6.md §3.4；场景无关，非视觉 Agent 可驱动）
+//     （6 个对外事件经 tg::Ipc::publish）
+//   - IPC 回合命令 turn/move/wait（场景无关，非视觉 Agent 可驱动）
 //   - 截图（game 排队，帧后 ExportImage）、log、quit
-//
-// 命令归属表见 docs/plan-5.6.md §1 与 docs/plan-6.md §3.4。
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -85,7 +83,7 @@ int skeleton_regression() {
     if (!r3 || r3->animation_set_count() != 1) return 1;
     const tg::AnimationSet& set = r3->animation_set(0);
     if (set.clip_count() != 7 || !set.has_clip("idle")) return 1;
-    if (set.name() != "AnimatedSprite2D") return 1;  // 名 = entity id（plan-10）
+    if (set.name() != "AnimatedSprite2D") return 1;  // 名 = entity id
     auto r4 = tg::SceneAsset::load("assets/scenes/forest.json");
     if (!r4 || r4->layer_count() < 2 || r4->entity_count() < 4) return 1;
     return 0;
@@ -146,7 +144,7 @@ struct Demo {
     game::GameState gs;                      // game_core：actor+回合唯一所有权
     int reloads = 0;
 
-    // ── 里程碑 9：事件总线 / 规则引擎 / 敌 AI（plan-9 §3.4-§3.6） ──
+    // ── 事件总线 / 规则引擎 / 敌 AI ──
     game::EventBus bus;        // game 层纯逻辑事件总线（IPC 桥接在 main 完成）
     game::RuleEngine rules;    // 规则最小子集（构造即内置 punch/damage_physical）
     game::AiSystem ai;         // 敌 AI（固定种子 20260909，可复现）
@@ -163,7 +161,7 @@ struct Demo {
     tg::TweenManager tween;
     tg::AnimationPlayer anim;          // 帧动画播放器（绑定首个含动画 actor 的集）
     bool has_anim = false;             // 已绑定可播放动画集
-    int bound_anim_set = -1;           // 当前绑定动画集序号（plan-10 归属校验）
+    int bound_anim_set = -1;           // 当前绑定动画集序号（归属校验）
 
     int window_w = 960, window_h = 540;
     tg::Vec2 cam{0, 0};
@@ -198,7 +196,7 @@ struct Demo {
 };
 
 // 实体视觉状态：玩家取引擎 tween 插值位置（未在动画时 == 逻辑格像素）；
-// 敌人同由引擎 tween 驱动（静止时 == 逻辑格像素，plan-9 §3.6）；
+// 敌人同由引擎 tween 驱动（静止时 == 逻辑格像素）；
 // 惰性实体无插值，视觉位置就是逻辑格像素。（供 IPC transform 视图使用）
 void entity_visual(const Demo& d, const game::Actor& a, float& vx, float& vy,
                    bool& moving) {
@@ -262,7 +260,7 @@ tg::Json actor_to_json(const Demo& d, const game::Actor& a) {
 }
 
 // 场景交换核心（candidate 已成功加载；keep_player + reloads 自增 + 动画重绑。
-// reload 与 genmap 共用，plan-12 §4.5）
+// reload 与 genmap 共用）
 void swap_scene(Demo& d, std::unique_ptr<tg::SceneAsset> loaded) {
     // 保留玩家运行时位置与回合数（game 策略：reload 后玩家位置/回合不变；
     // 其它 actor 全部按新 descriptor 重建）。旧 C demo 曾有等价行为。
@@ -278,17 +276,17 @@ void swap_scene(Demo& d, std::unique_ptr<tg::SceneAsset> loaded) {
     }
     d.gs.turn_count = keep_turn;       // 回合数跨 reload 保留（游戏进度）
     d.tween.cancel_all();              // 打断进行中的移动 tween（旧场景视觉位置失效）
-    d.enemy_view.clear();              // 敌人视觉条目随场景重建（plan-9 §3.6 S8）
+    d.enemy_view.clear();              // 敌人视觉条目随场景重建
     d.view_init = false;               // 重新追踪玩家视觉位置
     d.view_tween = 0;
     game::input_buffer_flush(d.input); // 清空未决输入（场景已换）
     ++d.reloads;
-    // 动画绑定（plan-10 §3.2）：绑定首个含动画 actor 的动画集；bound_anim_set
+    // 动画绑定：绑定首个含动画 actor 的动画集；bound_anim_set
     // 供绘制采样与快照注入做归属校验（防多动画实体时张冠李戴）
     d.bound_anim_set = -1;
     if (d.asset) {
         // 注意：actors 为 std::map，「首个」= id 字典序而非场景文件序；
-        // 单动画实体场景无影响，多动画实体时的选择策略留遭留（plan-10 §7）
+        // 单动画实体场景无影响，多动画实体时的选择策略留待定夺
         for (const auto& [id, a] : d.gs.actors) {
             if (a.anim_set >= 0) { d.bound_anim_set = a.anim_set; break; }
         }
@@ -327,7 +325,7 @@ void reload_scene(Demo& d, const std::string& path) {
 game::ActionResult handle_move(Demo& d, game::Dir m) {
     // 原版 handleMove 不查回合门控（缓冲触发无守卫，回合已由按键入口保证）；
     // GameSystems 版内部处理 invalid/blocked（含 phase 守卫），无副作用风险。
-    // 完整敌方阶段：移动成功后 AI 敌人行动（事件驱动，plan-9 §3.3）。
+    // 完整敌方阶段：移动成功后 AI 敌人行动（事件驱动）。
     // 返回 ActionResult：IPC move 复用本函数——键盘/IPC 同一条「移动→tween」
     // 管线（曾因 IPC 直接调 player_move 跳过 tween，导致逻辑格已动、视觉
     // 停在旧格整整 1 tile 的分叉 bug，transform 视图暴露）。
@@ -412,7 +410,7 @@ tg::Json turn_json(const Demo& d) {
     return j;
 }
 
-// ── 程序生成地图（plan-12 §4.5）：地形指派是玩法决策（本节全部逻辑归 game），
+// ── 程序生成地图：地形指派是玩法决策（本节全部逻辑归 game），
 // 引擎只提供 pick_tile 采样与 load_json 内存加载。生成流程：
 //   噪声指派 → pick_tile 填 id → 拼 tro-scene JSON → load_json → swap_scene。
 // 噪声为最小确定性 value-noise（粗网格双线性插值）：同 seed 同 w/h 逐位一致。
@@ -444,7 +442,7 @@ float gen_value_noise(int x, int y, std::uint64_t seed, int period) {
 }
 
 // genmap 生成上限（格）：远小于引擎 kLayerDimMax=4096——演示级的 JSON 体积与
-// 生成耗时约束（plan-12 §4.5；更大需求由调用方分片）
+// 生成耗时约束（更大需求由调用方分片）
 inline constexpr int kGenMapDimMax = 64;
 
 tg::IpcStatus handle_genmap(Demo& d, const tg::Json& req,
@@ -586,7 +584,7 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
             return tg::IpcStatus::error;
         }
         // 类型安全：dx/dy 必须是整数（-1..1 由 game_core 判定）；float 会被
-        // nlohmann get<int> 静默截断，故先拒绝（计划 §3.4：整数值各在 -1..1）。
+        // nlohmann get<int> 静默截断，故先拒绝（整数值各在 -1..1）。
         if (!req.contains("dx") || !req.contains("dy") ||
             !req["dx"].is_number_integer() || !req["dy"].is_number_integer()) {
             error = "move needs integer dx/dy";
@@ -836,9 +834,9 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         return tg::IpcStatus::handled;
     }
     if (cmd == "events") {
-        // 事件目录（plan-7 §3.5；plan-9 §3.6 首批 6 个对外事件实表）。
+        // 事件目录。
         // 条目 {name, when, data}；data 顶层 entity/source/target = 字符串 id，
-        // 可被 subscribe filter 等值匹配（M7 语义）。内部事件（AbilityUse/
+        // 可被 subscribe filter 等值匹配。内部事件（AbilityUse/
         // AbilityUseFailed/DamageRequest）不在注册表——不对外发布。
         auto entry = [](const char* name, const char* when, const char* data,
                         const char* filter) {
@@ -900,8 +898,8 @@ int main(int argc, char** argv) {
     }
     d.scene_path = scene_path;
 
-    // ── 里程碑 9 接线（plan-9 §3.6） ──
-    // 实体快照扩展注入点：hp（有 hp 的 actor）+ ai（战斗原型）+ anim（plan-10，
+    // ── 应用接线 ──
+    // 实体快照扩展注入点：hp（有 hp 的 actor）+ ai（战斗原型）+ anim（
     // 该 actor 的动画集被绑定时上报 clip/frame）；goblin 有 hp/ai，coin 等
     // 惰性实体两者皆无，player 仅 hp，soldier 仅 anim。
     d.extra_entity_fields = [&d](tg::Json& j, const game::Actor& a) {
@@ -938,7 +936,7 @@ int main(int argc, char** argv) {
         TraceLog(LOG_INFO, "[demo] IPC 不可用（Release 桩/端口占用）");
     }
 
-    // ── IPC 事件桥（plan-9 §3.6）：白名单 6 事件逐个桥到 tg::Ipc::publish。
+    // ── IPC 事件桥：白名单 6 事件逐个桥到 tg::Ipc::publish。
     // EventBus 保持纯逻辑零 IPC 依赖，桥接（订阅→转发）在 main 层完成。
     {
         static const char* kWireEvents[] = {"StateChanged", "MoveSucceeded",
@@ -1059,14 +1057,14 @@ int main(int argc, char** argv) {
                 wx = d.view_x;
                 wy = d.view_y;
             } else {
-                // 敌人：tween 插值中的视觉位置（静止 == 逻辑格像素，plan-9 §3.6）
+                // 敌人：tween 插值中的视觉位置（静止 == 逻辑格像素）
                 const auto vit = d.enemy_view.find(a->id);
                 if (vit != d.enemy_view.end()) {
                     wx = vit->second.vx;
                     wy = vit->second.vy;
                 }
             }
-            // 绘制（共享工具 anim_util，plan-10 采样公式所在处）：该 actor 的
+            // 绘制（共享工具 anim_util，采样公式所在处）：该 actor 的
             // 动画集已绑定 → 传播放器采样当前帧；触发/绑定策略在此调用方，
             // 机制（offset 组合 + 静态回退 + 色块兜底）在 game::draw_entity_sprite。
             // *d.asset 解引用依赖不变量：actors 非空 ⟹ 某次加载成功且 asset

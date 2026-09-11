@@ -8,6 +8,6 @@ add_executable(trogue src/main.cpp src/anim_util.cpp src/game_core.cpp
                       src/nav.cpp src/rules.cpp src/ai.cpp)
 target_link_libraries(trogue PRIVATE trogue_engine)
 
-# 动画查看器（plan-11）：帧动画触发/切换最小交互验证台，独立端点 48765
+# 动画查看器：帧动画触发/切换最小交互验证台，独立端点 48765
 add_executable(anim_viewer src/anim_util.cpp src/anim_viewer.cpp)
 target_link_libraries(anim_viewer PRIVATE trogue_engine)

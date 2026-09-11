@@ -1,4 +1,4 @@
-"""test_scene_gen.py —— scene_gen 确定性回归（plan-13 §7 承诺）。
+"""test_scene_gen.py —— scene_gen 确定性回归。
 
 同一 pattern fixture 跑两次，断言输出逐字节一致（机制采样全确定）。
 scene_gen 二进制不存在时跳过（未构建场景不阻塞单测）。

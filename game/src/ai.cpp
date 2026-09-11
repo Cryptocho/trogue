@@ -1,4 +1,4 @@
-// ai.cpp —— 里程碑 9：敌人 AI 实现（docs/plan-9.md §2.2/§2.3/§2.4/§3.5）。
+// ai.cpp —— 敌人 AI 实现。
 //
 // 语义逐条对齐原版 ai.lua（行号见各段注释）：
 //   - 状态迁移（:64-91）先迁移、后按新状态取动作（:94-100）；
@@ -6,7 +6,7 @@
 //     solid 层遮挡；层外/界外 = 无数据 = 不阻挡）；
 //   - 游走（:123-136）：70% 概率 4 向均匀随机一步（失败即原地，不重试）；
 //   - 追击（:138-187）：dist ≤ 1 → emit AbilityUse；否则 A* 一步
-//     （玩家格不阻挡——原版 player 原型无 Actor 组件，plan-9 §2.4）。
+//     （玩家格不阻挡——原版 player 原型无 Actor 组件）。
 #include "ai.hpp"
 
 #include <vector>
@@ -51,7 +51,7 @@ void AiSystem::run_enemy_phase(GameState& gs, EventBus& bus) {
         if (!is_combat_archetype(a.type)) continue;  // 惰性实体（coin 等）跳过
         if (!a.hp || a.hp->cur <= 0) continue;       // 死亡待清除的不行动
 
-        // 阶段内玩家死亡 → 剩余敌人立即停止（plan-9 §3.3，对齐原版
+        // 阶段内玩家死亡 → 剩余敌人立即停止（对齐原版
         // 「无玩家则直接收尾」ai.lua:43-46）
         player = gs.player();
         if (!player || !player->hp || player->hp->cur <= 0 ||

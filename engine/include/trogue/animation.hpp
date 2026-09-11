@@ -1,17 +1,17 @@
 #pragma once
-// animation.hpp —— 帧动画播放器与只读动画集（plan-5.4 §2/§3）。
+// animation.hpp —— 帧动画播放器与只读动画集。
 //
-// 边界（§1）：engine 只做执行原语（帧采样、fps/loop、完成/帧事件、协程等待）；
+// 边界：engine 只做执行原语（帧采样、fps/loop、完成/帧事件、协程等待）；
 // 触发/切换/应用归 game；播放器不绘制、不持有/绑定 game 对象。
 //
 // AnimationSet：只读动画集。scene 内嵌 animations 在 load 期已校验并解析为
-// detail::AnimationData（见 5.2 §2.6b / 5.4 §2，私有 scene_impl.hpp）；
+// detail::AnimationData（私有 scene_impl.hpp）；
 // AnimationSet 是它的 const 视图：存活期 = 所属 asset，公共面只读查询。
 // AnimationPlayer：非拥有绑定 `const AnimationSet*`（失效访问 = 安全 no-op，
 // 播放器记录绑定有效性，不崩溃）。
 //
-// 协程等待（§5）：`player.done()` 可 co_await；同一完成事件至多一个等待协程
-// （single_consumer，5.1 §5.2）；宿主（asset/player/manager）必须先于协程
+// 协程等待：`player.done()` 可 co_await；同一完成事件至多一个等待协程
+// （single_consumer）；宿主（asset/player/manager）必须先于协程
 // 销毁，或先 stop()/取消使等待即时完成——由 game（spawn_task 属 game 侧辅助）保证。
 
 #include <cstdint>   // std::uint64_t
@@ -26,7 +26,7 @@
 
 namespace tg {
 
-// ── 动画数据模型：私有（detail），见 5.2/5.4 的解析结构 ──
+// ── 动画数据模型：私有（detail） ──
 namespace detail {
 struct AnimData;   // 定义于私有 scene_impl.hpp（含 frames/textures/clips）
 struct AnimClip;   // 同上
@@ -38,7 +38,7 @@ class AnimationSet {
 public:
     AnimationSet() = default;  // 空集（无效绑定源）
 
-    // 名 = 所属 entity 的 id（plan-10：entity→动画集映射）；空视图为空串
+    // 名 = 所属 entity 的 id（entity→动画集映射）；空视图为空串
     std::string_view name() const;
 
     int clip_count() const;
@@ -80,7 +80,7 @@ public:
 
     bool valid() const { return set_ != nullptr; }  // 是否已绑定动画集
     bool playing() const;
-    // 暂停查询（对称 playing()；plan-11）：pause/resume 后调用方凭它决定下一次
+    // 暂停查询（对称 playing()）：pause/resume 后调用方凭它决定下一次
     // toggle，避免 game 侧自持 bool 与 play() 清暂停产生状态漂移（单一事实源）
     bool paused() const { return paused_; }
     double time() const { return time_; }
@@ -98,7 +98,7 @@ public:
     // 帧事件（可选，默认空）：进入新帧时触发（索引=帧号）。
     // 注意：advance() 触发 on_frame/on_finish 后仍继续本拍剩余逻辑，
     // 回调内改播放器状态（play/seek/stop）可能非直观 —— 推荐回调只做
-    // 应用/通知，播放状态切换放在 advance() 返回后（门禁 M2 附带收口）。
+    // 应用/通知，播放状态切换放在 advance() 返回后。
     void on_frame(std::function<void(int)> cb) { on_frame_ = std::move(cb); }
     // 完成事件：非 loop 播完触发一次
     void on_finish(std::function<void()> cb) { on_finish_ = std::move(cb); }

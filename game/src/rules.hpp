@@ -1,15 +1,15 @@
-// rules.hpp —— 里程碑 9：RuleEngine 最小子集（docs/plan-9.md §3.4；game 层）。
+// rules.hpp —— RuleEngine 最小子集（game 层）。
 //
 // 对齐原版 trogue-orign/src/core/rule_engine.lua 的事件驱动管线，最小子集：
 //   1 能力（punch）+ 1 效果（damage_physical 固定值）+ 冷却 + 死亡。
 //
-// 管线**严格按原版顺序**（plan-9 §2.5，审查 M1 修正点）：
+// 管线**严格按原版顺序**：
 //   AbilityUse → 校验（失败仅 AbilityUseFailed）→ 设冷却（仅 >0 才记）
 //   → DamageRequest → (handler) DamageDealt → EntityDied
 //   → 最后 AbilityUsed（仅成功）——wire 上 DamageDealt 先于 AbilityUsed。
 //   TurnEnded（对外事件，priority 100）→ 全体冷却 -1（下限 0）。
 //
-// 最小子集差异（plan-9 §2.5 逐条声明）：省略 learned/passive/cost 检查；
+// 最小子集差异：省略 learned/passive/cost 检查；
 // 射程校验（chebyshev ≤ range）为 C++ 加固；载荷字段为自有设计（与
 // events 注册表统一）；死亡 = 延迟销毁标记（enemy → pending_despawn，
 // player → GameOver 相位），由 game_core 收尾统一处理。
@@ -46,7 +46,7 @@ public:
     // 单测：同作用域局部对象）。热重载只换 asset 不换 gs 对象，无需重绑。
     void bind(GameState& gs, EventBus& bus);
 
-    // 能力存在且冷却为 0（plan-9 §3.4：punch 冷却恒 0，结构为后续能力预留）
+    // 能力存在且冷却为 0（punch 冷却恒 0，结构为后续能力预留）
     bool can_use(const Actor& a, const std::string& ability) const;
 
     // 完整 tryUseAbility（供 AbilityUse handler 与单测直接驱动）。

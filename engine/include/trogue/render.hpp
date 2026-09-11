@@ -1,11 +1,11 @@
 #pragma once
-// render.hpp —— 显式渲染原语与贴图资源（plan-5.3 §2/§3）。
+// render.hpp —— 显式渲染原语与贴图资源。
 //
 // 原则：engine 只绘制 tile 层与调用方显式传入的 sprite/色块；无隐式实体遍历、
 // 无自动 y-sort、无 descriptor 自动绘制。全部绘制调用在调用方的
 // BeginMode2D(camera)...EndMode2D() 区间内执行；engine 不调用这两个函数、
 // 不接收 camera（调用方已设置好变换）。资源生命周期：绘制期间 asset 必须
-// 存活；asset swap/销毁只在窗口绘制帧外（plan-5.3 §6）。
+// 存活；asset swap/销毁只在窗口绘制帧外。
 
 #include <cstdint>  // std::uint64_t
 

@@ -1,7 +1,7 @@
-// anim_viewer.cpp —— 动画查看器（plan-11）：引擎帧动画触发/切换的最小交互验证台。
+// anim_viewer.cpp —— 动画查看器：引擎帧动画触发/切换的最小交互验证台。
 //
-// 边界：engine 只做动画「执行原语」，触发/切换决策归 game 层（AGENTS.md
-// 「引擎公共 API 边界」）——本工具即 game 层消费者：
+// 边界：engine 只做动画「执行原语」，触发/切换决策归 game 层——本工具即
+// game 层消费者：
 //   - 任意键 → 播放/暂停切换（同帧多键只切一次，防奇偶抵消；ESC 为 raylib
 //     默认退出键，循环条件先行退出，不参与切换）
 //   - 鼠标左键 → clip 按资产枚举序轮转（暂停中点击 = 切换并恢复播放——
@@ -27,7 +27,7 @@
 
 namespace {
 
-// ── 缺省值（plan-11 §4.1） ──
+// ── 缺省值 ──
 constexpr int kDefaultPort = 48765;  // 与 demo 48764 可并存
 constexpr int kDefaultZoom = 3;
 constexpr int kWindowW = 960, kWindowH = 540;
@@ -48,7 +48,7 @@ struct Viewer {
     tg::Ipc ipc;
 };
 
-// ── 动作函数（键鼠与 IPC 的唯一逻辑入口，plan-11 §4.2） ──
+// ── 动作函数（键鼠与 IPC 的唯一逻辑入口） ──
 
 void toggle_pause(Viewer& v) {
     if (v.anim.paused()) {
@@ -70,7 +70,7 @@ void play_clip(Viewer& v, int index) {
 
 void next_clip(Viewer& v) {
     const int n = v.set.clip_count();
-    if (n <= 0) return;  // 无动画场景防模零（plan-11 §4.2 nit1：不崩目标）
+    if (n <= 0) return;  // 无动画场景防模零（不崩目标）
     play_clip(v, (v.clip_index + 1 + n) % n);
 }
 
@@ -177,7 +177,7 @@ int main(int argc, char** argv) {
     InitWindow(kWindowW, kWindowH, "[trogue] anim viewer");
     SetTargetFPS(60);
 
-    // ── 场景加载（单场景，无热重载——plan-11 §4.4） ──
+    // ── 场景加载（单场景，无热重载） ──
     auto loaded = tg::SceneAsset::load(scene_path);
     if (!loaded) {
         TraceLog(LOG_ERROR, "[viewer] 场景加载失败: %s",
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
     v.asset = std::make_unique<tg::SceneAsset>(std::move(*loaded));
     if (v.asset->entity_count() > 0) v.ent = v.asset->entity(0);
 
-    // 动画绑定（plan-11 §4.1）：set 0，play("idle") fallback 第一个 clip
+    // 动画绑定：set 0，play("idle") fallback 第一个 clip
     // （与 demo reload 语义一致）；无动画集 → 仅静态展示，交互 no-op 不崩
     if (v.asset->animation_set_count() > 0) {
         v.set = v.asset->animation_set(0);
@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
         const float dt = GetFrameTime();
         v.ipc.poll();
 
-        // ── 输入 → 动作（plan-11 §4.2）：任意键 toggle 一次（drain 全队列，
+        // ── 输入 → 动作：任意键 toggle 一次（drain 全队列，
         // 同帧多键防奇偶抵消）；ESC 由 raylib 默认退出键走 WindowShouldClose，
         // 不参与切换 ──
         bool any_key = false;
@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
         BeginDrawing();
         ClearBackground(BLACK);
 
-        // 相机：target 世界原点 + zoom N（plan-11 §4.1 已知假设：士兵视觉中心
+        // 相机：target 世界原点 + zoom N（已知假设：士兵视觉中心
         // 恰为原点；POINT 过滤整数倍 = 最近邻无损放大）
         BeginMode2D(Camera2D{{kWindowW / 2.0f, kWindowH / 2.0f},
                              {0.0f, 0.0f},

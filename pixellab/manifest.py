@@ -1,4 +1,4 @@
-"""manifest.py —— 来源 manifest 读写（upsert，plan-13 §5.2）。
+"""manifest.py —— 来源 manifest 读写（upsert）。
 
 assets/pixellab_manifest.json：按 (源类型, 源 id) upsert，重跑不产生重复条目。
 字段：source_type / source_id / download_urls / outputs / sha256 / imported_at。

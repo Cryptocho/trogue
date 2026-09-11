@@ -1,4 +1,4 @@
-// nav.hpp —— 里程碑 9：导航原语（纯函数，无窗口可测；docs/plan-9.md §3.2）。
+// nav.hpp —— 导航原语（纯函数，无窗口可测）。
 //
 // 对齐原版 trogue-orign/src/core/coordinates.lua + systems/ai.lua：
 //   - chebyshevDistance / hasLineOfSight（Bresenham，两端点均不判定遮挡）
@@ -29,8 +29,8 @@ bool has_line_of_sight(int x1, int y1, int x2, int y2,
 //   - 实体阻挡经 blocked_by_actor 注入（敌人互挡、玩家格不挡——对齐原版
 //     「blocking 只查 Solid/Actor，而 player 原型无 Actor」的语义）；
 //   - 斜切约束 = 地形 + 战斗实体（注入的 blocked_by_actor；coin 等惰性实体
-//     不参与——比 M6 try_move 的「地形 + 全部实体」窄，与原版 A* 仅地形的
-//     差异见 plan-9 §2.4，有意取舍）；
+//     不参与——比 try_move 的「地形 + 全部实体」窄，与原版 A* 仅地形的
+//     差异为有意取舍）；
 //   - 启发 = chebyshev，对角步代价 1.414，pop 迭代上限 1000（同原版）。
 std::optional<TilePos> astar_step(
     const GameState& gs, TilePos from, TilePos goal,

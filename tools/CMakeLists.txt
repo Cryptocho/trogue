@@ -1,10 +1,10 @@
 # tools/ —— 无窗口测试与 consumer smoke（仅当 TROGUE_BUILD_CONSUMER_SMOKES
-# AND BUILD_TESTING 时由顶层 CMakeLists 加入；plan-5.1 §7.2）。
+# AND BUILD_TESTING 时由顶层 CMakeLists 加入）。
 #
 # 测试目标分工：
 #   - 含私有 detail 访问的单测（schema 解析、seam）链接 trogue_engine_test，
 #     并 include engine/src/（trogue_engine_test 的接口本来就传播私有 include）。
-#   - 纯公共 API 的消费者验证链接生产 trogue_engine（consumer smoke，5.6 起）。
+#   - 纯公共 API 的消费者验证链接生产 trogue_engine（consumer smoke）。
 # 所有测试 working directory = ${CMAKE_SOURCE_DIR}（资产路径相对项目根约定）。
 
 # 单测需要构造/解析 JSON：复用系统的 nlohmann_json 包（与 engine 相同的查找回退）
@@ -40,7 +40,7 @@ add_test(NAME scene_query_test COMMAND trogue_scene_query_test)
 set_tests_properties(scene_query_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# ── render 三段计数 seam 单测（plan-5.3 §8） ──
+# ── render 三段计数 seam 单测 ──
 add_executable(trogue_render_test tests/render_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_render_test PRIVATE trogue_engine_test
                                                  ${TROGUE_TOOLS_NLOHMANN})
@@ -50,7 +50,7 @@ add_test(NAME render_test COMMAND trogue_render_test)
 set_tests_properties(render_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# ── 动画/Tween 虚拟时钟单测（plan-5.4 §8；链接生产库即可，纯公共 API） ──
+# ── 动画/Tween 虚拟时钟单测（链接生产库即可，纯公共 API） ──
 add_executable(trogue_anim_tween_test tests/anim_tween_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_anim_tween_test PRIVATE trogue_engine
                                                      ${TROGUE_TOOLS_NLOHMANN})
@@ -58,7 +58,7 @@ add_test(NAME anim_tween_test COMMAND trogue_anim_tween_test)
 set_tests_properties(anim_tween_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# ── terrain 匹配表/选择器单测（plan-12 §7；纯公共 API，链接生产库） ──
+# ── terrain 匹配表/选择器单测（纯公共 API，链接生产库） ──
 add_executable(trogue_terrain_test tests/terrain_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_terrain_test PRIVATE trogue_engine
                                                  ${TROGUE_TOOLS_NLOHMANN})
@@ -66,7 +66,7 @@ add_test(NAME terrain_test COMMAND trogue_terrain_test)
 set_tests_properties(terrain_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# ── pixellab 映射单测（plan-13 §7；无网络 Python 单测包一层 ctest） ──
+# ── pixellab 映射单测（无网络 Python 单测包一层 ctest） ──
 add_test(NAME pixellab_mapping_test
     COMMAND python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/pixellab/tests
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/pixellab)
@@ -74,13 +74,13 @@ add_test(NAME pixellab_mapping_test
 set_tests_properties(pixellab_mapping_test PROPERTIES
     ENVIRONMENT "TROGUE_SCENE_GEN=$<TARGET_FILE:trogue_scene_gen>")
 
-# ── scene_gen 离线场景生成 CLI（plan-13 §5.1；数据流 C 机制半，复用 pick_tile） ──
+# ── scene_gen 离线场景生成 CLI（数据流 C 机制半，复用 pick_tile） ──
 add_executable(trogue_scene_gen scene_gen.cpp)
 target_link_libraries(trogue_scene_gen PRIVATE trogue_engine
                                               ${TROGUE_TOOLS_NLOHMANN})
 # 无窗口纯离线工具；不注册 ctest（E2E 由 pixellab/ 侧驱动）
 
-# ── Watcher 分类纯函数 + Release 桩 + Ipc 集成（plan-5.5 §4） ──
+# ── Watcher 分类纯函数 + Release 桩 + Ipc 集成 ──
 add_executable(trogue_watcher_ipc_test tests/watcher_ipc_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_watcher_ipc_test PRIVATE trogue_engine
                                                      ${TROGUE_TOOLS_NLOHMANN})
@@ -91,7 +91,7 @@ add_test(NAME watcher_ipc_test COMMAND trogue_watcher_ipc_test)
 set_tests_properties(watcher_ipc_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# ── Ipc 事件通道单测（plan-7 §6；双分支同 watcher_ipc_test 先例） ──
+# ── Ipc 事件通道单测（双分支同 watcher_ipc_test 先例） ──
 add_executable(trogue_ipc_test tests/ipc_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_ipc_test PRIVATE trogue_engine
                                               ${TROGUE_TOOLS_NLOHMANN})
@@ -99,7 +99,7 @@ add_test(NAME ipc_test COMMAND trogue_ipc_test)
 set_tests_properties(ipc_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# ── consumer smoke（plan-5.6 §2；无窗口、链接生产 trogue_engine） ──
+# ── consumer smoke（无窗口、链接生产 trogue_engine） ──
 # 纯公共 API 面（trogue.hpp）的两种对象模型消费验证：证明引擎与使用者模型无关。
 add_executable(trogue_oop_client_smoke tests/oop_client_smoke.cpp tests/test_util.hpp)
 target_link_libraries(trogue_oop_client_smoke PRIVATE trogue_engine
@@ -114,7 +114,7 @@ target_link_libraries(trogue_ecs_client_smoke PRIVATE trogue_engine
 add_test(NAME ecs_client_smoke COMMAND trogue_ecs_client_smoke)
 set_tests_properties(ecs_client_smoke PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-# ── game_core 无窗口单测（plan-6 §4.d；plan-9 §3.7 扩 AI/规则/导航） ──
+# ── game_core 无窗口单测（扩 AI/规则/导航） ──
 # 直接编译 tools/tests/game_core_test.cpp + game/src/{game_core,nav,rules,ai}.cpp；
 # 顶层顺序 engine → tools → game 不影响源路径解析；门控同既有工具测试。
 add_executable(trogue_game_core_test tests/game_core_test.cpp tests/test_util.hpp

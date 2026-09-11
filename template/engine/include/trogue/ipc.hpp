@@ -1,6 +1,5 @@
 #pragma once
-// ipc.hpp —— 无 world 的 JSON-lines 传输、事件通道与 callback 分发
-// （plan-5.5 §1/§2、plan-7）。
+// ipc.hpp —— 无 world 的 JSON-lines 传输、事件通道与 callback 分发。
 //
 // engine 只做传输、事件通道与 callback 分发，**不拥有任何业务命令语义**（传输层
 // 保留命令：`ping` 与 `subscribe`/`unsubscribe`/`connections`——订阅表为传输层
@@ -10,7 +9,7 @@
 // handler 内 data 只在其调用期有效；engine 在包络后释放。handler 捕获 game
 // 状态；不可保存 request 引用跨调用。
 //
-// 事件通道（plan-7）：game 调用 publish() 向订阅连接直写一行
+// 事件通道：game 调用 publish() 向订阅连接直写一行
 // `{"ok":true,"event":E,"data":D}`（判别式：响应永远不含顶层 event 键）。仅主线程
 // 调用（与 poll 同域，单线程无锁）。**断开即订阅清零**——对端关闭/写失败/主动
 // disconnect 三条路径统一走 close_slot。慢消费者（停止读取）写遇 EAGAIN 即被断开
@@ -28,7 +27,7 @@
 #include <string_view>
 #include <vector>
 
-#include <nlohmann/json.hpp>  // 类型别名（仅本头需要；plan-5.1 §5.1）
+#include <nlohmann/json.hpp>  // 类型别名（仅本头需要）
 
 namespace tg {
 
@@ -44,13 +43,13 @@ using IpcHandler = std::function<IpcStatus(
     const std::string& cmd, const Json& request, std::optional<Json>& data,
     std::string& error)>;
 
-// 订阅记录快照（值类型，plan-7 §3.4）。
+// 订阅记录快照（值类型）。
 struct IpcSubscription {
     std::string event;
     Json filter;  // null = 无过滤（wire 上省略 filter 键，引擎内 null↔省略 双向
                   // 转换）；否则 object——对事件 data 顶层字段做 JSON 等值匹配
                   // （多键 AND、缺键不匹配、数字按数值相等），engine 不识任何
-                  // 键的语义（plan-7 §3.2）
+                  // 键的语义
 };
 
 // 连接快照（值类型）。
@@ -82,7 +81,7 @@ public:
     // 每帧：accept 到 EAGAIN → 轮询 active 连接（读→处理→写响应）。
     void poll();
 
-    // ── 事件通道（plan-7；仅主线程调用，与 poll/tick 同域） ──
+    // ── 事件通道（仅主线程调用，与 poll/tick 同域） ──
 
     // 向订阅了 event 的连接广播一行 {"ok":true,"event":E,"data":D}（非阻塞直写；
     // 收件人 = 存在「同名且无 filter 或 filter 匹配 data」记录的连接）。

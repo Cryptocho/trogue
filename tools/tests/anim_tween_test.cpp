@@ -1,4 +1,4 @@
-// anim_tween_test.cpp —— 动画播放器与 Tween 虚拟时钟单测（plan-5.4 §8）。
+// anim_tween_test.cpp —— 动画播放器与 Tween 虚拟时钟单测。
 //
 // 无窗口、纯逻辑（不触 GPU）：给定 fps/loop/速度/seek 推进 → 帧索引序列正确；
 // on_frame 在新帧触发一次；非 loop 播完 on_finish + done；Tween 缓动/延迟/
@@ -21,7 +21,7 @@ using tg::TweenSpec;
 
 // ── 内联动画集场景（模拟 asset 内数据） ──
 // 三 clip：two（fps=2、2 帧、非 loop）；loop3（fps=1、3 帧、loop）；
-// empty（0 帧、非 loop —— 空帧 clip，schema 允许载入，播放视为即时完成，M1）
+// empty（0 帧、非 loop —— 空帧 clip，schema 允许载入，播放视为即时完成）
 const SceneAsset& inline_asset() {
     static SceneAsset asset = [] {
         static int seq = 0;
@@ -51,7 +51,7 @@ const SceneAsset& inline_asset() {
     return asset;
 }
 
-// ── 空帧 clip：播放即时完成（门禁 M1 回归：不得永不结束 / done 挂死） ──
+// ── 空帧 clip：播放即时完成（回归：不得永不结束 / done 挂死） ──
 bool test_player_empty_clip() {
     bool ok = true;
     const SceneAsset& asset = inline_asset();
@@ -257,7 +257,7 @@ bool test_tween_cancel_wait() {
     CHECK(w2.done());
 
     // 生命周期：manager 销毁后已完成补间的 done 信号不悬垂（shared_ptr 持份）
-    // （5.1 §5.2「宿主存活期标志」；ASan 下验证无 UAF）
+    // （「宿主存活期标志」；ASan 下验证无 UAF）
     std::unique_ptr<TweenManager> m4 = std::make_unique<TweenManager>();
     TweenSpec spec4; spec4.duration = 1.0;
     const auto id4 = m4->add_float(0, 1, spec4,
@@ -270,7 +270,7 @@ bool test_tween_cancel_wait() {
     return ok;
 }
 
-// ── Tween 回调内再入 manager 安全（门禁 M2 回归：两阶段 tick 不失效迭代器） ──
+// ── Tween 回调内再入 manager 安全（回归：两阶段 tick 不失效迭代器） ──
 // on_update 里 add 新补间 + cancel_all：两阶段收集后统一执行，tick 不 UB。
 bool test_tween_reentrant_callbacks() {
     bool ok = true;
@@ -308,7 +308,7 @@ bool test_tween_reentrant_callbacks() {
     return ok;
 }
 
-// ── 暂停查询与冻结语义（plan-11 §4.5：viewer 的 toggle 依赖 paused() 单一事实源） ──
+// ── 暂停查询与冻结语义（viewer 的 toggle 依赖 paused() 单一事实源） ──
 bool test_player_pause() {
     bool ok = true;
     const SceneAsset& asset = inline_asset();

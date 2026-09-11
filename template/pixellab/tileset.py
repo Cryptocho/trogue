@@ -1,4 +1,4 @@
-"""tileset.py —— Wang 4×4 sheet → tro-tileset v2（plan-13 §5.2 B）。
+"""tileset.py —— Wang 4×4 sheet → tro-tileset v2。
 
 sheet 本身即 atlas（不重切片）：texture + col/row 直接引用，columns=4 rows=4。
 每 tile 按 mapping 三要素写 terrain_sets[0]（corners mode）+ 4 角 peering_bits
@@ -21,7 +21,7 @@ def build(meta: dict, name: str, lower: str, upper: str) -> dict:
     if len(ts) != 16:
         raise ValueError(
             f"{name}: 本期仅支持 16-tile 4×4 集（实际 {len(ts)}；"
-            "25-tile transition_size=1.0 不在范围，plan-13 §5.4）")
+            "25-tile transition_size=1.0 不在范围）")
     size = meta["tile_size"]
     tw, th = size["width"], size["height"]
     if (tw, th) not in ((16, 16), (32, 32)):

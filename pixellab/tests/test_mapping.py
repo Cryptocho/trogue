@@ -1,4 +1,4 @@
-"""test_mapping.py —— 映射三要素单测（fixture 实测表，plan-13 §5.3）。"""
+"""test_mapping.py —— 映射三要素单测（fixture 实测表）。"""
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import unittest

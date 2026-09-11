@@ -1,4 +1,4 @@
-// ecs_client_smoke.cpp —— 极简 ECS 风格 consumer smoke（plan-5.6 §2）。
+// ecs_client_smoke.cpp —— 极简 ECS 风格 consumer smoke。
 //
 // 目的：用与 oop_client_smoke 完全同一套 engine 公共 API（trogue.hpp），
 // 以组件-系统风格消费资产，证明 engine 与使用者对象模型无关：

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pxlab.py —— PixelLab → tro-* 转换 CLI（plan-13 §5.1）。
+"""pxlab.py —— PixelLab → tro-* 转换 CLI。
 
 子命令：
   import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle]

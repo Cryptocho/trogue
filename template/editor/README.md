@@ -1,12 +1,12 @@
 # trogue 编辑器使用指南（scene_exporter v4）
 
 用 Godot 4.7 画关卡，一键导出成引擎资产（tro-scene v2（含 bare）/ tro-tileset v2 / tro-animations v1 JSON），引擎端自动热重载。
-字段级权威定义见仓库根 `AGENTS.md`「资产规范：tro-scene v2.1」，本文件只讲怎么操作。
+字段级权威定义见引擎侧的 tro-scene / tro-tileset / tro-animations schema，本文件只讲怎么操作。
 
 ## 插件入口
 
 - 菜单：`Project > Tools > Export tro-tileset...` / `Export tro-animations...`
-- headless（Agent / 批处理，在仓库根 `trogue/` 下执行）：
+- headless（Agent / 批处理，在项目根目录执行）：
   ```bash
   # 首次或资源变更后先导入
   godot --headless --path editor --import
@@ -28,7 +28,7 @@
 
 1. 新建 TileSet 资源并**保存为 .tres 文件**（内联在场景里的无法导出），tile size 16×16。
 2. 每张贴图加一个 TileSetAtlasSource。
-3. 地板想 autotile：给该 source 配 terrain set（匹配边/角），然后用**地形画笔**画图——Godot 会把选好的变体烘进每个 cell，引擎直接使用，无需运行时 autotile。peering_bits 会被透传（供以后动态改图）。
+3. 地板想 autotile：给该 source 配 terrain set（匹配边/角），然后用**地形画笔**画图——Godot 会把选好的变体烘进每个 cell，引擎直接使用，无需运行时 autotile。peering_bits 会被透传，供引擎的 autotile 选择器（程序生成/动态改图）使用。
 4. 树/大覆盖物：加 TileSetScenesCollectionSource，添加场景模板。参考现成的 `assets/tree.tscn`：根为 Sprite2D（AtlasTexture 取 region + offset），子级 Area2D + RectangleShape2D 定碰撞足印。
 5. custom_data 随意加，会透传（引擎暂不消费）。
 
@@ -38,7 +38,7 @@
 - 每层一个 **TileMapLayer**；需要碰撞的层加 metadata `solid = true`。
 - 实体：Node2D 派生节点（Marker2D / Sprite2D / **AnimatedSprite2D** 都行），**节点名 = 实体 id**。
 - 实体贴图：实体自身或子节点挂 Sprite2D（AtlasTexture 的 region 若恰为一格 tile，自动走图集引用；否则独立贴图）。
-- **动画实体**：实体节点或子节点挂 **AnimatedSprite2D**（SpriteFrames 每个动画的帧建议用 AtlasTexture 序列帧）。导出时 `sprite` = 默认动画首帧（引擎立即可渲染静态画面），`animations` = 完整帧表（fps/loop 透传，引擎暂不播放，属玩法移植阶段）。
+- **动画实体**：实体节点或子节点挂 **AnimatedSprite2D**（SpriteFrames 每个动画的帧建议用 AtlasTexture 序列帧）。导出时 `sprite` = 默认动画首帧（引擎立即可渲染静态画面），`animations` = 完整帧表（fps/loop 透传，由引擎内置动画播放器消费）。
 - 纯实体场景（没有 TileMapLayer 也没关系）：直接导出，产物为 bare 场景（无 tilesets/palette/层），引擎正常载入。
 - 建议每种贴图一个 TileMapLayer（导出约束见下）。
 
@@ -60,7 +60,7 @@
 ## 导出后验证
 
 ```bash
-./build/bin/trogue --scene assets/scenes/xxx.json   # 从仓库根运行，直接看画面
+./build/bin/trogue --scene assets/scenes/xxx.json   # 从项目根目录运行，直接看画面
 ```
 
 运行中按 F12 截图，或用 IPC（`python3 tools/ipc_smoke.py` 先冒烟）。改 Godot → 重导出 → 引擎 150ms 内热重载，无需重启。

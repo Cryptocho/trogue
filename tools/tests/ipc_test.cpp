@@ -1,10 +1,10 @@
-// ipc_test.cpp —— tg::Ipc 事件通道单测（plan-7 §6）。
+// ipc_test.cpp —— tg::Ipc 事件通道单测。
 // Debug：进程内真实 loopback——订阅/退订全量集语义、参数校验、publish 分流、
 //        filter 匹配（含缺键/数值提升/空 object）、handler 内 publish 先于响应、
 //        事件超限断开、慢消费者断开、disconnect/断开清订阅、conn_id 单调、
 //        无 handler 时保留命令可用。
 // Release：桩行为（valid==false / publish/disconnect no-op / connections 空）。
-// helper 与端口策略沿用 watcher_ipc_test.cpp 模式（plan-7 §3.6 双分支先例）。
+// helper 与端口策略沿用 watcher_ipc_test.cpp 模式（双分支先例）。
 #include <cstdio>
 #include <string>
 
@@ -90,7 +90,7 @@ bool send_line(int fd, const std::string& line) {
     return send(fd, s.data(), s.size(), 0) == static_cast<ssize_t>(s.size());
 }
 
-// 对端已关闭且无数据 → recv 返回 0（plan-7 §3.7：残行 + EOF 契约的 EOF 侧）。
+// 对端已关闭且无数据 → recv 返回 0（残行 + EOF 契约的 EOF 侧）。
 bool recv_eof(int fd, int timeout_ms = 3000) {
     struct timeval tv{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
     (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
@@ -276,7 +276,7 @@ bool test_filter_routing() {
     return ok;
 }
 
-// ── handler 内 publish：事件行先于响应行（plan-7 §3.3 时序契约） ──
+// ── handler 内 publish：事件行先于响应行（时序契约） ──
 bool test_publish_ordering() {
     bool ok = true;
     const int port = next_port();
@@ -377,7 +377,7 @@ bool test_slow_consumer() {
 
     const std::string blob(60000, 'x');
     bool gone = false;
-    for (int i = 0; i < 200 && !gone; ++i) {  // 上界 ~12MB ≥ 4MB 预算（plan-7 §6）
+    for (int i = 0; i < 200 && !gone; ++i) {  // 上界 ~12MB ≥ 4MB 预算
         ipc.publish("flood", tg::Json{{"blob", blob}});
         gone = true;
         for (const auto& c : ipc.connections()) {

@@ -1,12 +1,12 @@
 #pragma once
 // terrain.hpp —— tro-tileset terrain 匹配表（TerrainTable）与 tile 选择器
-// （pick_tile，plan-12）。
+// （pick_tile）。
 //
 // 边界（复刻 animation.hpp 句式）：engine 只做机制采样——按 tileset 已标注的
 // peering_bits 规则把「地形 pattern」映射为 tile id（无状态纯函数）；地形指派、
 // 程序生成、触发归 game。engine 不保存地形状态、不做扩散式重排。
 //
-// 匹配语义对齐 Godot（查证 reference/godot-4.7.2-stable）：
+// 匹配语义对齐 Godot：
 //   - 评分 = Σ_{合法方向位}[tile_bit != pattern_bit]，取最小分（Godot
 //     tile_map_layer.cpp _get_best_terrain_pattern_for_constraints 的单格无状态
 //     简化：约束全给出、priority 恒 1、无扩散/current 保持项）
@@ -45,7 +45,7 @@ enum class TerrainBit : int {
 inline constexpr int kTerrainBitCount = 8;
 
 // 该 mode 下参与匹配的方向位（sides=4 边 / corners=4 角 / corners_and_sides=8）。
-// 与 Godot is_valid_terrain_peering_bit_for_mode 语义一致（tile_set.h:483）。
+// 与 Godot is_valid_terrain_peering_bit_for_mode 语义一致。
 inline bool terrain_bit_valid(TerrainMode mode, TerrainBit bit) noexcept {
     const bool is_corner =
         bit == TerrainBit::top_left_corner || bit == TerrainBit::top_right_corner ||

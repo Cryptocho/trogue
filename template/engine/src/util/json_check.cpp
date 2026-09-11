@@ -1,4 +1,4 @@
-// util/json_check.cpp —— JSON 结构校验 detail 工具实现（plan-5.2 §2）。
+// util/json_check.cpp —— JSON 结构校验 detail 工具实现。
 #include "util/json_check.hpp"
 
 #include <cmath>    // std::isfinite / std::floor

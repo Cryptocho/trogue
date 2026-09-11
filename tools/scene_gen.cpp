@@ -1,9 +1,9 @@
-// scene_gen.cpp —— 离线场景生成 CLI（plan-13 §5.1，数据流 C 的机制半）。
+// scene_gen.cpp —— 离线场景生成 CLI（数据流 C 的机制半）。
 //
 // 输入：tro-tileset JSON（assets 相对路径）+ 顶点 pattern JSON（stdin 或文件，
 // 由 pixellab/scene.py 按 mapping.vertex_corners 产出）。
 // 输出：tro-scene v2 JSON（tiles 烤死）——落盘前用 tg::SceneAsset::load_json
-// 回读自检（可校验原则，plan-13 §5.1）。
+// 回读自检（可校验原则）。
 //
 // 顶点 pattern JSON 格式：
 //   {"tileset": "tilesets/pixellab/x.json", "w": W, "h": H,
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    // 机制采样：引擎匹配表 + 选择器（plan-12 边界——采样归 engine）
+    // 机制采样：引擎匹配表 + 选择器（采样归 engine）
     auto table = tg::load_terrain_table(tileset_path);
     if (!table) {
         std::fprintf(stderr, "scene_gen: terrain table 加载失败: %s\n",

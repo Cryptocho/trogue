@@ -1,15 +1,15 @@
 #pragma once
-// tween.hpp —— 数值/位置/颜色补间执行原语（plan-5.4 §4）。
+// tween.hpp —— 数值/位置/颜色补间执行原语。
 //
-// 边界（§1/§4）：值补间器，不持对象指针——描述 from→to、时长、延迟、缓动、
+// 边界：值补间器，不持对象指针——描述 from→to、时长、延迟、缓动、
 // 循环；每次采样把当前值交给回调，由 game 应用到自己的对象。engine 不把
 // Tween 与任何实体/系统耦合；触发、目标值与应用层归 game。
 //
-// 纪律（§4.2 / §5/§6）：无限循环补间须由 game 显式 cancel（勿在 on_complete
+// 纪律：无限循环补间须由 game 显式 cancel（勿在 on_complete
 // 泄漏）；`wait(id)` 只等「完成」一次（cancel/不存在/已完成 → 立即完成）；
 // 同一 wait(id) 事件至多一个等待协程（single_consumer）。宿主（manager）必须
 // 先于协程销毁，或先 cancel_all 使等待即时完成——done 信号用 shared_ptr 持有，
-// 使已取消后 resume 安全（5.1 §5.2 契约）。
+// 使已取消后 resume 安全（契约）。
 //
 // 实现（风格总纲无虚函数）：三种值类型各持一个独立表，id 共用自增空间；
 // 无继承/无类型擦除，tick 分别推进。
@@ -127,7 +127,7 @@ private:
     // 表推进核心（tick 的公共实现）：**两阶段**——先只推进/erase（不调用
     // 任何用户回调），把 update/complete/done 收集为延迟动作，循环结束后
     // 统一执行。否则用户回调内 add_*/cancel_all 再入会令正在迭代的 map
-    // 迭代器失效（UB，门禁 M2）。定义于 tween.cpp。
+    // 迭代器失效（UB）。定义于 tween.cpp。
     template <typename Value, typename Slot>
     void tick_map(std::unordered_map<Id, Slot>& slots, double dt);
 };

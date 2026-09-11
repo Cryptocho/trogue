@@ -1,7 +1,7 @@
-"""scene.py —— terrain 网格 → 顶点 pattern → scene_gen CLI → tro-scene（plan-13 §5.2 C）。
+"""scene.py —— terrain 网格 → 顶点 pattern → scene_gen CLI → tro-scene。
 
 地形指派/顶点采样归本模块（调用方角色）；bits→tile id 归 tools/scene_gen
-（engine pick_tile）。场景 tiles 烤死（plan-12 决策）。
+（engine pick_tile）。场景 tiles 烤死。
 """
 
 from __future__ import annotations

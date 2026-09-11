@@ -1,15 +1,15 @@
-// ipc.cpp —— JSON-lines 传输、事件通道与 callback 分发（plan-5.5 §2、plan-7）。
+// ipc.cpp —— JSON-lines 传输、事件通道与 callback 分发。
 //
-// 状态机（5.5 §2.1）：每 poll = accept 阶段（循环至 EAGAIN；新 fd 只写 hello 不
+// 状态机：每 poll = accept 阶段（循环至 EAGAIN；新 fd 只写 hello 不
 // recv；满 8 关闭；hello 失败关不占槽）→ 轮询阶段（固定 slot 序逐行处理）。
-// 行分帧（5.5 §2.2）：线上字节计数含 \r 上限 kIpcLineMax=\n 不算；剥 \r\n 再解析；
-// 发送只发 LF。请求（5.5 §2.3）：解析失败/非 object/缺 cmd → 固定 invalid request
-// 不关连接；传输层保留命令（ping + subscribe/unsubscribe/connections，plan-7）
+// 行分帧：线上字节计数含 \r 上限 kIpcLineMax=\n 不算；剥 \r\n 再解析；
+// 发送只发 LF。请求：解析失败/非 object/缺 cmd → 固定 invalid request
+// 不关连接；传输层保留命令（ping + subscribe/unsubscribe/connections）
 // 先于 handler 拦截、不可被 game 覆盖；其余交 handler（handled 必须置 object
 // data，否则 internal error；未注册/not_handled → command not handled）。
-// 响应序列化（5.5 §2.4）：构造→序列化→发送；行超限 → 换兜底错误行、**连接保持**
+// 响应序列化：构造→序列化→发送；行超限 → 换兜底错误行、**连接保持**
 // （仅兜底行自身仍超限才 close 不发字节，绝无半行）。
-// 事件通道（plan-7 §3.3）：publish 非阻塞直写订阅连接；事件行超限**无兜底行** →
+// 事件通道：publish 非阻塞直写订阅连接；事件行超限**无兜底行** →
 // 断开该事件全部 filter 匹配订阅者（发无 event 键的兜底行会破坏判别式，禁止）；
 // EAGAIN/写失败 → close_slot（慢消费者自愈）。断开即订阅清零：对端关闭/写失败/
 // 主动 disconnect 三条路径统一走 close_slot。
@@ -56,7 +56,7 @@ void set_nonblock(int fd) {
 
 // 完整写：EINTR 重试；EAGAIN 返回 1；其他错误 -1；完成 0。
 // 注意：部分写后遇 EAGAIN 时已进内核的字节不收回——对端将见「残行 + EOF」
-// （plan-7 §3.7 文档契约）。
+// （文档契约）。
 int write_full(int fd, const char* data, std::size_t len) {
     std::size_t off = 0;
     while (off < len) {
@@ -72,7 +72,7 @@ int write_full(int fd, const char* data, std::size_t len) {
     return 0;
 }
 
-// 序列化 + 发送（响应统一出站路径；5.5 §2.4）。失败（含 EAGAIN）→ false，
+// 序列化 + 发送（响应统一出站路径）。失败（含 EAGAIN）→ false，
 // 调用方关连。**超限语义（响应独有）**：换兜底错误行、连接保持——只有兜底行
 // 自身仍超限才 false（事件路径不经过这里，见 Ipc::publish 的分叉注释）。
 bool send_packet(int fd, const Json& obj) {
@@ -125,7 +125,7 @@ bool send_hello(int fd) {
 // ════════════════════ Ipc::Impl ════════════════════
 
 struct Ipc::Impl {
-    // 订阅记录：(事件名, filter)（plan-7 §3.2）；filter null = 无过滤。
+    // 订阅记录：(事件名, filter)；filter null = 无过滤。
     struct Sub {
         std::string event;
         Json filter;
@@ -133,7 +133,7 @@ struct Ipc::Impl {
 
     int listen_fd = -1;
     std::array<int, kMaxClients> conn;               // fd；-1 = 空闲
-    std::array<std::uint64_t, kMaxClients> conn_id;  // 连接身份；0 = 空闲（plan-7）
+    std::array<std::uint64_t, kMaxClients> conn_id;  // 连接身份；0 = 空闲
     std::array<std::string, kMaxClients> inbuf;
     std::array<std::vector<Sub>, kMaxClients> subs;  // 订阅表（按连接槽位）
     std::uint64_t next_conn_id = 0;                  // 单调递增，断开不复用
@@ -145,7 +145,7 @@ struct Ipc::Impl {
     }
 
     // 断开唯一出口：对端关闭/写失败/主动 disconnect 全走这里——订阅清零在此
-    // 单点收口（plan-7 §3.1「断开即订阅清零」）。
+    // 单点收口（「断开即订阅清零」）。
     void close_slot(int idx) {
         if (conn[idx] >= 0) ::close(conn[idx]);
         conn[idx] = -1;
@@ -162,7 +162,7 @@ struct Ipc::Impl {
 
 namespace {
 
-// ── 事件通道工具（plan-7）──
+// ── 事件通道工具 ──
 
 // 订阅集 → wire JSON（对象数组；无 filter 者省略 filter 键——null↔省略 双向转换）。
 Json subs_to_json(const std::vector<Ipc::Impl::Sub>& subs) {
@@ -177,7 +177,7 @@ Json subs_to_json(const std::vector<Ipc::Impl::Sub>& subs) {
 
 // filter 匹配：filter 逐键与 data 顶层等值（AND；空 object = AND 空集 = 恒真）。
 // 缺键 → 不匹配：探测必须用 find()——非 const operator[] 会向 data 插入 null 键，
-// 把「缺键不匹配」静默变成「null == null 匹配」并污染 data（plan-7 §3.2 钉死）。
+// 把「缺键不匹配」静默变成「null == null 匹配」并污染 data（契约钉死）。
 bool filter_match(const Json& filter, const Json& data) {
     for (auto it = filter.begin(); it != filter.end(); ++it) {
         const auto hit = data.find(it.key());
@@ -206,7 +206,7 @@ void send_err(Ipc::Impl& im, int idx, const char* msg) {
         im.close_slot(idx);
 }
 
-// events 数组校验（plan-7 §3.2）：bad = 缺失/非数组/元素非非空字符串；empty = 空数组。
+// events 数组校验：bad = 缺失/非数组/元素非非空字符串；empty = 空数组。
 enum class EventsArr { ok, bad, empty };
 EventsArr check_events_arr(const Json& req) {
     const auto it = req.find("events");
@@ -285,8 +285,8 @@ void handle_connections(Ipc::Impl& im, int idx) {
 
 // 处理一行（JSON 请求）→ 写响应；出错关闭槽。
 void handle_line(Ipc::Impl& im, int idx, const std::string& line) {
-    // fd 为快照：handler 内 publish 可能因写失败把**本连接** close_slot（plan-7
-    // §3.3 重入角落）。此时响应 send 以陈旧 fd 失败 → 末尾 close_slot(idx) 被
+    // fd 为快照：handler 内 publish 可能因写失败把**本连接** close_slot
+    // （重入角落）。此时响应 send 以陈旧 fd 失败 → 末尾 close_slot(idx) 被
     // 空槽守卫挡成 no-op——语义即「响应不再发出，对端见事件行/残行 + EOF」。
     // 该因果链由 service_slot 前后 conn[idx] 检查 + close_slot 守卫闭环，勿改。
     const int fd = im.conn[idx];
@@ -312,7 +312,7 @@ void handle_line(Ipc::Impl& im, int idx, const std::string& line) {
         return;
     }
 
-    // 订阅通道保留命令（plan-7）：先于 game handler——订阅表为传输层自有状态。
+    // 订阅通道保留命令：先于 game handler——订阅表为传输层自有状态。
     if (cmd == "subscribe") {
         handle_subscribe(im, idx, req);
         return;
@@ -334,7 +334,7 @@ void handle_line(Ipc::Impl& im, int idx, const std::string& line) {
     std::optional<Json> data;
     std::string error;
     IpcStatus st = IpcStatus::not_handled;
-    // handler 是 game 代码：异常不得穿透到主循环杀进程（5.1 §6 兜底纪律）。
+    // handler 是 game 代码：异常不得穿透到主循环杀进程（兜底纪律）。
     // 兜底回 internal error；连接保持，供后续请求继续服务。
     try {
         st = im.handler(cmd, req, data, error);
@@ -485,7 +485,7 @@ void Ipc::poll() {
     }
 }
 
-// ── 事件通道（plan-7 §3.3）──
+// ── 事件通道 ──
 
 void Ipc::publish(std::string_view event, const Json& data) {
     if (!impl_) return;  // 无效实例 no-op

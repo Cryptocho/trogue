@@ -9,7 +9,7 @@
       despawn/观测命令(query_entities/layers/solid_at/get_tile)/
       screenshot/reload(位置保留)/回合命令(turn/move/wait)/
       事件通道(subscribe/unsubscribe/connections/events 协议断言)/
-      游戏事件(plan-9: 注册表实表/hp-ai 快照/filter 单实体观测/GameOver 前的伤害)/quit。
+      游戏事件(注册表实表/hp-ai 快照/filter 单实体观测/GameOver 前的伤害)/quit。
 """
 
 import argparse
@@ -34,7 +34,7 @@ def check(name, cond, detail=""):
 
 
 class LineReader:
-    """持久行读取器：一次 recv 可能含多行，rest 必须留给下一次（plan-5.6 §3）。"""
+    """持久行读取器：一次 recv 可能含多行，rest 必须留给下一次。"""
 
     def __init__(self, sock):
         self.sock = sock
@@ -206,7 +206,7 @@ def main():
           f"{tc0+1} → {r['data']['turn_count']}")
 
     print("== 事件通道（tro-ipc v1.2 协议断言）==")
-    # 事件目录：plan-9 首批 6 个对外游戏事件实表（内部事件不登记）
+    # 事件目录：首批 6 个对外游戏事件实表（内部事件不登记）
     k_wire_events = {"StateChanged", "MoveSucceeded", "AbilityUsed",
                      "DamageDealt", "EntityDied", "TurnEnded"}
     r = rpc(cmd="events")
@@ -269,7 +269,7 @@ def main():
           r.get("ok") and len(r["data"]["connections"]) == 1
           and all(not c.get("events") for c in r["data"]["connections"]), r)
 
-    print("== 游戏事件（plan-9：EventBus → IPC 桥）==")
+    print("== 游戏事件（EventBus → IPC 桥）==")
 
     def drain(reader, count_max=64, timeout=0.4):
         """非阻塞收集一段时间内到达的事件行（超时即停；残行留在缓冲）。"""
@@ -324,7 +324,7 @@ def main():
               and m["data"].get("entity") == "player" for m in evs), kinds)
 
     # 连接 B：按字段订阅——{entity:goblin_1} 观测状态/移动/攻击，
-    # {target:player} 观测受伤（M7 同连接多 filter 并存 + 缺键不匹配反向验证）
+    # {target:player} 观测受伤（同连接多 filter 并存 + 缺键不匹配反向验证）
     b_sock = socket.create_connection(("127.0.0.1", args.port), timeout=5)
     b_reader = LineReader(b_sock)
     b_reader.next_line()  # hello

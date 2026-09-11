@@ -1,16 +1,16 @@
-// event_bus.hpp —— 里程碑 9：game 层进程内事件总线（docs/plan-9.md §3.1）。
+// event_bus.hpp —— game 层进程内事件总线。
 //
 // 对齐原版 trogue-orign/src/core/events.lua 的最小核心：
 //   - on(name, handler, priority) 返回订阅句柄，off(handle) 注销；
 //   - priority 越小越先执行，同优先级按注册序（稳定排序）；
 //   - dirty 标记：on/off O(1)，emit 时延迟重建有序表；
 //   - emit 先快照后调用：handler 内 on/off/emit 重入不迭代器失效
-//     （里程碑 5 tween 回调重入 UB 教训的直接应用）。
+//     （tween 回调重入 UB 教训的直接应用）。
 //
-// 与原版的差异（无消费者不做，docs/plan-9.md §7 遗留）：emitTo/emitToMany/child。
+// 与原版的差异（无消费者不做）：emitTo/emitToMany/child。
 // 纯逻辑零 IPC 依赖（桥接在 main 层完成），单线程主循环内使用，无锁。
 // 载荷 = tg::Json（与 IPC wire 同构，桥接零转换；顶层 entity/source/target =
-// 字符串 id，与 M7 subscribe filter「顶层字段等值匹配」口径直接兼容）。
+// 字符串 id，与 subscribe filter「顶层字段等值匹配」口径直接兼容）。
 
 #pragma once
 

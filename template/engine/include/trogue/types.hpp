@@ -1,12 +1,11 @@
 #pragma once
-// types.hpp —— 基础值类型与统一错误载体（plan-5.1 §3.2 / §6）。
+// types.hpp —— 基础值类型与统一错误载体。
 //
 // 值类型 = 纯数据（public 字段、无 getter/setter），可复制/移动，不持有资源；
-// 错误 = tl::expected<T, Error>（vendored，见 engine/CMakeLists.txt 的
-// third_party/tl-expected），公共 API 以 tg::ErrorOr<T> 返回可预期失败，
+// 错误 = tl::expected<T, Error>，公共 API 以 tg::ErrorOr<T> 返回可预期失败，
 // 不跨 API 抛裸异常（异常仅在调用约定被违反时用作程序错误信号，如 coro.hpp）。
 //
-// ErrorCode 是开放枚举：各分卷落地时按模块需要追加成员（追加不破坏现有代码）。
+// ErrorCode 是开放枚举：各模块按需要追加成员（追加不破坏现有代码）。
 
 #include <cstdint>   // std::uint8_t / std::uint32_t / std::uint64_t
 #include <string>
@@ -21,7 +20,7 @@ enum class ErrorCode {
     kInvalidArgument,    // 调用参数非法（越界/空指针/非法模式组合）
     kNotFound,           // 查询未命中（如 tile 查询无结果）
     kParseError,         // JSON/文本解析失败
-    kSchemaViolation,    // 资产格式/限额/组合规则拒绝（校验语义见 AGENTS「字段与语义规则」）
+    kSchemaViolation,    // 资产格式/限额/组合规则拒绝
     kIoError,            // 文件/套接字/inotify 等系统 I/O 失败
     kResourceExhausted,  // 资源耗尽（id 回绕、缓存上限等）
     kNotSupported,       // 平台/配置不支持（如非 Linux 的 watcher、Release 桩）
@@ -45,7 +44,7 @@ struct Error {
     }
 };
 
-// 公共别名（plan-5.1 §6）：不使用 std::expected（C++23 才有，本工程定 C++20）
+// 公共别名：不使用 std::expected（C++23 才有，本工程定 C++20）
 template <class T, class E>
 using expected = tl::expected<T, E>;
 
@@ -86,7 +85,7 @@ struct Color {
     }
 };
 
-// ════════════════════ 渲染结果（plan-5.3 §2） ════════════════════
+// ════════════════════ 渲染结果 ════════════════════
 
 // 绘制原语返回值：供无窗口测试与 game 调试观测；正常 game 通常忽略。
 enum class RenderResult {

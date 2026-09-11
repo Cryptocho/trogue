@@ -1,4 +1,4 @@
-// nav.cpp —— 里程碑 9：导航原语实现（docs/plan-9.md §3.2）。
+// nav.cpp —— 导航原语实现。
 //
 // A* 细节对齐原版 coordinates.lua:81-187：
 //   - 8 向邻接、启发 chebyshev、对角步代价 1.414、pop 上限 1000；

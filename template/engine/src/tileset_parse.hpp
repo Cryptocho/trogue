@@ -1,5 +1,5 @@
 #pragma once
-// tileset_parse.hpp —— tro-tileset 文档共享解析核心（plan-12 §4.1）。
+// tileset_parse.hpp —— tro-tileset 文档共享解析核心。
 // 场景 tileset 元数据（scene_asset.cpp load_tileset_meta）与 TerrainTable 加载
 //（terrain.cpp load_terrain_table）共用同一解析实现，杜绝两套解析漂移。
 // 本头仅 engine 内部可达（src/ 私有），不进公共面。
@@ -27,9 +27,9 @@ struct TilesetParsed {
 };
 
 // 解析 tro-tileset 文档：format/version/尺寸/texture/tiles/columns/terrain 全量
-// 校验（plan-12 §4.1——terrain 字段此前宽容路过，本期起解析 + 校验）。source 仅
-// 用于错误消息上下文（引用路径或注入名）。不读纹理文件；「与场景 tile 尺寸一致」
-// 检查是场景侧调用方职责（TerrainTable 无场景上下文）。
+// 校验（含 terrain 字段的解析 + 校验）。source 仅用于错误消息上下文（引用路径或
+// 注入名）。不读纹理文件；「与场景 tile 尺寸一致」检查是场景侧调用方职责
+//（TerrainTable 无场景上下文）。
 expected<TilesetParsed, Error> parse_tileset_document(const nlohmann::json& ts,
                                                       std::string_view source);
 

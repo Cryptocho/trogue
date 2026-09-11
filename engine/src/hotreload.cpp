@@ -1,4 +1,4 @@
-// hotreload.cpp —— Watcher 实现（plan-5.5 §3）。
+// hotreload.cpp —— Watcher 实现。
 //
 // Linux（TROGUE_DEBUG）：inotify 监听目录，150ms 防抖尾沿补触发；poll() 经
 // detail::classify_event_name 过滤合法 .json basename（裸名）。非 Linux /
@@ -28,7 +28,7 @@ namespace tg {
 
 namespace detail {
 
-// basename 分类纯函数（plan-5.5 §3.1；不依赖 inotify 类型，便于单测）。
+// basename 分类纯函数（不依赖 inotify 类型，便于单测）。
 // 输入 inotify 名称区字节（含尾部 NUL/padding）；输出合法 .json basename 或空。
 std::optional<std::string> classify_event_name(const char* zone, std::size_t len) {
     if (len == 0) return std::nullopt;

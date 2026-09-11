@@ -1,6 +1,6 @@
-// animation.cpp —— AnimationSet 只读视图 + AnimationPlayer 帧采样实现（plan-5.4 §3）。
+// animation.cpp —— AnimationSet 只读视图 + AnimationPlayer 帧采样实现。
 //
-// 帧采样语义（§3.2）：time_ 为 clip 起始时间累积（秒）；帧索引 =
+// 帧采样语义：time_ 为 clip 起始时间累积（秒）；帧索引 =
 // floor(time_ * fps)（速度倍率缩放后）；loop 回卷、非 loop 播完置 stopped 并
 // 触发 on_finish + done()。current_frame() 只产出视觉描述（texture/region/
 // offset/asset_id），不做任何绘制。帧事件：帧索引改变时触发 on_frame。
@@ -22,7 +22,7 @@ namespace tg {
 // ════════════════════ AnimationSet（只读视图） ════════════════════
 
 std::string_view AnimationSet::name() const {
-    // 动画集名 = 解析时记录的所属 entity id（plan-10：entity→动画集映射键）。
+    // 动画集名 = 解析时记录的所属 entity id（entity→动画集映射键）。
     return data_ ? std::string_view{data_->name} : std::string_view{};
 }
 
@@ -148,8 +148,8 @@ bool AnimationPlayer::advance(double dt_seconds) {
     if (dt_seconds < 0) dt_seconds = 0;
 
     // 空帧 clip（schema 允许载入）：无帧可播，播放时长 0 → 首拍即即时完成
-    // （plan-5.4 §2「空 frames 接受，播放视为即时完成」；否则非 loop 的
-    // cyc==0 永不满足完成条件 → 播放永不停、done() 永久挂起，见门禁 M1）。
+    // （空 frames 接受，播放视为即时完成；否则非 loop 的
+    // cyc==0 永不满足完成条件 → 播放永不停、done() 永久挂起）。
     if (c->frames.empty()) {
         playing_ = false;
         if (!finish_called_) {

@@ -1,5 +1,5 @@
 // watcher_ipc_test.cpp —— Watcher::classify_event_name 全分支单测 + Release 桩行为
-// + Debug Ipc 真实 socket 集成测试（plan-5.5 §4）。
+// + Debug Ipc 真实 socket 集成测试。
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>

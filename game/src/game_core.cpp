@@ -1,25 +1,25 @@
-// game_core.cpp —— 回合制核心实现（M6 闭环 + M9 敌 AI/战斗接入，plan-9 §3.3）。
+// game_core.cpp —— 回合制核心实现（闭环 + 敌 AI/战斗接入）。
 //
 // 碰撞语义对齐 trogue-orign（只读参考）：
 //   movement.lua onMoveAttempt：目标格地形 solid → 实体互斥 → 斜向切角约束；
 //   coordinates.lua canDiagonalMove：仅当两个相邻正交格都被阻挡时才禁止斜切。
 //
-// M9 语义（docs/plan-9.md）：
+// 移动与结算语义：
 //   - try_move：泛化移动裁决，成功 emit MoveSucceeded（bus 非空时）；
-//   - GameSystems 可空重载：完整敌方阶段（AI）vs M6 静止语义，单一代码路径；
+//   - GameSystems 可空重载：完整敌方阶段（AI）vs 静止语义，单一代码路径；
 //   - 收尾统一清除 pending_despawn（对齐原版延迟销毁 processDespawns）；
 //     GameOver 保持相位：不 +1 回合、不发 TurnEnded。
 
 #include "game_core.hpp"
 
-#include "trogue/animation.hpp"  // AnimationSet::name（entity→动画集映射，plan-10）
+#include "trogue/animation.hpp"  // AnimationSet::name（entity→动画集映射）
 
 #include "ai.hpp"      // AiSystem（resolve_enemy_turn 完整模式调用）
 #include "event_bus.hpp"
 
 namespace game {
 
-// ── 原型门控（plan-9 §3.3）：本里程碑战斗原型仅 goblin ──
+// ── 原型门控：战斗原型仅 goblin ──
 
 bool is_combat_archetype(std::string_view type) { return type == "goblin"; }
 
@@ -90,9 +90,9 @@ void import_scene(GameState& gs, const tg::SceneAsset& asset) {
     gs.actors.clear();
     gs.pending_despawn.clear();
 
-    // 地图边界：取第一个层的宽/高（本里程碑 forest 两层同尺寸）。
+    // 地图边界：取第一个层的宽/高（forest 两层同尺寸）。
     // 约束：层 origin 必须为 (0,0)（当前资产无 origin 偏移；若未来资产带负
-    // origin，网格换算需重做——见 docs/plan-6.md §2）。
+    // origin，网格换算需重做）。
     if (asset.layer_count() > 0) {
         const tg::LayerInfo& L = asset.layer(0);
         gs.map_w = L.width;
@@ -114,14 +114,14 @@ void import_scene(GameState& gs, const tg::SceneAsset& asset) {
         a.color = e.color;
         a.z = e.z;
         a.sprite = e.sprite;
-        // 动画集映射（plan-10 §3.1）：动画集名 = 所属 entity id；未命中 = -1
+        // 动画集映射：动画集名 = 所属 entity id；未命中 = -1
         for (int s = 0; s < asset.animation_set_count(); ++s) {
             if (asset.animation_set(s).name() == a.id) {
                 a.anim_set = s;
                 break;
             }
         }
-        // 原型门控（plan-9 §3.3）：player → hp 100；goblin → hp 25 + AI；
+        // 原型门控：player → hp 100；goblin → hp 25 + AI；
         // 其余惰性实体（coin 等）不参与战斗（对齐原版 ai.lua:41 只查 AIState）。
         if (a.is_player) {
             a.hp = Hp{kPlayerMaxHp, kPlayerMaxHp};
@@ -132,7 +132,7 @@ void import_scene(GameState& gs, const tg::SceneAsset& asset) {
         gs.actors.emplace(key, std::move(a));
     }
 
-    // 新场景：回合复位（plan §3.4：turn_count 初始 1，玩家回合）
+    // 新场景：回合复位（turn_count 初始 1，玩家回合）
     gs.phase = Phase::PlayerTurn;
     gs.turn_count = 1;
 }
@@ -145,7 +145,7 @@ bool tile_is_solid(const GameState& gs, int tx, int ty) {
 }
 
 bool tile_solid_terrain(const GameState& gs, int tx, int ty) {
-    // 界外/层矩形外 = 无数据 = 不阻挡（引擎原语义；plan-9 §2.3 视野用）。
+    // 界外/层矩形外 = 无数据 = 不阻挡（引擎原语义；视野用）。
     if (tx < 0 || ty < 0 || tx >= gs.map_w || ty >= gs.map_h) return false;
     if (!gs.asset) return false;
     // 引擎查询用像素：格中心点（尺寸一半）。仅 solid 判阻挡。
@@ -178,7 +178,7 @@ bool can_diagonal_move(const GameState& gs, int from_x, int from_y, int dx,
 
 ActionResult try_move(GameState& gs, EventBus* bus, const std::string& actor_id,
                       int dx, int dy) {
-    // 参数合法性：(0,0) 与越界 → Invalid（同 M6 player_move 首段校验）
+    // 参数合法性：(0,0) 与越界 → Invalid（同 player_move 首段校验）
     if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx == 0 && dy == 0))
         return ActionResult::Invalid;
     auto it = gs.actors.find(actor_id);
@@ -221,7 +221,7 @@ ActionResult finish_player_action(GameState& gs, const GameSystems* sys,
 
 }  // namespace
 
-// ── M6 兼容签名：敌方阶段 = 静止 + 回合 +1（无 AI、无事件） ──
+// ── 兼容签名：敌方阶段 = 静止 + 回合 +1（无 AI、无事件） ──
 
 ActionResult player_move(GameState& gs, int dx, int dy) {
     const Actor* p = gs.player();
@@ -235,7 +235,7 @@ ActionResult player_wait(GameState& gs) {
     return finish_player_action(gs, nullptr, ActionResult::Waited);
 }
 
-// ── GameSystems 版：完整敌方阶段（AI + 事件）；入口 phase 守卫（r2 N1） ──
+// ── GameSystems 版：完整敌方阶段（AI + 事件）；入口 phase 守卫 ──
 
 ActionResult player_move(GameState& gs, GameSystems& sys, int dx, int dy) {
     if (gs.phase != Phase::PlayerTurn) return ActionResult::Invalid;
@@ -264,7 +264,7 @@ void resolve_enemy_turn(GameState& gs, const GameSystems* sys) {
     for (const auto& id : gs.pending_despawn) gs.actors.erase(id);
     gs.pending_despawn.clear();
 
-    // GameOver：收尾不推进回合、不发 TurnEnded、保持相位（plan-9 §3.3 r2 M3）
+    // GameOver：收尾不推进回合、不发 TurnEnded、保持相位
     if (gs.phase == Phase::GameOver) return;
 
     gs.turn_count += 1;
