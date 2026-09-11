@@ -13,7 +13,7 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 ./build/bin/trogue            # 从项目根运行（资产按 CWD assets/ 约定读取）
 ```
 
-`new_project.sh` 会复制模板并剥离仅服务模板本体的文件（`scripts/`、`README.md`）。
+`new_project.sh` 复制模板并剥离仅服务模板本体的文件（`scripts/`、`README.md`），
 产出的项目保留 `AGENTS.md`（Agent 开发指南）与全部引擎/编辑器/资产管线。
 
 ## 目录
@@ -23,34 +23,33 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 | `engine/` | trogue 引擎静态库（C++20，依赖 raylib + nlohmann/json + tl::expected） | **快照**（勿手改） |
 | `editor/` | Godot 4.7 可选视觉标注/导出工程（scene_exporter v4） | **快照**（勿手改） |
 | `pixellab/` | PixelLab MCP → tro-* 资产转换层（Python） | **快照**（勿手改） |
-| `tools/` | 引擎级无窗口测试 + `ipc_smoke.py` + `scene_gen` | 混合（见下） |
+| `tools/` | 离线场景生成 CLI `scene_gen` + `ipc_smoke.py` | 见下 |
 | `game/` | **你的游戏**（起步骨架，随意改写） | 项目自有 |
-| `assets/` | 场景/图集/贴图（含引擎测试 fixture） | 项目自有 |
+| `assets/` | 你的资产（模板不含资产文件，按需自建） | 项目自有 |
 
-## 快照（vendored）与同步
+## 快照与同步
 
-`engine/`、`pixellab/`、`editor/`、`tools/` 的引擎级测试与 fixture 是**从 trogue
-仓库复制来的快照**。权威源是 trogue 仓库本身——**不要在本项目里手改这些文件**；
-上游更新后，在 trogue 仓库内重跑 `template/scripts/sync_from_source.sh` 刷新。
+`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp` 是**从 trogue 仓库复制来的
+快照**，权威源是 trogue 仓库——**不要在本项目里手改**；上游更新后，在 trogue 仓库内
+重跑 `template/scripts/sync_from_source.sh` 刷新。
 
 模板自有（可自由修改）：`CMakeLists.txt`、`.gitignore`、`tools/CMakeLists.txt`、
 `tools/ipc_smoke.py`、`game/**`、`assets/**`。
 
 ## 起步内容
 
-- `game/src/main.cpp`：窗口 + 场景渲染 + WASD 单格移动（引擎 TweenManager 驱动）
-  + 热重载 + IPC（`status`/`list_entities`/`get_entity`/`move`/`screenshot`/`quit`）。
-- `assets/scenes/starter.json`：20×15 palette 场景（四面墙 + 玩家 + 木箱）。
-- `assets/scenes/{demo,test,soldier_animated_sprite_2d}.json`、`tilesets/*`、
-  `textures/*`：**引擎测试 fixture**（`ctest` 需要，勿随意删除；删除会让引擎
-  单测变红）。你的游戏资产请另建文件。
+- `game/src/main.cpp`：窗口 + 场景渲染 + WASD 单格移动（引擎 TweenManager 驱动、
+  播完精确落格）+ 热重载 + IPC（`status`/`list_entities`/`get_entity`/`move`/
+  `screenshot`/`log`/`quit`）。
+- 内置起步场景：`game/src/main.cpp` 用 `tg::SceneAsset::load_json` **在内存里构造**一个
+  20×15 palette 场景（四面墙 + 玩家 + 木箱），因此模板**零资产文件**即可运行；要换成
+  磁盘场景，加 `assets/scenes/*.json` 并 `--scene` 指定（热重载随之启用）。
 
 ## 开发命令
 
 ```bash
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
-./build/bin/trogue [--scene assets/scenes/starter.json] [--port 48764]
-ctest --test-dir build --output-on-failure      # 引擎级测试
+./build/bin/trogue [--scene assets/scenes/xxx.json] [--port 48764]
 python3 tools/ipc_smoke.py                      # 游戏运行中时（DEBUG 构建）
 ```
 

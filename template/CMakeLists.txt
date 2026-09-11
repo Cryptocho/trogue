@@ -10,17 +10,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)            # clangd 自动使用
 # 引擎与游戏代码统一零告警基线
 add_compile_options(-Wall -Wextra -Wpedantic)
 
-# ── 测试与选项 ──
-include(CTest)                                   # 先于一切（BUILD_TESTING）
-option(TROGUE_BUILD_CONSUMER_SMOKES
-       "Build consumer smoke executables and no-window unit tests (requires BUILD_TESTING)" ON)
-option(TROGUE_DEBUG
-       "Debug tooling (ipc/watcher 桩化；Animation/Tween 为通用功能不桩化)" ON)
+# ── 选项：TROGUE_DEBUG 控制 IPC/热重载（Release 下桩化，API 形状不变） ──
+option(TROGUE_DEBUG "Enable debug IPC & hot-reload tooling" ON)
 
 add_subdirectory(engine)
-# 引擎级无窗口测试（tools/）；game 层测试由本游戏自行扩展（见 game/）
-if(TROGUE_BUILD_CONSUMER_SMOKES AND BUILD_TESTING
-   AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tools/CMakeLists.txt)
+
+# tools/：离线场景生成 CLI（pixellab 管线的 C 机制半，复用引擎 pick_tile）
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tools/CMakeLists.txt)
   add_subdirectory(tools)
 endif()
+
 add_subdirectory(game)

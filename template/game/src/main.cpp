@@ -1,28 +1,29 @@
 // main.cpp —— 起步游戏骨架（trogue 模板）。
 //
 // 这是新游戏的起点：一个能跑、能被 Agent 迭代的最小闭环——
-//   - 从 assets/scenes/starter.json 载入场景（tro-scene v2.1）；
+//   - 场景默认**在内存里构造**（tg::SceneAsset::load_json），零资产文件即可运行；
+//     传 `--scene <assets 相对路径>` 则改从磁盘加载，失败回退内置场景；
 //   - render_scene 画 tile 层，显式绘制 game 自己的对象（色块/贴图）；
 //   - WASD / 方向键 单格移动：地形 solid 用引擎 tile 查询裁决，视觉用引擎
 //     TweenManager 驱动、播完精确落格（避免浮点残差与像素抖动）；
-//   - Watcher 热重载 + F5（candidate load → 帧外 swap）；
+//   - 若存在 assets/scenes 目录则监听其 .json（热重载）+ F5 手动重载；
 //   - IPC（DEBUG）：status / list_entities / get_entity / move / screenshot /
-//     log / quit —— 非视觉 Agent 可据此观测与驱动物理游戏。
+//     log / quit —— 非视觉 Agent 可据此观测与驱动游戏。
 //
 // 只经 engine/include/trogue/*.hpp 公共头使用引擎；玩法（对象模型、输入、
 // 规则、AI、动画触发）都在本文件/本游戏内实现。把这里当成草稿纸，随游戏
 // 设计随意改写；引擎不需要动。
 //
-// 运行： ./build/bin/trogue [--scene assets/scenes/starter.json] [--port 48764]
+// 运行： ./build/bin/trogue [--scene assets/scenes/xxx.json] [--port 48764]
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 #include <raylib.h>
@@ -32,17 +33,81 @@
 
 namespace {
 
-constexpr int kTileSize = 16;      // 与 starter.json 的 tile 尺寸一致
+constexpr int kTileSize = 16;           // 场景 tile 尺寸
 constexpr float kMoveDuration = 0.12f;  // 单格移动动画时长（秒）
+
+// ── 内置起步场景（palette 模式，四面墙 + 玩家 + 木箱）──
+// 用 tg::Json 逐层构造，避免手写超长 tiles 数组；与磁盘 tro-scene 完全同构。
+constexpr int kMapW = 20, kMapH = 15;
+
+std::string builtin_scene_json() {
+    tg::Json ground = tg::Json::array();
+    tg::Json walls = tg::Json::array();
+    for (int y = 0; y < kMapH; ++y) {
+        for (int x = 0; x < kMapW; ++x) {
+            ground.push_back(0);
+            const bool edge = (x == 0 || y == 0 || x == kMapW - 1 || y == kMapH - 1);
+            walls.push_back(edge ? 1 : -1);
+        }
+    }
+    auto make_layer = [](const char* name, bool solid, const tg::Json& tiles) {
+        tg::Json l;
+        l["name"] = name;
+        l["width"] = kMapW;
+        l["height"] = kMapH;
+        l["solid"] = solid;
+        l["tiles"] = tiles;
+        return l;
+    };
+
+    tg::Json palette = tg::Json::array({"#2a2d3a", "#7f8ca3"});
+    tg::Json layers = tg::Json::array();
+    layers.push_back(make_layer("ground", false, ground));
+    layers.push_back(make_layer("walls", true, walls));
+
+    tg::Json tilemap;
+    tilemap["tile_width"] = kTileSize;
+    tilemap["tile_height"] = kTileSize;
+    tilemap["palette"] = palette;
+    tilemap["layers"] = layers;
+
+    auto make_entity = [](const char* id, const char* type, int gx, int gy,
+                          const char* color) {
+        tg::Json e;
+        e["id"] = id;
+        e["type"] = type;
+        e["x"] = gx * kTileSize;
+        e["y"] = gy * kTileSize;
+        e["w"] = kTileSize;
+        e["h"] = kTileSize;
+        e["color"] = color;
+        return e;
+    };
+    tg::Json entities = tg::Json::array();
+    entities.push_back(make_entity("player", "player", 10, 7, "#e94560"));
+    entities.push_back(make_entity("crate_1", "crate", 14, 7, "#8a6f4c"));
+
+    tg::Json meta;
+    meta["name"] = "builtin";
+    meta["background"] = "#101018";
+
+    tg::Json scene;
+    scene["format"] = "tro-scene";
+    scene["version"] = 2;
+    scene["meta"] = meta;
+    scene["tilemap"] = tilemap;
+    scene["entities"] = entities;
+    return scene.dump();
+}
 
 // ── game 自己的对象模型（引擎不认识它） ──
 struct Actor {
     std::string id;
     std::string type;
-    int gx = 0, gy = 0;                 // 逻辑格坐标
+    int gx = 0, gy = 0;  // 逻辑格坐标
     bool is_player = false;
     tg::Color color{255, 255, 255, 255};
-    tg::SpriteDesc sprite;              // 视觉快照（has==false → 画色块）
+    tg::SpriteDesc sprite;  // 视觉快照（has==false → 画色块）
 };
 
 // ── 应用状态 ──
@@ -65,7 +130,7 @@ struct Game {
     int port = tg::kIpcPortDefault;
 
     tg::Watcher watcher;
-    std::string scene_path = "assets/scenes/starter.json";
+    std::string scene_path;  // 空 = 用内置场景；否则磁盘路径
 
     bool shot_requested = false;
     std::string shot_path;
@@ -107,7 +172,6 @@ bool tile_blocked_terrain(const tg::SceneAsset& asset, int gx, int gy) {
            tg::TileQueryResult::solid;
 }
 
-// 目标格是否被其它 actor 占据
 bool tile_has_other(const Game& g, int gx, int gy, const std::string& self) {
     for (const auto& a : g.actors)
         if (a.id != self && a.gx == gx && a.gy == gy) return true;
@@ -119,8 +183,7 @@ bool try_move(Game& g, int dx, int dy) {
     Actor* p = nullptr;
     for (auto& a : g.actors)
         if (a.is_player) p = &a;
-    if (!p || g.asset == nullptr) return false;
-    if (dx == 0 && dy == 0) return false;
+    if (!p || !g.asset || (dx == 0 && dy == 0)) return false;
 
     const int nx = p->gx + dx;
     const int ny = p->gy + dy;
@@ -164,13 +227,30 @@ void init_player_view_if_needed(Game& g) {
     }
 }
 
-// ── 热重载：candidate load 成功才 swap（失败保留旧资产与旧对象） ──
-void reload_scene(Game& g, const std::string& path) {
-    auto loaded = tg::SceneAsset::load(path);
+bool dir_exists(const std::string& path) {
+    struct stat st{};
+    return ::stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+// ── 加载/换场景：candidate load 成功才 swap（失败保留旧场景） ──
+// path 为空（或用磁盘加载失败且当前无场景）→ 回退内置场景。
+void load_scene(Game& g, const std::string& path) {
+    tg::expected<tg::SceneAsset, tg::Error> loaded{tl::unexpected(
+        tg::Error{tg::ErrorCode::kInvalidArgument, "no scene path"})};
+    if (!path.empty()) {
+        loaded = tg::SceneAsset::load(path);
+        if (!loaded)
+            TraceLog(LOG_WARNING, "[game] 场景加载失败，回退内置场景: %s",
+                     loaded.error().message.c_str());
+    }
     if (!loaded) {
-        TraceLog(LOG_WARNING, "[game] 场景加载失败，保留旧场景: %s",
+        const std::string text = builtin_scene_json();
+        loaded = tg::SceneAsset::load_json(text, "<builtin>");
+    }
+    if (!loaded) {
+        TraceLog(LOG_ERROR, "[game] 内置场景解析失败: %s",
                  loaded.error().message.c_str());
-        return;
+        return;  // 保留旧场景
     }
     g.asset = std::make_unique<tg::SceneAsset>(std::move(*loaded));
     import_scene(g, *g.asset);
@@ -299,7 +379,7 @@ int main(int argc, char** argv) {
 
     InitWindow(g.window_w, g.window_h, "[trogue] game");
     SetTargetFPS(60);
-    reload_scene(g, g.scene_path);
+    load_scene(g, g.scene_path);
 
     g.ipc = tg::Ipc::create(static_cast<std::uint16_t>(g.port));
     if (g.ipc.valid()) {
@@ -312,9 +392,13 @@ int main(int argc, char** argv) {
         TraceLog(LOG_INFO, "[game] IPC 不可用（Release 桩/端口占用）");
     }
 
-    g.watcher = tg::Watcher::create("assets/scenes");
-    if (!g.watcher.valid())
-        TraceLog(LOG_INFO, "[game] watcher 不可用（非 Debug/非 Linux）");
+    // 热重载仅在存在资产目录时启用；无资产项目不建 watcher。
+    bool hot_reload = !g.scene_path.empty() && dir_exists("assets/scenes");
+    if (hot_reload) {
+        g.watcher = tg::Watcher::create("assets/scenes");
+        if (!g.watcher.valid())
+            TraceLog(LOG_INFO, "[game] watcher 不可用（非 Debug/非 Linux）");
+    }
 
     while (!WindowShouldClose() && !g.quit) {
         const float dt = GetFrameTime();
@@ -325,10 +409,10 @@ int main(int argc, char** argv) {
         if (g.watcher.valid()) {
             if (auto changed = g.watcher.poll()) {
                 TraceLog(LOG_INFO, "[game] watcher: %s → 重载", changed->c_str());
-                reload_scene(g, g.scene_path);
+                load_scene(g, g.scene_path);
             }
         }
-        if (IsKeyPressed(KEY_F5)) reload_scene(g, g.scene_path);
+        if (IsKeyPressed(KEY_F5)) load_scene(g, g.scene_path);
 
         // 输入 → 单格移动（4 向）
         int dx = 0, dy = 0;
@@ -363,7 +447,7 @@ int main(int argc, char** argv) {
                     tg::render_sprite(*g.asset, a->sprite, tg::Vec2{wx, wy},
                                       a->color) != tg::RenderResult::Invalid)
                     continue;
-                // 无贴图/贴图缺失 → 色块（浮点矩形，不做 int 截断）
+                // 无贴图/贴图缺失 → 色块（引擎 draw_rect 内部为浮点，不截断）
                 tg::draw_rect(tg::Rect{wx, wy, kTileSize, kTileSize}, a->color);
             }
         }

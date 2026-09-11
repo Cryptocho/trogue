@@ -4,22 +4,23 @@
 
 ### 项目模板（template/ → 派生新游戏项目）
 
-- 影响的文件: `template/`（新增：`README.md`、`AGENTS.md`、`.gitignore`、`CMakeLists.txt`、`scripts/new_project.sh`、`scripts/sync_from_source.sh`、`game/CMakeLists.txt`、`game/src/main.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`assets/scenes/starter.json`、vendored 快照 `engine/`/`pixellab/`/`editor/`/`tools/tests/` 与 fixture 资产）、`engine/src/render.cpp`、`engine/CMakeLists.txt`、`AGENTS.md`、`docs/plan-14.md`（新增）
+- 影响的文件: `template/`（新增：`README.md`、`AGENTS.md`、`.gitignore`、`CMakeLists.txt`、`scripts/new_project.sh`、`scripts/sync_from_source.sh`、`game/CMakeLists.txt`、`game/src/main.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`，及 vendored 快照 `engine/`/`pixellab/*.py`/`editor/`/`tools/scene_gen.cpp`）、`engine/src/render.cpp`、`engine/CMakeLists.txt`、`AGENTS.md`、`docs/plan-14.md`（新增）
 
 #### Added
-- 顶层 `template/`：自包含项目骨架（vendored `engine`/`pixellab`/`editor`/`tools` 快照 + 起步 `game` 骨架 + 引擎测试 fixture + 模板自有 `AGENTS.md`/`README.md`/`CMakeLists.txt`），复制即得到能构建、能运行、能被 Agent 迭代的新游戏起点
+- 顶层 `template/`：**最小**自包含项目骨架（vendored `engine`/`pixellab`/`editor`/`scene_gen` 快照 + 起步 `game` 骨架 + 模板自有 `AGENTS.md`/`README.md`/`CMakeLists.txt`/`tools/CMakeLists.txt`/`tools/ipc_smoke.py`），复制即得到能构建、能运行、能被 Agent 迭代的新游戏起点
+- 起步游戏**内置内存起步场景**（`game/src/main.cpp` 用 `tg::SceneAsset::load_json` 构造 palette 场景）：模板**零资产文件**即可运行；`--scene <assets 相对路径>` 可改从磁盘加载（存在 `assets/scenes` 时启用 watcher 热重载）
 - `template/scripts/new_project.sh`：派生独立项目（复制并按白名单剥离模板专属文件 `scripts/`/`README.md`，保留 `AGENTS.md`；拒绝覆盖已存在目标）
-- `template/scripts/sync_from_source.sh`：从本源仓库刷新 vendored 快照（整目录替换 engine/pixellab/editor + tools/fixture 显式文件清单；支持含空格文件名；永不触碰模板自有文件；幂等）
-- 起步游戏 `template/game/src/main.cpp`：窗口 + 场景渲染 + WASD 单格移动（引擎 `TweenManager` 驱动、播完精确落格）+ Watcher 热重载 + IPC（`status`/`list_entities`/`get_entity`/`move`/`screenshot`/`log`/`quit`）+ inspector 式 `transform` 快照
+- `template/scripts/sync_from_source.sh`：从本源仓库刷新 vendored 快照（engine/pixellab/editor 整目录替换 + tools 逐文件；永不触碰模板自有文件；幂等）
+- 起步游戏 IPC（`status`/`list_entities`/`get_entity`/`move`/`screenshot`/`log`/`quit`）+ inspector 式 `transform` 快照 + 引擎 `TweenManager` 驱动的单格移动（播完精确落格）
 - 模板 `AGENTS.md`：新项目 Agent 指南（引擎公共 API 边界、tro-* schema 精简表（声明权威源=本源仓库）、IPC 协议、调试工作流、PixelLab 管线、快照同步纪律）
-- 模板 `tools/CMakeLists.txt` 裁剪去 `trogue_game_core_test`（该目标编译 game/src 玩法模块）；模板 `tools/ipc_smoke.py` 为与起步游戏命令集匹配的精简版
+- 模板**不含**本仓库自身的测试套件与 fixture（`tools/tests/`、`pixellab/tests/`、`pixellab/fixtures/`）——它们只服务本仓库引擎验证（且 fixture 内含会过期的签名下载 URL），游戏项目另建自己的测试
 
 #### Bug Fixes
 - `engine/src/render.cpp`：`draw_rect` 改用浮点原语 `DrawRectanglePro`（原 `DrawRectangle(int)` 截断坐标，违背「数值精度纪律」——插值中的移动实体会产生 ±1px 错位与帧间抖动）
 - `engine/CMakeLists.txt`：raylib 安装前缀兜底注释去除发行版专属措辞（可移植化）
 
 #### Tests
-- 派生项目验证：`new_project.sh` 产出副本构建零告警、`ctest` 10/10 全绿、起服 + `tools/ipc_smoke.py` 10/10、截图视觉与像素色值验收一致、reload-中途移动无逻辑/视觉失步（`transform.visual == 逻辑格像素` 数值自证）
+- 派生项目验证：`new_project.sh` 产出副本构建零告警、起服 + `tools/ipc_smoke.py` 10/10、内置场景截图视觉与像素色值验收一致、`--scene` 磁盘场景路径可用
 
 ### PixelLab 资产管线（pixellab/ → tro-* 转换层）
 

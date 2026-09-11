@@ -16,12 +16,12 @@ project/
 ├── engine/            # trogue 引擎（C++20 静态库，快照，勿手改）
 ├── editor/            # Godot 4.7 可选视觉标注/导出工程（快照）
 ├── pixellab/          # PixelLab MCP → tro-* 转换层（Python，快照）
-├── tools/             # 引擎级 ctest + ipc_smoke.py + scene_gen
+├── tools/             # scene_gen（离线场景生成 CLI）+ ipc_smoke.py
 ├── game/              # 你的游戏（随意改写）
-└── assets/            # 场景/图集/贴图（引擎按 CWD assets/ 约定读取）
+└── assets/            # 你的资产（引擎按 CWD assets/ 约定读取）
 ```
 
-快照目录（`engine/`、`pixellab/`、`editor/`、`tools/tests/`）由上游同步，
+快照（`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp`）由上游同步，
 **不得手改**；要改引擎请改 trogue 仓库再同步。项目自有：`game/`、`assets/`、
 `CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`。
 
@@ -148,9 +148,10 @@ python3 pixellab/pxlab.py verify        # 复核产物 sha256
 1. 构建：`cmake --build build`
 2. 起服：`(./build/bin/trogue > /tmp/game_run.log 2>&1 &)`
 3. 冒烟：`python3 tools/ipc_smoke.py`
-4. 调试循环：`status`/`list_entities` 观测 → 改 `assets/scenes/*.json` → ~0.5s 后
-   `status.reloads` 自增即热重载生效 → `screenshot` 拿画面 →
-   `set_entity`/`spawn`（如果你实现了）做运行时实验。
+4. 调试循环：`status`/`list_entities` 观测 → 改场景（起步游戏默认是 `main.cpp` 里
+   的**内置内存场景**；若你加了 `assets/scenes/*.json` 并用 `--scene` 指定，则改
+   文件后 ~0.5s `status.reloads` 自增即热重载生效）→ `screenshot` 拿画面 →
+   实现 `spawn`/`set_entity` 等命令后可做运行时实验。
 5. 截图视觉验收：**read 工具可直接读图**并自行下结论；项目外路径（如 `/tmp`）先
    拷进项目内可读路径再读（用完即删）。辅以**数值自证**（Python 像素比对、IPC
    快照的 transform 视图）——亚像素残差/截断肉眼易漏，机器判定优先。
@@ -162,12 +163,11 @@ python3 pixellab/pxlab.py verify        # 复核产物 sha256
 
 ## 测试
 
-- `ctest --test-dir build`：引擎级无窗口测试（schema/查询/渲染/动画/tween/terrain/
-  watcher/ipc/consumer smoke）。这些测试依赖 `assets/` 里的 **fixture 资产**
-  （`demo.json`/`test.json`/`soldier_animated_sprite_2d.json`/`tilesets/*`），勿删。
-- 你的游戏逻辑：把纯逻辑（输入/规则/AI/状态机）写成**无 raylib 依赖**的模块，
-  在 `game/CMakeLists.txt` 里编进一个无窗口测试目标（文件内有示例注释）。这样
-  逻辑可被 ctest 覆盖，表现层靠截图+数值验收。
+- 把游戏的纯逻辑（输入/规则/AI/状态机）写成**无 raylib 依赖**的模块，在
+  `game/CMakeLists.txt` 里编进一个无窗口测试目标（文件内有示例注释），用
+  `ctest` 覆盖；表现层靠截图 + 数值（IPC 快照）验收。
+- 表现层「静止时位置 == 逻辑坐标」这类不变量，可由 IPC 快照的 `transform` 视图
+  数值自证——亚像素残差/截断肉眼易漏，机器判定优先。
 
 ## 引擎构建依赖
 

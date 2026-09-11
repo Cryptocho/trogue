@@ -4,6 +4,9 @@
 - 日期：2026-09-11
 - 前置：里程碑 5~13 已落地（C++ 引擎 / 回合制 / 事件通道 / AI+规则 / 帧动画 / 查看器 / autotile / PixelLab 管线）
 
+
+> **实施修订（2026-09-11）**：模板收敛为**最小起点**——不再携带本仓库自身的测试套件（`tools/tests/`）与 `pixellab/fixtures/`（它们是本仓库验证引擎自用，且 fixture 含会过期的签名下载 URL）。模板目标为「用 trogue 从零开发新游戏」的最小可运行骨架：vendored `engine`/`pixellab`/`editor`/`scene_gen` + 起步 `game`（**内置内存场景，零资产文件**）+ 模板自有 `AGENTS.md`/`README.md`/CMake 与 `ipc_smoke.py`；模板亦不含 `assets/`。下方 §4/§5 的 fixture 清单与「保留引擎测试」决策作废，以本条为准。
+
 ## 1. 目的
 
 让「用 trogue 引擎从零自主开发一个游戏」成为一条**可复制**的路径：仓库新增顶层 `template/`，包含 `engine` / `editor` / `pixellab` / `game` 起步代码 / `tools` / 顶层 `CMakeLists.txt`。使用者（或 Agent）复制它即得到一个**能构建、能运行、能被 Agent 迭代**的项目骨架。随后用一个全新项目验证「Agent 完整自主开发一个游戏」是否可行，并暴露改进点。
