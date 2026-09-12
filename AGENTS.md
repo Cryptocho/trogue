@@ -167,6 +167,9 @@
 > - **确定性随机原语**（`trogue/random.hpp`）：`tg::hash_u64`/`tg::hash_combine`（splitmix64 坐标哈希自由函数）+ `tg::Random`（xoshiro256** 种子化流式 PRNG，可复制值类型：`next_u64`/`next_int` 闭区间无模偏差/`next_double`/`next_bool`/`pick`/`shuffle`）。算法与常量在头文件注释中**钉死为可复现契约**（同 seed 同调用序列跨平台逐位一致，不依赖 std:: 随机设施；替换算法属破坏性变更）；前置条件违反（`next_int` lo>hi、`pick` 空容器）= 程序错误、不设断言（与 `layer(i)` 契约注释 + 直接索引同策略，避免 NDEBUG 行为分叉）。**生成策略（何用、阈值、分布形状）归 game**；不提供全局随机源、概率分布对象（无消费方，可用原语组合）。
 > - **固定步长累加器不进引擎（2026-09-13 裁定）**：仓库内零消费方，按「需求驱动、不预先纳入」纪律移交「动态运动与物理能力评估」主线的时间步进评估。
 
+> **2026-09-13 新增（里程碑 19）**：
+> - **贴图缓存失效**（`render.hpp`）：`tg::reload_texture(path)`——进程级独立贴图缓存的失效原语：卸载已缓存贴图 + 清失败哨兵，下次绘制该路径重读盘（失败哨兵清除后恢复「每路径首失败记一次日志」语义）。合法路径恒返回 true（契约 =「确保下次重读盘」，不报告缓存状态）；合法路径不触碰 `RenderStats` 计数，仅非法路径 +1 `param_failures`（Agent 可用「失效后绘制 → `texture_attempts` 增长」佐证重载发生）。图集贴图随 asset RAII（换资产即自然重载）不在范围；**失效时机与文件监听策略归 game**（`tg::Watcher` 仍只监听 .json，「改 png 自动失效」是策略组合，不内置）。
+
 > `world.c`/`TgWorld`/`TgEntity`/`tg_*` 等历史 C API 已在 **里程碑 5（2026-09-07）** 整体删除/迁移到 `game/`（见「文档有效性与历史实现降级」），引擎不再拥有这些类型；不得再以兼容名义把它们引回 engine。
 
 ### 文档有效性与历史实现降级
@@ -201,7 +204,7 @@ trogue/
 │   └── addons/scene_exporter/  # 导出插件 v4（菜单 + headless，v2.1 schema + 动画）
 ├── docs/                  # 里程碑计划书（plan-<M>.md，开工前闭环送审）+ 历史归档 history.md
 ├── tools/
-│   ├── ipc_smoke.py       # IPC 冒烟测试（61 项断言）
+│   ├── ipc_smoke.py       # IPC 冒烟测试（74 项断言）
 │   ├── scene_gen.cpp      # 离线场景生成 CLI（pixellab 管线数据流 C 机制半，复用 pick_tile）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── pixellab/              # PixelLab MCP → tro-* 转换层（上游资产管线，与 editor/ 平级；见「PixelLab 资产管线」）
@@ -450,6 +453,7 @@ python3 tools/ipc_smoke.py
 | `get_tile` | `x` `y`（像素） | `{tiles:[{layer,value}]（仅非空格）, solid}` |
 | `probe_collide` | `a`/`b`（各 `[x,y]`，给则出 segment）；`rect`（`[x,y,w,h]`）+`delta`（`[dx,dy]`，给则出 sweep）；至少给一组 | `{segment?:{result,layer,tx,ty,t,point}, sweep?:{box,blocked_x,blocked_y,result}}`（`result` ∈ solid/clear/error；验证静态几何原语的 Agent 探针） |
 | `reload` | — | `{reloaded:true, reloads:N}` |
+| `reload_texture` | `path`（必填字符串，assets 相对路径） | `{reloaded:true, path}`（进程内独立贴图缓存失效，下次绘制重读盘；路径不安全 → 错误包络；图集贴图随 asset RAII 不在此列——改 png 后 Agent 无需重启进程） |
 | `genmap` | `seed` 必填 int；`w`/`h` 可选（缺省 40，∈[1,64]） | `{generated:true, seed, w, h, nonempty, reloads}`（程序生成地图：game 噪声指派 → pick_tile → load_json → swap；同 seed 同尺寸逐位一致，plan-12 §4.5；生成后 watcher/F5/reload 会以 scene_path 覆盖之——预期行为） |
 | `screenshot` | `path?`（缺省 `screenshot_<时间戳>.png`） | `{path, ok, w, h, bytes}`；**同步**——响应返回时文件已落盘（game 层离屏 FBO 渲染完整帧，不依赖屏幕缓冲；`--headless` 下同样可用） |
 | `log` | `msg` | `{logged:true}`（打印进引擎日志） |
@@ -494,7 +498,7 @@ python3 tools/ipc_smoke.py
 
 0. **文件工具纪律（2026-09-09 拍板，多次踩坑教训）**：修改任何文件前必须先用 **read 工具**读它——禁止用 bash（`cat`/`head`/`sed -n` 等）代替读取。edit/write 工具以 read 工具的读取记录为准：未经 read 读过或读后文件已变更（含自己经 bash 改动过），edit/write 一律拒绝（「edit requires reading first」「file changed since it was read」）。已多次因此报错中断，此为硬性前置步骤。
 1. 起服：`cmake --build build && (./build/bin/trogue > /tmp/trogue_run.log 2>&1 &)`
-2. 冒烟：`python3 tools/ipc_smoke.py`（44 项断言全过为基线；plan-9 起为 61 项）
+2. 冒烟：`python3 tools/ipc_smoke.py`（74 项断言全过为基线）
 3. 调试循环：`status`/`list_entities` 观测 → 改 `assets/scenes/*.json` → 0.5s 后 `status.reloads` 自增即为生效 → `screenshot` 拿画面 → `set_entity`/`spawn` 做运行时实验
 4. 收尾：`{"cmd":"quit"}` 让引擎干净退出
 5. 日志在 stdout（TraceLog 格式），解析失败原因可在其中检索 `[scene]`
@@ -603,7 +607,7 @@ python3 tools/ipc_smoke.py
 - [x] **PixelLab 资产 skill/管线改进（2026-09-12）**：API v2 spritesheet ZIP 导入（统一 cell + layout JSON）与逐帧 URL 双路径、角色帧下载并发上限 8、rotation/animation clip 命名冲突检查、tileset metadata 的 16-tile/尺寸/bounding-box 校验、`check-grid` 网格判据命令、manifest sha256 产物验收；全局 `pixellab-mcp` skill 同步 MCP/v2 双路径与成本/验收规则
 - [x] **通用原语补齐·确定性随机原语（2026-09-13 完成）**：engine `random.hpp`——`tg::hash_u64`/`hash_combine`（splitmix64 坐标哈希）+ `tg::Random`（xoshiro256**，算法钉死为可复现契约：`next_u64`/`next_int` 闭区间无模偏差/`next_double`/`next_bool`/`pick`/`shuffle`）；两消费方切换（game AI 的 `std::mt19937`→`tg::Random`、demo `genmap` 手写 `gen_hash`→引擎哈希）；`tools/tests/random_test.cpp`（黄金序列 + 独立参考实现第二来源对照冻结）+ `ipc_smoke.py` genmap 确定性断言（计划 `docs/plan-18.md` 两轮审查通过并落地）
 - [ ] **固定步长累加器（原 P1 后半，移交主线）**：仓库内零消费方，按「需求驱动、不预先纳入」纪律并入「动态运动与物理能力评估」主线的时间步进评估；届时定义 advance(dt) → 整步数 + 插值 alpha 的原语形态（插值与否由 game 决定）
-- [ ] **独立贴图缓存失效 API（P2，2026-09-13 拍板）**：`reload_texture(path)` 或 `flush_textures()`——当前进程级贴图缓存只增不减、无失效口子，Agent 改 png 必须重启进程，与场景 JSON 秒级热重载不对称；修 Agent「改→跑→观察→再改」迭代闭环上最疼的断层
+- [x] **独立贴图缓存失效 API（2026-09-13 完成）**：`tg::reload_texture(path)`——进程级独立贴图缓存的失效原语（卸载 + 清失败哨兵，下次绘制重读盘；合法路径恒 true、不触碰 RenderStats 计数，仅非法路径 +1 `param_failures`；图集贴图随 asset RAII 不在范围）；demo IPC `reload_texture` 探针命令 + demo.json `tex_probe` 独立贴图实体；失效时机与文件监听策略仍归 game（计划 `docs/plan-19.md` 两轮审查通过并落地）
 - [ ] **单格 tile 写入（P3，2026-09-13 拍板）**：`set_tile_at`/小区域填充（`update_layer_tiles` 的窄化变体，不新增语义边界）——当前整层原子替换使「挖一格墙」需取整层数组改一格再写回（O(n) 工效税）；破坏地形、逐帧生成地形（falling-sand 类）游戏的刚需
 - [ ] **API 语义文档收尾（P4，零 API 增量，2026-09-13 拍板）**：① tween-as-timer idiom（`add_float(0,0,{duration,delay}, 忽略采样, on_complete)` + `co_await wait(id)` 串演出序列）文档化；② `TweenSpec.repeats` 补写正值语义与无限循环下 `on_complete` 是否逐轮触发；③ `render_sprite` 翻转语义（文档化负 scale 行为或加显式 flip）；④ 模板/指南并列展示多种消费方式（OOP 与 ECS 各一个最小例），把「引擎不规定架构」从声明变成可见事实（缓解示范引力）
 

@@ -74,7 +74,7 @@ bool test_import_and_query() {
     CHECK(asset.tile_width() == 16);
     CHECK(asset.tile_height() == 16);
     CHECK(asset.layer_count() == 2);
-    CHECK(asset.entity_count() == 6);
+    CHECK(asset.entity_count() == 7);  // 含 tex_probe（独立贴图探针实体）
 
     // 层信息快照：walls 层 solid、palette（tileset_index<0、tileset_name 空）
     const auto& walls = asset.layer(1);
@@ -89,7 +89,7 @@ bool test_import_and_query() {
     actors.reserve(asset.entity_count());
     for (int i = 0; i < asset.entity_count(); ++i)
         actors.push_back(Actor::from_descriptor(asset.entity(i)));
-    CHECK(actors.size() == 6);
+    CHECK(actors.size() == 7);
     CHECK(actors[0].id == "player");
     CHECK(actors[0].type == "player");
     CHECK(actors[0].x == 48.0f);  // demo: player x=48

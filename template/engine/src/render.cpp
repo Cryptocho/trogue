@@ -8,7 +8,8 @@
 //
 // 贴图生命周期：tileset 图集贴图随 asset RAII（SceneImpl::atlas_textures
 // 槽位，本文件实现 SceneImpl::~SceneImpl 释放）；独立贴图（sprite/动画帧）
-// 进程级共享懒缓存（path → shared_ptr），shutdown_render() 统一释放。
+// 进程级共享懒缓存（path → shared_ptr），reload_texture() 显式失效单条、
+// shutdown_render() 统一释放。
 #include "trogue/render.hpp"
 
 #include <cmath>     // std::floor
@@ -307,6 +308,19 @@ RenderResult draw_rect(Rect world_rect, Color color) {
                                  world_rect.h},
                      ::Vector2{0.0f, 0.0f}, 0.0f, to_raylib(color));
     return RenderResult::Drawn;
+}
+
+bool reload_texture(std::string_view texture_path) {
+    if (texture_path.empty() || !detail::is_safe_relative_path(texture_path)) {
+        ++g_render_stats.param_failures;
+        // 固定文案（不回显路径——路径 grammar 不拒绝控制字符，回显可伪造日志行）
+        TraceLog(LOG_ERROR, "[render] reload_texture 路径不安全");
+        return false;
+    }
+    const std::string path(texture_path);
+    g_texture_cache.erase(path);   // shared_ptr 析构 → UnloadTexture（若为最后引用）
+    g_texture_failed.erase(path);  // 清哨兵：下次绘制重试加载（恢复每路径首失败日志语义）
+    return true;
 }
 
 void shutdown_render() {

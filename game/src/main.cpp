@@ -625,7 +625,8 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         static const char* cmds[] = {
             "ping", "help", "status", "list_entities", "get_entity",
             "query_entities", "set_entity", "spawn", "despawn",
-            "layers", "solid_at", "get_tile", "probe_collide", "reload", "screenshot",
+            "layers", "solid_at", "get_tile", "probe_collide", "reload",
+            "reload_texture", "screenshot",
             "log", "quit", "turn", "move", "wait", "genmap",
             "subscribe", "unsubscribe", "connections", "events",
         };
@@ -957,6 +958,24 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         data = tg::Json::object();
         (*data)["reloaded"] = true;
         (*data)["reloads"] = d.reloads;
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "reload_texture") {
+        // 贴图缓存失效探针：Agent 改 png 后无需重启进程即可让下一帧重读盘。
+        // 命令要么生效要么报错（引擎返回 false = 路径不安全 → 错误包络），
+        // 不返回「软失败」——与 move 的 blocked 结果语义分离。
+        if (!req.contains("path") || !req["path"].is_string()) {
+            error = "reload_texture needs string path";
+            return tg::IpcStatus::error;
+        }
+        const std::string path = req["path"].get<std::string>();
+        if (!tg::reload_texture(path)) {
+            error = "reload_texture rejected unsafe path: " + path;
+            return tg::IpcStatus::error;
+        }
+        data = tg::Json::object();
+        (*data)["reloaded"] = true;
+        (*data)["path"] = path;
         return tg::IpcStatus::handled;
     }
     if (cmd == "screenshot") {

@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### 引擎：独立贴图缓存失效（reload_texture）
+
+- 影响的文件: `engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-19.md`
+
+#### Added
+- 新增 `tg::reload_texture(path)`：进程级独立贴图缓存的失效原语——卸载已缓存贴图并清除失败哨兵，下次绘制该路径重读盘（失败哨兵清除后恢复「每路径首失败记一次日志」语义）。合法路径恒返回 true（契约 =「确保下次重读盘」，不报告缓存状态）；合法路径不触碰 `RenderStats` 计数，仅非法路径 +1 `param_failures`。图集贴图随 asset RAII 不在范围；失效时机与文件监听策略归 game。
+- demo 新增 IPC 命令 `reload_texture`（`path` 必填；路径不安全 → 错误包络，不返回软失败）并登记 `help`；demo.json 新增 `tex_probe` 独立贴图实体（`textures/goblin.png`），冒烟与人工验证走真实缓存路径。
+
+#### Tests
+- `render_test` 新增无窗口契约用例：合法路径 stats 完全不变、非法路径仅 `param_failures` 增。
+- `ipc_smoke.py` 新增 4 项断言（合法路径生效/不安全路径拒绝/缺 path 报错/help 登记），基线 70 → 74 项。
+- consumer smoke 实体数基线 6 → 7（demo.json 新增实体）。
+- 人工 E2E：替换贴图 → 进程内失效 → 截图确认下一帧重读盘渲染新内容 → 还原，全程无崩溃、无僵尸纹理。
+- Debug + Release 构建零告警；CTest 15/15 通过；模板快照同步且独立副本构建通过。
+
+#### Documentation
+- AGENTS.md：IPC 命令表新增 `reload_texture` 行；引擎公共 API 边界追加里程碑 19 块；Roadmap P2 勾选；订正冒烟断言基线计数（61/44 → 74）。
+
 ### 引擎：确定性随机原语（坐标哈希 + 种子化流式 PRNG）
 
 - 影响的文件: `engine/include/trogue/random.hpp`、`engine/src/random.cpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/random_test.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/ai.hpp`、`game/src/ai.cpp`、`game/src/main.cpp`、`template/engine/`、`AGENTS.md`、`docs/plan-18.md`

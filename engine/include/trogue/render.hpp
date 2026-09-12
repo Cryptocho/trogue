@@ -56,9 +56,23 @@ struct RenderStats {
 RenderStats render_stats();
 void render_reset_stats();  // 归零（测试/长跑分段观测）
 
+// 使独立贴图缓存中的指定条目失效：卸载已缓存贴图并清除失败哨兵，下次
+// 绘制该路径时从磁盘重新加载。仅作用于进程级独立贴图缓存（sprite/动画帧）；
+// 图集贴图随 asset RAII（换资产即自然重载），不在作用范围。
+// path 为 assets 相对路径（与 SpriteDesc::texture 同一约定）。
+// 返回：path 合法 → true（无论此前是否在缓存中，失效请求均生效——「确保
+// 下次绘制重新读盘」这一契约对未缓存路径同样成立）；path 非法（空/不安全
+// 相对路径）→ false + param_failures 计数，不触碰缓存。
+// 计数语义：本函数不触碰 window_checks/texture_attempts。
+// GL 上下文与调用时序：缓存条目仅在窗口存活期的绘制中产生，本函数按单线程
+// 主循环约定在窗口存活期调用（GL 上下文存在）；从未开窗的进程缓存恒空 →
+// erase 为空操作。窗口关闭后的行为不在单线程主循环约定内，不声明。
+bool reload_texture(std::string_view texture_path);
+
 // 进程级共享贴图缓存释放（应在窗口销毁前、所有绘制结束后调用）。
 // 生命周期契约：独立贴图（sprite/动画帧）按路径去重进进程级缓存，**无容量
-// 上限**、只增不减，生命周期 = 进程（由本函数统一释放）；图集贴图随 asset RAII。
+// 上限**（可经 reload_texture 显式失效单条），生命周期 = 进程（由本函数
+// 统一释放）；图集贴图随 asset RAII。
 void shutdown_render();
 
 }  // namespace tg

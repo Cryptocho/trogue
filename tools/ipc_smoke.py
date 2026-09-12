@@ -240,6 +240,7 @@ def main():
           all(c in cmds for c in
               ("subscribe", "unsubscribe", "connections", "events")), r)
     check("help 登记 probe_collide", "probe_collide" in cmds, r)
+    check("help 登记 reload_texture", "reload_texture" in cmds, r)
 
     # 独立长连接订阅（主 sock 保持短连接 RPC 语义，互不干扰）
     ev_sock = socket.create_connection(("127.0.0.1", args.port), timeout=5)
@@ -451,6 +452,20 @@ def main():
     r = rpc(cmd="genmap", seed="bad")
     check("genmap 非整数 seed 报错",
           r.get("ok") is False and "integer" in r.get("error", ""), r)
+
+    print("== 贴图缓存失效（reload_texture）==")
+    # demo.json 的 tex_probe 实体持有 textures/goblin.png（独立贴图缓存路径）。
+    # 失效语义：合法路径 = 生效（无论此前是否已缓存），命令级软失败不存在——
+    # 引擎拒绝（路径不安全）→ demo 转错误包络。
+    r = rpc(cmd="reload_texture", path="textures/goblin.png")
+    check("reload_texture 合法路径生效",
+          r.get("ok") and r["data"].get("reloaded") is True
+          and r["data"].get("path") == "textures/goblin.png", r)
+    r = rpc(cmd="reload_texture", path="../evil.png")
+    check("reload_texture 不安全路径拒绝",
+          r.get("ok") is False and "unsafe" in r.get("error", ""), r)
+    r = rpc(cmd="reload_texture")
+    check("reload_texture 缺 path 报错", r.get("ok") is False, r)
 
     print("== 退出 ==")
     r = rpc(cmd="quit")

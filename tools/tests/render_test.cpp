@@ -114,11 +114,35 @@ bool test_window_unavailable_no_draw() {
     return ok;
 }
 
+bool test_reload_texture_contract() {
+    bool ok = true;
+    render_test_reset_stats();
+    const RenderStats before = render_test_stats();
+
+    // 合法路径（无窗口：缓存恒空）→ no-op true，stats 完全不变
+    CHECK(tg::reload_texture("textures/anything.png") == true);
+    const RenderStats after_ok = render_test_stats();
+    CHECK(after_ok.param_failures == before.param_failures);
+    CHECK(after_ok.window_checks == before.window_checks);
+    CHECK(after_ok.texture_attempts == before.texture_attempts);
+
+    // 非法路径 → false + 仅 param_failures 各 +1（window_checks/attempts 不变）
+    CHECK(tg::reload_texture("") == false);
+    CHECK(tg::reload_texture("../x.png") == false);
+    CHECK(tg::reload_texture("textures/../x.png") == false);
+    const RenderStats after_bad = render_test_stats();
+    CHECK(after_bad.param_failures == after_ok.param_failures + 3);
+    CHECK(after_bad.window_checks == after_ok.window_checks);
+    CHECK(after_bad.texture_attempts == after_ok.texture_attempts);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
     test_param_failures_precede_window();
     test_window_unavailable_no_draw();
+    test_reload_texture_contract();
     // 清理独立贴图缓存（未加载任何东西，幂等）
     tg::shutdown_render();
     std::printf("[render test] checks=%d failures=%d\n", ::tg_test::g_checks,
