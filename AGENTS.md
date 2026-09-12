@@ -117,6 +117,7 @@
 │  animation   帧动画播放器（消费 tro-animations）│
 │  tween       数值/位置/颜色补间执行原语          │
 │  terrain     autotile 匹配表 TerrainTable/pick_tile│
+│  random      确定性随机（坐标哈希 + 流式 PRNG）  │
 │  hotreload   文件变化通知（不自行替换游戏状态）   │
 │  ipc         JSON-lines 传输/事件推送/callback 分发│
 ├──────────────────────────────────────────────┤
@@ -161,6 +162,10 @@
 > **2026-09-11 新增（里程碑 16）**：
 > - **碰撞几何原语**（`trogue/collision.hpp`）：`tg::aabb_overlap`（纯谓词，委托 raylib `CheckCollisionRecs`）、`tg::segment_hits_solid`（线段 vs solid 层的保守 supercover 网格步进，逐层处理 origin；返回首个命中的层/tile/坐标/参数 `t`）、`tg::sweep_move`（轴分离 swept 滑移解算：先 X 后 Y，停在前缘恰好接触 solid 边界处，可沿墙滑动）。引擎只回答「矩形/线段与**静态地形几何**的关系」；**谁和谁碰、碰后如何**仍归 game。工具/探针侧 `probe_collide` IPC 命令（demo）可直接验证这三者。
 > - 明确**不进引擎**：动态实体碰撞**规则**、刚体物理/solver、单向平台/斜坡、分层碰撞矩阵、寻路（图搜索）、相机与绘制排序。
+
+> **2026-09-13 新增（里程碑 18）**：
+> - **确定性随机原语**（`trogue/random.hpp`）：`tg::hash_u64`/`tg::hash_combine`（splitmix64 坐标哈希自由函数）+ `tg::Random`（xoshiro256** 种子化流式 PRNG，可复制值类型：`next_u64`/`next_int` 闭区间无模偏差/`next_double`/`next_bool`/`pick`/`shuffle`）。算法与常量在头文件注释中**钉死为可复现契约**（同 seed 同调用序列跨平台逐位一致，不依赖 std:: 随机设施；替换算法属破坏性变更）；前置条件违反（`next_int` lo>hi、`pick` 空容器）= 程序错误、不设断言（与 `layer(i)` 契约注释 + 直接索引同策略，避免 NDEBUG 行为分叉）。**生成策略（何用、阈值、分布形状）归 game**；不提供全局随机源、概率分布对象（无消费方，可用原语组合）。
+> - **固定步长累加器不进引擎（2026-09-13 裁定）**：仓库内零消费方，按「需求驱动、不预先纳入」纪律移交「动态运动与物理能力评估」主线的时间步进评估。
 
 > `world.c`/`TgWorld`/`TgEntity`/`tg_*` 等历史 C API 已在 **里程碑 5（2026-09-07）** 整体删除/迁移到 `game/`（见「文档有效性与历史实现降级」），引擎不再拥有这些类型；不得再以兼容名义把它们引回 engine。
 
@@ -596,12 +601,30 @@ python3 tools/ipc_smoke.py
 - [x] **下游可用性与输入载体补全（2026-09-11）**：`render_sprite` 缩放、bare 场景省略地形容器、独立 `AnimationAsset`、`SolidGridView`（game 自持碰撞掩码）、受限 `SceneAsset::update_layer_tiles`、模板游戏开发指南与 CJK 字体参考实现；模板同步脚本支持临时克隆安装/更新；计划 `docs/plan-17.md`
 - [ ] **动态运动与物理能力评估（下一主线）**：以模板派生项目的实际需求为输入，先定义跨游戏的确定性运动/碰撞执行原语，再决定是否增加动态实体 broad-phase、连续碰撞、约束/刚体或留在 game；不得把一款游戏的规则系统塞进 engine
 - [x] **PixelLab 资产 skill/管线改进（2026-09-12）**：API v2 spritesheet ZIP 导入（统一 cell + layout JSON）与逐帧 URL 双路径、角色帧下载并发上限 8、rotation/animation clip 命名冲突检查、tileset metadata 的 16-tile/尺寸/bounding-box 校验、`check-grid` 网格判据命令、manifest sha256 产物验收；全局 `pixellab-mcp` skill 同步 MCP/v2 双路径与成本/验收规则
+- [x] **通用原语补齐·确定性随机原语（2026-09-13 完成）**：engine `random.hpp`——`tg::hash_u64`/`hash_combine`（splitmix64 坐标哈希）+ `tg::Random`（xoshiro256**，算法钉死为可复现契约：`next_u64`/`next_int` 闭区间无模偏差/`next_double`/`next_bool`/`pick`/`shuffle`）；两消费方切换（game AI 的 `std::mt19937`→`tg::Random`、demo `genmap` 手写 `gen_hash`→引擎哈希）；`tools/tests/random_test.cpp`（黄金序列 + 独立参考实现第二来源对照冻结）+ `ipc_smoke.py` genmap 确定性断言（计划 `docs/plan-18.md` 两轮审查通过并落地）
+- [ ] **固定步长累加器（原 P1 后半，移交主线）**：仓库内零消费方，按「需求驱动、不预先纳入」纪律并入「动态运动与物理能力评估」主线的时间步进评估；届时定义 advance(dt) → 整步数 + 插值 alpha 的原语形态（插值与否由 game 决定）
+- [ ] **独立贴图缓存失效 API（P2，2026-09-13 拍板）**：`reload_texture(path)` 或 `flush_textures()`——当前进程级贴图缓存只增不减、无失效口子，Agent 改 png 必须重启进程，与场景 JSON 秒级热重载不对称；修 Agent「改→跑→观察→再改」迭代闭环上最疼的断层
+- [ ] **单格 tile 写入（P3，2026-09-13 拍板）**：`set_tile_at`/小区域填充（`update_layer_tiles` 的窄化变体，不新增语义边界）——当前整层原子替换使「挖一格墙」需取整层数组改一格再写回（O(n) 工效税）；破坏地形、逐帧生成地形（falling-sand 类）游戏的刚需
+- [ ] **API 语义文档收尾（P4，零 API 增量，2026-09-13 拍板）**：① tween-as-timer idiom（`add_float(0,0,{duration,delay}, 忽略采样, on_complete)` + `co_await wait(id)` 串演出序列）文档化；② `TweenSpec.repeats` 补写正值语义与无限循环下 `on_complete` 是否逐轮触发；③ `render_sprite` 翻转语义（文档化负 scale 行为或加显式 flip）；④ 模板/指南并列展示多种消费方式（OOP 与 ECS 各一个最小例），把「引擎不规定架构」从声明变成可见事实（缓解示范引力）
 
 ### 下一主线的边界说明
 
 动态运动与物理的**执行原语评估**属于引擎主线，因为固定步长推进、连续运动、静态/动态形状查询、广义碰撞检测、接触求解和确定性数值行为都是跨游戏复用、与美学无关、可无头测试的机制能力。它们如果留在某个 `game/`，会被某款游戏的重力、跳跃、伤害或敌人规则绑死。
 
 引擎只应提供通用执行能力：时间步进、运动积分、形状查询、sweep/broad-phase、接触结果和确定性约束求解；game 仍拥有实体、碰撞层策略、重力/加速度参数、跳跃规则、伤害/触发器、单向平台等玩法决策。是否实现完整刚体物理，必须先由模板派生项目的真实需求和无头测试判据决定，不能因为“物理常见”就把玩法规则塞进 engine。
+
+### API 通用性评估结论（2026-09-13 拍板）
+
+> 对全部 13 个公共头做了游戏类型倾向与缺省原语评估（背景：引擎要通用、Agent-first——API 薄到能完整进上下文、不引导 Agent 僵化思路、不重复造轮子）。结论固化于此，作为 Roadmap「通用原语补齐」各项（P1–P4）的依据；每项开工仍走里程碑门禁（plan-N + 审查）。P1–P3 与「动态运动与物理能力评估」相互独立，可先行落地；其中固定步长累加器与该主线的「时间步进」评估有交集，届时以本节口径为准合并。
+
+**类型倾向结论（软倾向，非架构偏见）**：现有 API 的倾向公式 =「均匀 tile 网格世界 + 静态 solid 地形 + AABB 轴分离运动」——顶视角/横版动作、roguelike、platformer 一族的原型（引擎出身使然）。倾向落在**资产格式**（tro-scene 主体是 tilemap、autotile 整个模块是网格概念）与**碰撞形状**（AABB-only、静态世界），不在架构上：bare 场景（v2.1）、`SolidGridView`（game 自持碰撞真值）、显式绘制不隐式遍历、`type`/`solid` 全不透明共同构成逃生舱；descriptor 而非运行时实体、无 world 容器，OOP/ECS 均不被引导。非网格游戏（卡牌/视觉小说/物理沙盒）能用，但只享受约四成能力快车道。**不为此扩 API**：非 tile 游戏走 bare + `render_sprite`/`draw_rect` + 直调 raylib 即是既定路径；tile 快车道对网格游戏是加分而非对其他类型的歧视。
+
+**缺省原语判定的共同理由**：demo `genmap` 噪声与 game A* 游走各自手写过一遍固定种子随机（RNG 重复造轮子的实证）；整层 `update_layer_tiles` 使逐格修改为 O(n)；贴图缓存无失效口子使改 png 必须重启进程——三者都是「每个游戏都会重写/每次迭代都会撞上」的通用机制，而非某款游戏的形状。
+
+**明确不加（防止清单膨胀，含否决理由）**：
+- **定时器/调度器 API**：tween 即 timer（`add_float(0, 0, {duration, delay}, 忽略采样, on_complete)` + `co_await wait(id)`），加 API 是同义重复，文档化 idiom 即可（归 P4-①）；
+- **圆形碰撞谓词**：raylib `CheckCollisionCircles` 纯数学、可无头直用，按「raylib 直达不进引擎」留 game（`aabb_overlap` 进引擎是因它构成 collision.hpp 的层语义故事，不构成再加圆的理由）；
+- **寻路（图搜索）**：维持既有拍板不进引擎；设**金丝雀规则**——等第二个消费方也各自手写一遍寻路再重议是否收编（注入代价函数的网格搜索本身符合准入判据，缺的是重复证据而非能力）。
 
 ### 引擎能力验证线（探针：`game/`；非交付物）
 

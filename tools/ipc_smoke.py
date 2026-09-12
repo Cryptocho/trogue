@@ -426,6 +426,32 @@ def main():
     b_sock.close()
     time.sleep(0.3)
 
+    print("== 程序生成地图（genmap 确定性契约）==")
+    # 注意：genmap 会 swap 场景（实体清空、reloads 自增），故置于实体相关段之后；
+    # reloads 为计数器字段，两次调用必然不同，不参与内容一致性比较。
+    r = rpc(cmd="genmap", seed=42)
+    g1 = r.get("data", {}) if r.get("ok") else None
+    check("genmap 生成成功", g1 is not None and g1.get("generated") is True
+          and g1.get("seed") == 42 and g1.get("w") == 40 and g1.get("h") == 40, r)
+    r = rpc(cmd="genmap", seed=42)
+    g2 = r.get("data", {}) if r.get("ok") else None
+    check("genmap 同 seed 确定性复现",
+          g2 is not None and g2.get("nonempty") == g1.get("nonempty")
+          and g2.get("w") == g1.get("w") and g2.get("h") == g1.get("h"), (g1, g2))
+    # 异 seed：nonempty 计数有极小概率恰好相等（~1% 量级），按序多试几个
+    # seed 取首个不同者，消除常跑冒烟的偶发假失败
+    g3 = None
+    for seed in (43, 44, 45, 46, 47):
+        r = rpc(cmd="genmap", seed=seed)
+        g3 = r.get("data", {}) if r.get("ok") else None
+        if g3 and g3.get("nonempty") != g1.get("nonempty"):
+            break
+    check("genmap 异 seed 结果不同",
+          g3 is not None and g3.get("nonempty") != g1.get("nonempty"), (g1, g3))
+    r = rpc(cmd="genmap", seed="bad")
+    check("genmap 非整数 seed 报错",
+          r.get("ok") is False and "integer" in r.get("error", ""), r)
+
     print("== 退出 ==")
     r = rpc(cmd="quit")
     check("quit", r.get("ok") and r["data"].get("bye") is True, r)

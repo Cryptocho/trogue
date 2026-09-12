@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### 引擎：确定性随机原语（坐标哈希 + 种子化流式 PRNG）
+
+- 影响的文件: `engine/include/trogue/random.hpp`、`engine/src/random.cpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/random_test.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/ai.hpp`、`game/src/ai.cpp`、`game/src/main.cpp`、`template/engine/`、`AGENTS.md`、`docs/plan-18.md`
+
+#### Added
+- 新增 `trogue/random.hpp`：`tg::hash_u64`/`tg::hash_combine`（splitmix64 坐标哈希自由函数）+ `tg::Random`（xoshiro256** 种子化流式 PRNG，可复制值类型：`next_u64`/`next_int` 闭区间无模偏差拒绝采样/`next_double`/`next_bool`/`pick`/`shuffle`）。算法与常量在头文件注释中钉死为可复现契约：同 seed 同调用序列跨平台逐位一致（不依赖 std:: 随机设施——其分布算法为实现定义）；前置条件违反（`next_int` lo>hi、`pick` 空容器）= 程序错误、不设断言（与 `layer(i)` 同策略，避免 NDEBUG 行为分叉）。
+- `ipc_smoke.py` 新增 genmap 断言：同 seed 确定性复现、异 seed 结果不同（按序多 seed 取首个不同者，消除计数巧合的偶发假失败）、非整数 seed 错误包络。
+
+#### Refactored
+- 消费方切换：game 敌人 AI 的 `std::mt19937` + `std::uniform_*_distribution` 改为 `tg::Random`（跨平台序列一致）；demo `genmap` 的手写坐标散列 `gen_hash` 改为引擎 `tg::hash_combine`（value-noise 插值与阈值逻辑不变）。同 seed 生成的地图图案与 AI 游走序列因此重定基线；确定性契约（同 seed 复现）不变。
+
+#### Tests
+- 新增 `random_test`：黄金值序列（独立 Python 参考实现第二来源生成冻结，`hash_u64(0)` 与 splitmix64 公开已知值互证）、同/异 seed、复制语义、闭区间端点/均匀性 sanity/极端范围、`next_double` 值域、`next_bool` 边界短路、`pick` 覆盖、`shuffle` 多重集保持/确定性/分布、哈希雪崩与组合敏感性。
+- Debug + Release 构建零告警；CTest 15/15 通过；ipc_smoke 70/70 通过；模板快照同步且独立副本构建通过。
+
+#### Architecture
+- 拍板（2026-09-13）：固定步长累加器不进引擎（仓库内零消费方，按需求驱动纪律移交动态运动与物理主线的时间步进评估）；不提供全局随机源与概率分布对象。同期评估结论（类型倾向分析、P2–P4 待办）已固化进 AGENTS.md「API 通用性评估结论」。
+
 ### 导出器与 demo：Godot 标注兼容性修复与窗口参数
 
 - 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`game/src/main.cpp`、`AGENTS.md`、`template/AGENTS.md`

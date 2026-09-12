@@ -75,6 +75,7 @@ set(ENGINE_SOURCES
     src/hotreload.cpp
     src/ipc.cpp
     src/terrain.cpp
+    src/random.cpp
     src/util/json_check.cpp
     src/util/path_check.cpp
     src/util/color_check.cpp

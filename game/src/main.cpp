@@ -494,30 +494,21 @@ tg::Json turn_json(const Demo& d) {
 }
 
 // ── 程序生成地图：地形指派是玩法决策（本节全部逻辑归 game），
-// 引擎只提供 pick_tile 采样与 load_json 内存加载。生成流程：
+// 引擎只提供 pick_tile 采样、确定性哈希与 load_json 内存加载。生成流程：
 //   噪声指派 → pick_tile 填 id → 拼 tro-scene JSON → load_json → swap_scene。
-// 噪声为最小确定性 value-noise（粗网格双线性插值）：同 seed 同 w/h 逐位一致。
-
-std::uint64_t gen_hash(std::uint64_t x, std::uint64_t y, std::uint64_t seed) {
-    std::uint64_t h = seed;
-    h ^= x * 0x9E3779B97F4A7C15ULL;
-    h ^= y * 0xC2B2AE3D27D4EB4FULL;
-    h ^= h >> 33;
-    h *= 0xFF51AFD7ED558CCDULL;
-    h ^= h >> 33;
-    h *= 0xC4CEB9FE1A85EC53ULL;
-    h ^= h >> 33;
-    return h;
-}
+// 噪声为最小确定性 value-noise（粗网格双线性插值）：坐标散列用引擎
+// hash_combine（splitmix64 组合，跨平台逐位一致），同 seed 同 w/h 逐位一致。
 
 float gen_value_noise(int x, int y, std::uint64_t seed, int period) {
     const int x0 = x / period, y0 = y / period;
     const float fx = static_cast<float>(x % period) / static_cast<float>(period);
     const float fy = static_cast<float>(y % period) / static_cast<float>(period);
     const auto v = [&](int gx, int gy) {
-        return static_cast<float>(gen_hash(static_cast<std::uint64_t>(gx),
-                                           static_cast<std::uint64_t>(gy),
-                                           seed) >> 40) / 16777216.0f;  // [0,1)
+        return static_cast<float>(
+                   tg::hash_combine(seed, static_cast<std::uint64_t>(gx),
+                                    static_cast<std::uint64_t>(gy)) >>
+                   40) /
+               16777216.0f;  // [0,1)
     };
     const auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
     return lerp(lerp(v(x0, y0), v(x0 + 1, y0), fx),

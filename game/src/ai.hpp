@@ -6,12 +6,15 @@
 //   - idle 70% 4 向均匀游走 / alerted 停 / chasing 贴脸攻击否则 A* 一步；
 //   - 触发点 = 玩家回合结束（本项目的 resolve_enemy_turn 收尾内同步结算）。
 //
-// 随机数：std::mt19937 固定种子（默认常量，单测/复现可另设），替代原版
-// 全局 math.random——确定性是 AI 单测与崩溃复现的前提。
+// 随机数：tg::Random 固定种子（默认常量，单测/复现可另设），替代原版
+// 全局 math.random——确定性是 AI 单测与崩溃复现的前提；相比 std::mt19937
+// + std:: 分布（算法实现定义），tg::Random 的序列跨平台逐位一致。
 
 #pragma once
 
-#include <random>
+#include <cstdint>
+
+#include "trogue/random.hpp"
 
 #include "event_bus.hpp"
 #include "game_core.hpp"
@@ -30,7 +33,7 @@ struct AiSystem {
     // resolve_enemy_turn 负责）；阶段内玩家死亡 → 立即停止剩余敌人。
     void run_enemy_phase(GameState& gs, EventBus& bus);
 
-    std::mt19937 rng;
+    tg::Random rng;
 };
 
 }  // namespace game

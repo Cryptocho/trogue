@@ -111,11 +111,9 @@ void AiSystem::run_enemy_phase(GameState& gs, EventBus& bus) {
         switch (a.ai.state) {
         case AiPhase::idle: {
             // 70% 概率 4 向均匀游走（失败即原地，不重试）
-            std::uniform_real_distribution<float> unit(0.0f, 1.0f);
-            if (unit(rng) < kWanderChance) {
+            if (rng.next_double() < kWanderChance) {
                 static constexpr Dir kDirs4[4] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-                std::uniform_int_distribution<int> pick(0, 3);
-                const Dir d = kDirs4[pick(rng)];
+                const Dir d = kDirs4[static_cast<std::size_t>(rng.next_int(0, 3))];
                 try_move(gs, &bus, id, d.dx, d.dy);
             }
             break;

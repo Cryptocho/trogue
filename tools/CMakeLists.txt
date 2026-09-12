@@ -92,6 +92,14 @@ add_test(NAME terrain_test COMMAND trogue_terrain_test)
 set_tests_properties(terrain_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── 确定性随机原语单测（纯公共 API，链接生产库） ──
+add_executable(trogue_random_test tests/random_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_random_test PRIVATE trogue_engine
+                                                 ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME random_test COMMAND trogue_random_test)
+set_tests_properties(random_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── pixellab 映射单测（无网络 Python 单测包一层 ctest） ──
 add_test(NAME pixellab_mapping_test
     COMMAND python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/pixellab/tests
