@@ -117,8 +117,13 @@ public:
     // 调色板颜色；index 越界 → 返回黑色并记 warning（防御性：调用方先查
     // palette_count；越界不崩溃）。
     Color palette_color(int index) const;
-    int tile_width() const;   // bare（无 tilesets/palette 且层空）→ 0
+    int tile_width() const;   // bare（无地形层）→ 0
     int tile_height() const;
+
+    // 原子替换一层 tile 值；不改变层元数据、贴图或层数量。
+    // tiles 长度必须等于 width*height，且每个值符合该层的值域；失败时不修改资产。
+    ErrorOr<void> update_layer_tiles(int layer_index,
+                                     const std::vector<int>& tiles);
 
     // ── 动画集访问 ──
     // 每个含 animations 的 entity 对应一个 AnimationSet（0..count-1）；
@@ -149,7 +154,7 @@ private:
     friend RenderResult render_scene(const SceneAsset& asset);
     friend RenderResult render_sprite(const SceneAsset& asset,
                                       const SpriteDesc& sprite, Vec2 pos,
-                                      Color tint);
+                                      Color tint, Vec2 scale);
 };
 
 // ════════════════════ tile-only 查询（自由函数） ════════════════════

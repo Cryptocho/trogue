@@ -11,16 +11,38 @@
 //
 // 全部为自由函数 / 纯值类型，无 OOP 层级、不暴露 raylib 类型、无随机（确定性）。
 
+#include <cstdint>
+
 #include "trogue/scene.hpp"  // SceneAsset
 #include "trogue/types.hpp"  // Vec2 / Rect / TileQueryResult
 
 namespace tg {
+
+// 非拥有的单层 solid 网格视图。mask 按行主序存储，非零元素表示阻挡。
+// mask 的生命周期由调用方保证；视图本身不复制或释放它。
+struct SolidGridView {
+    int width = 0;
+    int height = 0;
+    int tile_w = 0;
+    int tile_h = 0;
+    int origin_x = 0;
+    int origin_y = 0;
+    const std::uint8_t* mask = nullptr;
+    int stride = 0;  // 0 表示 width
+    int layer_id = -1;
+};
 
 // ════════════════════ 几何谓词 ════════════════════
 
 // 轴对齐矩形相交：半开 [x,x+w)×[y,y+h)；仅边界相接（如 a.x+a.w == b.x）→ false。
 // 任一 w/h <= 0（含 NaN）→ false。
 bool aabb_overlap(Rect a, Rect b) noexcept;
+
+// 以下查询接受调用方自持的、按 solid 层展开的视图数组。视图数组为空或
+// 退化视图不产生阻挡；TileHit.layer 使用 SolidGridView::layer_id。
+TileQueryResult is_solid_at(const SolidGridView* views, int count, Vec2 world);
+TileQueryResult rect_hits_solid(const SolidGridView* views, int count,
+                                Rect world_rect);
 
 // ════════════════════ 线段 vs solid tile 层（视线 / 射线） ════════════════════
 
@@ -47,6 +69,8 @@ struct TileHit {
 // - 端点豁免（如「视线终点不判定」）是调用方策略：需要时自行回缩 b 或先判端点。
 // - a/b 任一坐标非有限 → error。
 TileHit segment_hits_solid(const SceneAsset& asset, Vec2 a, Vec2 b);
+TileHit segment_hits_solid(const SolidGridView* views, int count, Vec2 a,
+                           Vec2 b);
 
 // ════════════════════ 轴对齐矩形对 solid 层的滑移解算（swept） ════════════════════
 
@@ -75,5 +99,7 @@ struct SweepResult {
 // - 参数非法（box/delta 含非有限值，或 box.w<=0 / box.h<=0）→ result=error，
 //   返回 box=入参原值。
 SweepResult sweep_move(const SceneAsset& asset, Rect box, Vec2 delta);
+SweepResult sweep_move(const SolidGridView* views, int count, Rect box,
+                       Vec2 delta);
 
 }  // namespace tg

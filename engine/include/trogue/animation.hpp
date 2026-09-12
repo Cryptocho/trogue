@@ -17,6 +17,7 @@
 
 #include <cstdint>   // std::uint64_t
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -50,8 +51,33 @@ public:
 private:
     const detail::AnimData* data_ = nullptr;  // 非拥有；存活期 = asset
     friend class AnimationPlayer;
+    friend class AnimationAsset;
     friend class detail::SceneLoader;         // SceneAsset 解析时构建视图
     void set_data(const detail::AnimData& d) noexcept { data_ = &d; }
+};
+
+// ════════════════════ AnimationAsset（拥有型独立动画资产） ════════════════════
+
+class AnimationAsset {
+public:
+    static expected<AnimationAsset, Error> load(std::string_view path);
+    static expected<AnimationAsset, Error> load_json(
+        std::string_view text, std::string_view name = "<memory>");
+
+    AnimationAsset(const AnimationAsset&) = delete;
+    AnimationAsset& operator=(const AnimationAsset&) = delete;
+    AnimationAsset(AnimationAsset&&) noexcept;
+    AnimationAsset& operator=(AnimationAsset&&) noexcept;
+    ~AnimationAsset();
+
+    // 引用仅在本 AnimationAsset 存活期内有效；移动后须重新取得并绑定。
+    const AnimationSet& view() const;
+    std::string_view name() const;
+
+private:
+    explicit AnimationAsset(std::unique_ptr<detail::AnimData> data);
+    std::unique_ptr<detail::AnimData> data_;
+    AnimationSet view_;
 };
 
 // ════════════════════ AnimationPlayer ════════════════════

@@ -92,9 +92,9 @@ bool test_root_and_keys() {
                         tg::ErrorCode::kSchemaViolation);
     ok &= expect_reject("version != 2", R"({"format":"tro-scene","version":3,"tilemap":{}})",
                         tg::ErrorCode::kSchemaViolation);
-    // tilemap 缺失 / 非 object
-    ok &= expect_reject("tilemap 缺失", R"({"format":"tro-scene","version":2})",
-                        tg::ErrorCode::kSchemaViolation);
+    // tilemap 缺省：没有地形的纯实体场景合法
+    ok &= expect_ok("tilemap 缺省的 bare 场景",
+                    R"({"format":"tro-scene","version":2,"entities":[]})");
     ok &= expect_reject("tilemap 非 object", R"({"format":"tro-scene","version":2,"tilemap":[]})",
                         tg::ErrorCode::kSchemaViolation);
     // 根未知键宽容：合法场景加未知根键应成功

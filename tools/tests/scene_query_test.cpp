@@ -337,12 +337,39 @@ bool test_batch_grid_and_mask() {
     return ok;
 }
 
+bool test_update_layer_tiles() {
+    bool ok = true;
+    const std::string p = write_scene(single_solid_scene());
+    auto r = SceneAsset::load(p);
+    std::remove(p.c_str());
+    REQUIRE(r.has_value());
+    const auto& layer_ref = r->layer(0);
+    CHECK(layer_ref.nonempty == 1);
+    std::vector<int> empty(16, -1);
+    CHECK(r->update_layer_tiles(0, empty).has_value());
+    CHECK(r->layer(0).nonempty == 0);
+    CHECK(is_solid_at(*r, tg::Vec2{8, 8}) == TileQueryResult::clear);
+    int value = 99;
+    CHECK(tile_at(*r, 0, tg::Vec2{8, 8}, &value) == TileLookupResult::empty);
+    std::vector<int> bad(15, -1);
+    CHECK(!r->update_layer_tiles(0, bad).has_value());
+    CHECK(r->layer(0).nonempty == 0);
+    std::vector<int> restored(16, -1);
+    restored[0] = 1;
+    CHECK(r->update_layer_tiles(0, restored).has_value());
+    CHECK(layer_ref.nonempty == 1);
+    CHECK(is_solid_at(*r, tg::Vec2{8, 8}) == TileQueryResult::solid);
+    CHECK(!r->update_layer_tiles(9, restored).has_value());
+    return ok;
+}
+
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
     test_is_solid_at();
     test_rect_hits_solid();
     test_tile_at();
     test_batch_grid_and_mask();
+    test_update_layer_tiles();
     test_asset_id_and_safety();
     test_asset_id_exhaustion_seam();
     std::printf("[query test] checks=%d failures=%d\n", ::tg_test::g_checks,

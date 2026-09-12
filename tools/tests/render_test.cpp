@@ -69,9 +69,15 @@ bool test_param_failures_precede_window() {
     bad_path.asset_id = a.asset_id();
     bad_path.texture = "../evil.png";
     CHECK(render_sprite(a, bad_path, tg::Vec2{0, 0}) == RenderResult::Invalid);
+    // ① 非法缩放在窗口检查前失败
+    SpriteDesc bad_scale = bad_path;
+    bad_scale.texture = "textures/x.png";
+    CHECK(render_sprite(a, bad_scale, tg::Vec2{0, 0},
+                        tg::Color{255, 255, 255, 255}, tg::Vec2{0, -1}) ==
+          RenderResult::Invalid);
 
     const RenderStats after_param = render_test_stats();
-    CHECK(after_param.param_failures >= before.param_failures + 3);
+    CHECK(after_param.param_failures >= before.param_failures + 4);
     CHECK(after_param.window_checks == before.window_checks);       // 窗口检查未执行
     CHECK(after_param.texture_attempts == before.texture_attempts); // 未触达加载
 

@@ -54,8 +54,17 @@ set_tests_properties(render_test PROPERTIES
 add_executable(trogue_anim_tween_test tests/anim_tween_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_anim_tween_test PRIVATE trogue_engine
                                                      ${TROGUE_TOOLS_NLOHMANN})
-add_test(NAME anim_tween_test COMMAND trogue_anim_tween_test)
-set_tests_properties(anim_tween_test PROPERTIES
+add_test(NAME trogue_anim_tween_test COMMAND trogue_anim_tween_test)
+set_tests_properties(trogue_anim_tween_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# ── 独立 tro-animations v1 加载/生命周期单测（纯公共 API） ──
+add_executable(trogue_animations_load_test
+               tests/animations_load_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_animations_load_test PRIVATE trogue_engine
+                                                          ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME animations_load_test COMMAND trogue_animations_load_test)
+set_tests_properties(animations_load_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # ── TaskRunner 容器单测（纯公共 API，链接生产库） ──

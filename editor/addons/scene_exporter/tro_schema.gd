@@ -309,9 +309,13 @@ static func build_tileset_groups(ts: TileSet, base_name: String) -> Dictionary:
 				var yso: int = td.get_y_sort_origin()
 				if yso != 0:
 					entry["y_sort_origin"] = yso
-				entry["terrain_set"] = td.get_terrain_set()
-				entry["terrain"] = td.get_terrain()
-				_append_peering_bits(entry, ts, td)
+				# terrain_set/terrain 必须成对有效才写：Godot 允许"属于 set 但未指定
+				# terrain"（get_terrain() == -1），这种瓦片按纯图块导出（两个字段与
+				# peering_bits 都省略），否则违反 tro-tileset 的成对约束，引擎拒绝载入
+				if td.get_terrain_set() >= 0 and td.get_terrain() >= 0:
+					entry["terrain_set"] = td.get_terrain_set()
+					entry["terrain"] = td.get_terrain()
+					_append_peering_bits(entry, ts, td)
 				var cd := {}
 				for j in range(ts.get_custom_data_layers_count()):
 					var lname := ts.get_custom_data_layer_name(j)

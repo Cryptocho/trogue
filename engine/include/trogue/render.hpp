@@ -25,7 +25,8 @@ RenderResult render_scene(const SceneAsset& asset);
 // 注：**pos 始终为纹理左上角**（不因 region 缺省而改为居中）；需居中请由 game
 // 自行设 offset（引擎不做隐式对齐）。
 RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
-                           Vec2 pos, Color tint = Color{255, 255, 255, 255});
+                           Vec2 pos, Color tint = Color{255, 255, 255, 255},
+                           Vec2 scale = Vec2{1.0f, 1.0f});
 
 // 便捷色块（palette/bare/无贴图时 game 可用）；不做任何实体语义。
 RenderResult draw_rect(Rect world_rect, Color color);

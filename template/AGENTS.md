@@ -1,196 +1,148 @@
 # 游戏项目 Agent 开发指南（trogue）
 
-> 本文件是本项目的 Agent 权威指南。**先写文档理清设计，再动代码。** 目标：让
-> Agent 自主完成一款游戏——实现、构建、生成资产、运行验证、迭代调试，直到功能完成。
+> 本文件教 Agent **怎么做游戏**，不是引擎 API 说明书。成功标准不是“功能都写完”，而是玩家愿意继续玩：先定体验与深度，再选择实现路径；功能完成只是及格线。
 >
-> **schema 权威源**：tro-scene / tro-tileset / tro-animations 的字段定义来自
-> trogue 仓库的 AGENTS.md；本文件是随模板分发的**快照**。若上游 schema 演化而
-> 下方字段表未更新，以 trogue 仓库为准（本项目引擎即该快照里的 engine/）。
+> **schema 权威源**：tro-scene / tro-tileset / tro-animations 的契约以随模板分发的引擎实现和上游项目说明为准。本文件只保留开发时需要的摘要。
 
-## 项目结构
+## 1. 目标与工作方式
+
+### 1.1 先回答游戏问题
+
+开始实现前，先在项目根写设计文档（可叫 `DESIGN.md`，已有设计文档也可复用），至少回答：
+
+- 核心循环是什么，用一句话说清楚；
+- 玩家每分钟做哪些重要决定，而不是只执行操作；
+- 玩家为什么会失败，失败后为什么愿意重开；
+- 变化、风险、资源、构筑或叙事如何产生纵深；
+- 第一局的目标、难度曲线和可观察反馈是什么。
+
+没有这些答案，不要因为某个 API 很方便就开始堆功能。先定体验与深度，再打开引擎参考区寻找实现路径；引擎已有能力是工具，不是题材菜单。引擎没有的能力也不要成为玩法天花板：按目标决定补在 game 还是提出引擎改进。
+
+### 1.2 从设计到可玩闭环
+
+1. 写设计与验收清单，确定最小可玩循环。
+2. 在 `game/` 实现最小闭环，必要时手写场景 JSON 或生成测试资产。
+3. 构建并运行，先用 IPC/日志做数值验证，再读截图检查实际表现。
+4. **试玩是必选步骤**：真人或视觉子代理至少玩几轮，询问“有趣吗、难度合适吗、还想再来一局吗”。不满足就回到设计，不要用更多工程代码掩盖体验问题。
+5. 重复调整规则、反馈、节奏和内容，直到达到目标。
+
+ctest 能证明逻辑没有坏，截图能证明画面没有明显坏；乐趣、节奏和难度不能被 ctest 覆盖。可用无头 bot 批量测通关率、平均深度和失败分布，但仍不能替代试玩。
+
+### 1.3 文档原则
+
+**文档给契约与意图，不给绕坑说明。** 如果文档需要写“必须先做 X，否则会失败”，先判断这是正式契约还是实现事故泄漏；若是事故，应修代码让这句话消失。文档应如实区分真实限制与项目自己的选择。
+
+## 2. 项目结构与更新
 
 ```
 project/
-├── AGENTS.md          # 本文件
-├── CMakeLists.txt     # 聚合：engine + tools + game
-├── engine/            # trogue 引擎（C++20 静态库，快照，勿手改）
-├── editor/            # Godot 4.7 可选视觉标注/导出工程（快照）
-├── pixellab/          # PixelLab MCP → tro-* 转换层（Python，快照）
-├── tools/             # scene_gen（离线场景生成 CLI）+ ipc_smoke.py
-├── game/              # 你的游戏（随意改写）
-└── assets/            # 你的资产（引擎按 CWD assets/ 约定读取）
+├── AGENTS.md          # 本文件：游戏设计、实现、验证指南
+├── CMakeLists.txt     # 聚合 engine + tools + game
+├── engine/            # trogue 引擎快照，勿手改
+├── editor/            # Godot 可选视觉标注/导出快照
+├── pixellab/          # PixelLab 转换工具快照
+├── tools/             # scene_gen、冒烟脚本与项目工具
+├── game/              # 你的游戏：玩法、对象模型、输入、UI、音频
+└── assets/            # 你的运行时资产
 ```
 
-快照（`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp`）由上游同步，
-**不得手改**；要改引擎请改 trogue 仓库。本项目含更新器 `scripts/sync_from_source.sh`：
-在项目根重跑即从上游**临时克隆**取最新模板，只刷新 vendored 快照，**不动**你的
-`game/`、`assets/` 与项目自有文件。项目自有：`game/`、`assets/`、`CMakeLists.txt`、
-`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`README.md`、`.gitignore`、本文件。
-
-## 引擎公共 API 边界（重要）
-
-引擎是**薄执行原语层**，不是游戏框架：
-
-- `engine/include/trogue/*.hpp` 是唯一公共面，统一 `namespace tg`、纯 C++、RAII；
-  内部直接调 raylib C API。game 只经这些头使用引擎。
-- **引擎不规定游戏架构**：没有 `World`/`Entity`/ECS/组件/系统。对象模型（OOP
-  或 ECS）由你在 `game/` 定义。
-- **场景资产是只读快照**：`tg::SceneAsset`（RAII）持有 tile 层、图集、descriptor；
-  `tg::SceneEntity` 是值快照（通用 spawn descriptor）。引擎不保存运行时实体位置。
-- **绘制是显式的**：`tg::render_scene` 只画 tile 层；sprite/色块由你调用
-  `tg::render_sprite`/`tg::draw_rect` 绘制，自行排序。引擎不隐式遍历实体，
-  descriptor 的 `type`/`solid` 不触发引擎玩法分支。
-- **碰撞是低层查询**：`tg::is_solid_at`/`tg::rect_hits_solid`/`tg::tile_at` 只查
-  `solid:true` 的 tile 层；实体碰撞、动态碰撞由你实现。
-- **通用表现原语归引擎**：
-  - `tg::AnimationPlayer` + `tg::AnimationSet`：帧动画采样（fps/loop/seek/回调/
-    `co_await done()`）。你决定何时播哪条、绑到哪个对象；播放器**不自动 draw**。
-  - `tg::TweenManager`：float/`Vec2`/`Color` 补间（时长/缓动/延迟/循环/回调/
-    `co_await wait()`）。你决定补间谁、目标值、触发时机。
-  - `tg::TerrainTable`/`tg::pick_tile`：autotile 纯函数（8 向 pattern → tile id）。
-    地形指派/程序生成归你；引擎只做确定性采样。
-- **功能准入判据**：引擎只收**机制性、确定性、可无头测试**的执行原语；音频总线、
-  shader 管理、粒子等美学/玩法决策载体由 game 直接调 raylib 实现。
-- **不重复造轮子**：引擎已有的通用能力（补间、动画、autotile、tile 查询）**直接
-  复用**，不要在 game 层手写等价物。
-- **数值精度纪律**：像素/网格对齐的移动用固定时长 tween（`TweenManager`）并播完
-  **精确 snap 到整数像素**；不要用指数趋近 lerp（float 永不收敛，残差被绘制截断
-  成错位/抖动）。绘制用浮点原语（引擎 `draw_rect` 内部即浮点；raylib 层避免
-  `DrawRectangle(int)` 截断）。
-- **注释自足纪律**：代码注释（含 docstring）必须自足——直接陈述契约、语义与
-  「为什么」，**不得引用本仓库内部文档**（`plan-N`/`docs/plan-*.md`/`§x.y`
-  节号/里程碑/门禁编号/`AGENTS.md` 指针/查证副本路径等）。这些文件不随代码
-  分发，对读者是悬空噪音。合法的外部溯源（如对齐原版 `trogue-orign/*.lua`、
-  Godot 上游符号名）可以保留。
-
-### 内存加载程序生成场景
-
-`tg::SceneAsset::load_json(text, name)` 与 `load(path)` 同一解析/校验路径——把程序
-生成的 tro-scene JSON 直接喂进去渲染。地形指派 → `pick_tile` 填 id → 拼 JSON →
-`load_json` 是推荐的程序生成闭环（`tools/scene_gen.cpp` 即此机制半的 CLI 示范）。
-
-## 资产规范
-
-### tro-scene v2.1（`assets/scenes/*.json`）
-
-| 规则 | 说明 |
-|------|------|
-| 版本 | `format:"tro-scene"`, `version:2` |
-| 坐标系 | 像素，原点=tilemap 左上角，y 向下；实体 x/y 为**左上角** |
-| 三态 | ① `tilesets` 存在=图集模式；② 有 `palette` 无 `tilesets`=palette 模式；③ 两者皆无且 `layers` 空/缺省=**bare 纯实体场景**。图集与 palette 互斥 |
-| `meta` | `{name, background:"#rrggbb"}` |
-| `tilemap` | `tile_width`/`tile_height`；`tilesets`(1..8, `{name,path}` 相对 assets/)；`palette`(≤32)；`layers`(≤4) |
-| 层 | `{name,width,height,solid?,origin?:[x,y],tileset?,tiles}`；图集模式每层必填 `tileset`；`tiles` 行主序，长 = w×h，`-1`=空 |
-| `solid` 层 | 参与引擎 tile 查询；**层矩形外 = 不阻挡** |
-| 实体 | `{id(唯一必填), type?"unknown", x,y,w,h, z?, color?, solid?, sprite?, animations?, props?}` |
-| 实体 sprite | 图集 `{tileset,tile}` 或独立贴图 `{texture, region?, offset?:[ox,oy]}`；region 缺省整图；锚点 = x/y + offset |
-| 实体 animations | `{textures:[路径], animations:[{name,fps,loop,frames:[{texture:idx,region?,offset?}]}]}`；名 = entity id（经 `asset.animation_set(i)` 取） |
-| 实体 props | 任意 object，引擎忽略不存；game 导入时自行解释 |
-| 限额 | layers ≤4、tilesets ≤8、palette ≤32、实体名 63 字节 |
-
-### tro-tileset v2（`assets/tilesets/*.json`）
-
-`{format:"tro-tileset",version:2, texture, tile_width,tile_height, columns,rows,
-terrain_sets:[...], tiles:[{id,col,row, size_in_atlas?,texture_origin?,y_sort_origin?,
-terrain_set?,terrain?,peering_bits?,custom_data?}]}`。`tiles[]` 数组顺序 = tile id
-（tro-scene 引用该 id）。`terrain_sets`/`peering_bits` 供 `tg::pick_tile` 消费。
-
-### tro-animations v1（`assets/animations/*.json`）
-
-独立动画资产，结构 = 实体 `animations` 字段：
-`{format:"tro-animations",version:1,textures:[...],animations:[{name,fps,loop,frames}]}`。
-引擎只消费场景实体**内嵌** `animations`；独立文件是转换中间产物，用时把
-`textures`/`animations` 内嵌进场景实体。
-
-## Godot 编辑器（可选）
-
-`editor/` 是可选视觉标注/预览工具，**不是运行时依赖**。Agent 可 headless 调用：
+`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp` 是上游快照。需要引擎修复时修改上游项目；派生项目更新时在根目录运行：
 
 ```bash
-godot --headless --path editor --import
-godot --headless --path editor --script res://addons/scene_exporter/headless_export.gd \
-  -- scene=res://assets/a.tscn,scene=res://assets/b.tscn
-# 也可 tileset=res://...tres / animations=res://...tscn
+./scripts/sync_from_source.sh
 ```
 
-产物直写 `../assets/`。**简单场景/测试关卡可直接手写 tro-scene JSON，无需 Godot**
-（`agent` 优先走这条路）。元数据速查见 `editor/README.md`。
+更新器会临时浅克隆上游，将最新快照覆盖到当前项目，不需要用户克隆整个仓库；会保留你的 `game/`、`assets/`、项目 CMake、README、测试和本文件。空目录运行同一个脚本则安装完整模板。`--url`、`--ref`、`--source` 可覆盖来源，`--full` 才会重置项目自有文件。
 
-## PixelLab 资产管线（`pixellab/`）
+## 3. 设计指南
 
-像素美术生成（外部 MCP 服务）→ tro-* 转换层。**调用任何 PixelLab MCP 工具前先查
-文档** `https://api.pixellab.ai/mcp/docs`；批量前 `get_balance`；pro 模式先 confirm_cost。
+- 玩法决策归 `game/`：输入、状态机、实体生命周期、规则、AI、动态碰撞规则、相机、UI、音频、粒子、shader 和存档。
+- 引擎是通用执行层：它不拥有你的世界，不根据 `type` 猜玩法，不自动管理实体。
+- 不重复造轮子：动画播放、Tween、静态地形查询、autotile 等能力直接复用引擎。
+- 反向规则同样成立：引擎没有的机制不能限制设计；若该机制跨游戏、确定、可无头测试，就应考虑补引擎，否则由 game 自己实现。
+- 网格/回合移动使用固定时长 tween，结束时精确 snap；连续即时运动不受这条网格纪律约束。
+- 视觉反馈必须服务决策：命中、受伤、阻挡、选择、失败原因和下一步目标应清楚可见。
+
+## 4. 资产与内容生产
+
+### 4.1 场景与字体
+
+简单场景、测试地图和程序生成内容可以直接写 tro-* JSON，不需要 Godot。Godot 只是可选的视觉标注/预览工具，不是运行时依赖。
+
+CJK 字体优先使用独立 `.ttf`/`.otf`，由 raylib 直接加载并用 `IsFontValid` 验证；只有拿到 `.ttc`、字符集过大或图集尺寸受限时，才使用 `tools/gen_font.py` 烘焙 PNG 与度量 JSON。模板中的 `game/src/ui_font.*` 是可选参考，不是起步目标的硬依赖。
+
+### 4.2 PixelLab
+
+调用 PixelLab MCP 前先查 `https://api.pixellab.ai/mcp/docs`；批量前检查余额，pro 模式先报价再确认。生成后必须在游戏实际显示尺度验收：看角色方向、动画循环、调色板、碰撞占位和同组资产一致性；不合格就重掷或修图，不要把 `get_*` 只当状态查询。
 
 ```bash
-# 角色/动画：保存 create_character/animate_character 的 get_character 响应为 meta JSON
-python3 pixellab/pxlab.py import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle]
-# Wang 瓦片集：保存 create_topdown_tileset 的 metadata
-python3 pixellab/pxlab.py import-tileset --meta <json> --image-url <png URL> --lower <名> --upper <名>
-# 地图：get_map ASCII 网格 → 场景（依赖 build/tools/trogue_scene_gen，先构建）
-python3 pixellab/pxlab.py import-map --grid <文件|-> --tileset <tro-tileset> --scene <名> --out <assets 相对路径>
-python3 pixellab/pxlab.py verify        # 复核产物 sha256
+python3 pixellab/pxlab.py import-character --meta <json> --name <n>
+python3 pixellab/pxlab.py import-tileset --meta <json> --image-url <url> --lower <名> --upper <名>
+python3 pixellab/pxlab.py import-map --grid <file> --tileset <tro-tileset> --scene <name> --out <path>
+python3 pixellab/pxlab.py verify
 ```
 
-产物落 `assets/`；`assets/pixellab_manifest.json` 记录来源。规则明确的资产仍可直接
-手写 tro-*——PixelLab 路径只在需要美术生成力时使用。
+PixelLab 的 rotation 行与动画行建议使用不同名字（例如 `<name>_rot_<dir>`），避免与动画 clip 的名字混淆；这是命名约定，不是把转换事故伪装成玩法规则。
 
-## IPC 协议（tro-ipc v1.2，仅 DEBUG 构建）
+**瓦片集地形标注归用户 + Godot（2026-09-12 拍板）**：地形/Wang 瓦片集的 terrain/peering_bits 标注由用户在 Godot 建 TileSet（.tres）用地形画笔逐格完成，经 scene_exporter 导出 tro-tileset（或直接提供 Godot 格式瓦片集）；Agent 不做自动标注，也不开发顶点级输入管线。`import-tileset`/`import-map` 的 MCP 产物只作**占位资产**（视觉占位、临时测试）：自动转换的 peering_bits/归池只保证格级特征——格级地形输入与多数投票归约原理上表达不了顶点居中特征（1 格洞等），映射与选择语义本身已验证无误，缺口仅在输入端；需要顶点级特征时由用户在 Godot 手工逐格摆瓦片（地形画笔把变体烘进 cell，无粒度损失）。
 
-- TCP `127.0.0.1:48764`（`--port` 可改），JSON-lines，每行一个请求/响应。
-- 响应包络：`{"ok":true,"data":{...}}` / `{"ok":false,"error":"..."}`。
-- 接入问候：`{"ok":true,"event":"hello","data":{...}}`。
-- 最多 8 并发连接；单行 ≤64KB。命令字段平铺在请求对象里。
-- **engine 传输层保留**命令：`ping`、`subscribe`/`unsubscribe`/`connections`。
-- **其余命令语义归 game**（在 `game/src/main.cpp` 的 IPC handler 实现）。起步骨架
-  已实现：`status`/`list_entities`/`get_entity`/`move`/`screenshot`/`log`/`quit`。
-  随游戏设计增改命令，并同步 `tools/ipc_smoke.py`。
-- **事件通道**：`tg::Ipc::publish(event, data)` 向订阅连接推送
-  `{"ok":true,"event":E,"data":D}`。判别式：响应**永不**含顶层 `event` 键。订阅
-  filter 为 data 顶层字段等值匹配（多键 AND）；断开即订阅清零。
+## 5. 实现
 
-## Agent 调试工作流
+优先把纯逻辑放进不依赖 raylib 的模块，游戏对象模型自选 OOP/ECS。引擎公共契约见附录；本章不复制 API 细节。实现顺序应围绕最小可玩循环，而不是围绕附录中的接口列表。
 
-0. **文件工具纪律**：改任何文件前先用 read 工具读它；不要用 bash 读取代替。
-   （edit/write 以 read 记录为准；未经 read 或读后变更会被拒绝。）
-1. 构建：`cmake --build build`
-2. 起服：`(./build/bin/trogue > /tmp/game_run.log 2>&1 &)`
-3. 冒烟：`python3 tools/ipc_smoke.py`
-4. 调试循环：`status`/`list_entities` 观测 → 改场景（起步游戏默认是 `main.cpp` 里
-   的**内置内存场景**；若你加了 `assets/scenes/*.json` 并用 `--scene` 指定，则改
-   文件后 ~0.5s `status.reloads` 自增即热重载生效）→ `screenshot` 拿画面 →
-   实现 `spawn`/`set_entity` 等命令后可做运行时实验。
-5. 截图视觉验收：**read 工具可直接读图**并自行下结论；项目外路径（如 `/tmp`）先
-   拷进项目内可读路径再读（用完即删）。辅以**数值自证**（Python 像素比对、IPC
-   快照的 transform 视图）——亚像素残差/截断肉眼易漏，机器判定优先。
-6. 收尾：`{"cmd":"quit"}` 干净退出；残留进程占端口用 `pkill -x trogue` 清理。
+使用已有能力：`AnimationPlayer` 负责帧推进，`TweenManager` 负责数值/位置/颜色补间，`TerrainTable`/`pick_tile` 负责确定性 autotile；game 决定何时触发、如何组合。引擎的 `SolidGridView` 可接受 game 自持的碰撞掩码，适合程序生成地图。
 
-**已知坑**：① raylib `TakeScreenshot` 破坏绝对路径，本项目用
-`LoadImageFromScreen`+`ExportImage`（截图前 `rlDrawRenderBatchActive()` 强制 flush
-渲染批，否则拍到残缺帧）；② 测试脚本必须按行解析 TCP 流（hello 与响应可能连包）。
+## 6. 验证与验收
 
-## 测试
+```bash
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
+cd build && ctest --output-on-failure
+cd .. && ./build/bin/trogue
+python3 tools/ipc_smoke.py
+```
 
-- 把游戏的纯逻辑（输入/规则/AI/状态机）写成**无 raylib 依赖**的模块，在
-  `game/CMakeLists.txt` 里编进一个无窗口测试目标（文件内有示例注释），用
-  `ctest` 覆盖；表现层靠截图 + 数值（IPC 快照）验收。
-- 表现层「静止时位置 == 逻辑坐标」这类不变量，可由 IPC 快照的 `transform` 视图
-  数值自证——亚像素残差/截断肉眼易漏，机器判定优先。
+纯逻辑用 ctest；IPC 用结构化快照断言；截图拷进项目可读路径后用 `read` 直接检查。验收清单至少包括：核心循环可重复、失败可理解、输入反馈明确、资产在实际尺度一致、碰撞边界无穿透、静止时视觉位置等于逻辑位置。生成的每个动画/资产都要确认确实被游戏使用。
 
-## 引擎构建依赖
+## 7. 调试工作流
 
-- 编译器：支持 **C++20 协程**（GCC 12+ / Clang 15+ 或同能力编译器）。
-- 库：raylib 6.0、nlohmann/json 3.11+、tl::expected 1.x。
-- 来源：优先系统包管理器（`find_package` 自动探测）；系统缺失时可用 CMake
-  `FetchContent` 按需拉取。**不要在 game 项目里 vendored 这些第三方库。**
-- 缺依赖（`find_package` 失败 / 链接缺符号 / 版本不符）时**通知用户**安装，
-  不要自行改动系统环境。
+1. 先读文件再改文件，不用 bash 读取替代文件工具。
+2. `cmake --build build` 后启动游戏，日志写到 `/tmp/game_run.log`。
+3. 用 IPC 的 `status`、`list_entities`、`get_entity` 和游戏自有命令定位数值问题。
+4. 用 `screenshot` 获取完整帧；截图写在项目内临时路径，读完删除。
+5. 用 Python 像素比对和 `transform` 快照检查亚像素残差；不要只凭肉眼判断碰撞或移动。
+6. 结束时发送 `quit`；残留进程用 `pkill -x trogue` 清理。
 
-## 开发流程
+冒烟脚本属于项目自有文件，随着游戏 IPC 命令增删而维护，不是引擎固定命令集。
 
-1. 给出计划（含步骤/验证），等待批准。
-2. 实现计划。
-3. subagent 检查未提交代码（合理性/优雅/风格/逻辑）——禁止自检。
-4. 检查后更新 `CHANGELOG.md`（若无则新建；每模块 `### 功能描述` + `- 影响的文件:`）。
-5. 更新本文件（若架构/规范变化）。
-6. 询问用户是否写 commit message（英文预览待确认，禁止直接提交）。
-7. 确认后提交并推送。
+## 8. 附录：参考区
+
+### A. 引擎边界摘要
+
+引擎提供 `SceneAsset` 只读资产（另有受限的 `update_layer_tiles`）、显式 tile/sprite 绘制、动画播放器、Tween、autotile、tile 查询、静态 solid 几何原语、IPC 传输与 watcher。`AnimationAsset` 可独立加载 `tro-animations` v1；其 `view()` 只在资产存活期有效。
+
+碰撞 API 既可从 `SceneAsset` 查询，也可从 game 自持的 `SolidGridView` 数组查询；视图不拥有 mask，逐 solid 层需保留自身 origin。引擎负责 AABB 谓词、线段 vs 静态 tile、sweep 滑移等确定性几何关系；动态实体碰撞规则、刚体物理、solver、单向平台、斜坡、碰撞矩阵和寻路属于 game。引擎边界不是开发优先级排序。
+
+### B. tro-* 资产摘要
+
+- `tro-scene` v2：根含 `format`/`version`，像素坐标、层为行主序 tile、`-1` 为空；图集与 palette 互斥；只有实体而没有地形的场景是合法 bare 场景。图集模式的 `tilesets` 为 1..8 个 `{name,path}`，每层引用一个 tileset；palette 最多 32 色；层最多 4 个，`origin` 是可负的世界像素偏移。
+- 层条目为 `{name,width,height,solid?,origin?,tileset?,tiles}`，`tiles` 长度必须是 `width*height`，图集值域是所引 tileset 的 tile 数，palette 值域是 palette 数。solid 层只参与静态 tile 查询，层矩形外不阻挡。
+- 实体 descriptor 为 `{id,type?,x,y,w,h,z?,color?,solid?,sprite?,animations?,props?}`；id 必须唯一。sprite 要么是 `{tileset,tile}`，要么是 `{texture,region?,offset?}`；region 缺省整图，锚点是 `x/y + offset`；`props` 是 game 自行解释的 object。
+- `tro-tileset` v2：包含 `texture`、tile 尺寸、`columns/rows`、`terrain_sets` 和 `tiles`；`tiles[]` 顺序即稳定 tile id，`peering_bits` 供 `tg::pick_tile` 确定性选择。
+- `tro-animations` v1：`format`、`version`、`textures`、`animations`；clip 有 `name/fps/loop/frames`，clip 名在动画集内唯一，frame 通过 texture 索引引用，可含 region/offset。
+- 实体 descriptor 是 game 的 spawn 初值，不是引擎运行时实体；`solid` 只是导入提示。
+
+### C. IPC 摘要
+
+DEBUG 构建默认监听 `127.0.0.1:48764`，协议版本恒为 1；JSON-lines 每行一请求/响应，单行上限 64KB，最多 8 个连接。成功包络为 `{"ok":true,"data":...}`，失败为 `{"ok":false,"error":"..."}`，hello 是带 `event:"hello"` 的成功行。
+
+engine 负责 `ping`、`subscribe`、`unsubscribe`、`connections` 和事件传输；订阅 filter 是事件 data 顶层字段等值匹配，多键 AND，断开即清零。响应不含顶层 `event`，事件推送含顶层 `event`；事件超长直接断开匹配订阅者。其余命令由 game 定义并同步 `tools/ipc_smoke.py`。监听脚本必须按行读取并有退出条件。
+
+起步 game 命令包括 `status`、`list_entities`、`get_entity`、`move`、`screenshot`、`log`、`quit`；可按设计增删。`screenshot` 返回时文件已经写入，具体实体和玩法命令不属于引擎契约。
+
+### D. 构建与依赖
+
+需要 C++20 协程、raylib 6.0、nlohmann/json 3.11+、tl::expected 1.x。缺依赖时通知项目维护者，不自行安装系统包。引擎公共头位于 `engine/include/trogue/`，公共 API 为 `namespace tg` 的纯 C++/RAII 类型。
+
+### E. 开发流程
+
+每次较大改动都遵循：设计 → 最小实现 → 构建/逻辑测试 → 运行/截图 → 必选试玩 → 迭代。若发现引擎能力缺口，先判断它是否跨游戏、机制性、确定且可无头测试；符合则回上游引擎补能力，不符合则留在 game。

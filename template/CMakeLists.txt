@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 project(trogue_game CXX)
 
+# 启用 CTest，使派生项目里的 add_test 示例真正被收集。
+include(CTest)
+
 # ── 语言基线 ──
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

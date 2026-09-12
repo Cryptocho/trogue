@@ -164,7 +164,8 @@ struct Demo {
     bool has_anim = false;             // 已绑定可播放动画集
     int bound_anim_set = -1;           // 当前绑定动画集序号（归属校验）
 
-    int window_w = 960, window_h = 540;
+    int window_w = 1920, window_h = 1080;
+    bool fullscreen = false;
     tg::Vec2 cam{0, 0};
     bool quit = false;
 
@@ -1048,6 +1049,12 @@ int main(int argc, char** argv) {
             d.port = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--headless") == 0)
             d.headless = true;
+        else if (std::strcmp(argv[i], "--fullscreen") == 0)
+            d.fullscreen = true;
+        else if (std::strcmp(argv[i], "--width") == 0 && i + 1 < argc)
+            d.window_w = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--height") == 0 && i + 1 < argc)
+            d.window_h = std::atoi(argv[++i]);
     }
     d.scene_path = scene_path;
 
@@ -1073,8 +1080,14 @@ int main(int argc, char** argv) {
     // 生命周期 = Demo（热重载只换 asset，指针恒有效），绑定一次即可。
     d.rules.bind(d.gs, d.bus);
 
-    if (d.headless) SetConfigFlags(FLAG_WINDOW_HIDDEN);
+    unsigned int window_flags = FLAG_WINDOW_RESIZABLE;
+    if (d.headless) window_flags |= FLAG_WINDOW_HIDDEN;
+    if (d.fullscreen && !d.headless) window_flags |= FLAG_FULLSCREEN_MODE;
+    if (window_flags != 0) SetConfigFlags(window_flags);
     InitWindow(d.window_w, d.window_h, "[trogue] C++ demo");
+    // Camera2D 和离屏绘制统一使用 raylib 当前的逻辑渲染尺寸。
+    d.window_w = GetRenderWidth();
+    d.window_h = GetRenderHeight();
     SetTargetFPS(60);
 
     reload_scene(d, scene_path);
@@ -1152,6 +1165,16 @@ int main(int argc, char** argv) {
 
     while (!WindowShouldClose() && !d.quit) {
         const float dt = GetFrameTime();
+
+        // raylib 通过轮询报告窗口尺寸变化；最大化/拖拽缩放后必须同步相机 offset。
+        if (IsWindowResized()) {
+            const int render_w = GetRenderWidth();
+            const int render_h = GetRenderHeight();
+            if (render_w > 0 && render_h > 0) {
+                d.window_w = render_w;
+                d.window_h = render_h;
+            }
+        }
 
         // 视觉追踪先于 IPC/按键：任何来源的首帧行动都不会从 (0,0) 起 tween
         init_player_view_if_needed(d);

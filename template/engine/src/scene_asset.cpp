@@ -123,6 +123,42 @@ Color SceneAsset::palette_color(int index) const {
 int SceneAsset::tile_width() const { return impl_->tile_w; }
 int SceneAsset::tile_height() const { return impl_->tile_h; }
 
+ErrorOr<void> SceneAsset::update_layer_tiles(int layer_index,
+                                              const std::vector<int>& tiles) {
+    if (layer_index < 0 ||
+        layer_index >= static_cast<int>(impl_->layers.size()))
+        return tl::unexpected(Error{ErrorCode::kInvalidArgument, "layer 索引越界"});
+    const LayerInfo& info = impl_->layers[static_cast<std::size_t>(layer_index)];
+    const std::size_t expected = static_cast<std::size_t>(info.width) *
+                                 static_cast<std::size_t>(info.height);
+    if (tiles.size() != expected)
+        return tl::unexpected(Error{ErrorCode::kInvalidArgument,
+                                     "tile 数量与层尺寸不一致"});
+    int max_value = 0;
+    if (info.tileset_index >= 0) {
+        const std::size_t ts = static_cast<std::size_t>(info.tileset_index);
+        if (ts >= impl_->tilesets.size())
+            return tl::unexpected(Error{ErrorCode::kInternal, "层 tileset 索引失效"});
+        max_value = impl_->tilesets[ts].tile_count;
+    } else if (impl_->mode == detail::SceneImpl::Mode::palette) {
+        max_value = static_cast<int>(impl_->palette.size());
+    } else {
+        return tl::unexpected(Error{ErrorCode::kInvalidArgument,
+                                     "bare 场景没有可更新的 tile 层"});
+    }
+    for (const int value : tiles) {
+        if (value < -1 || value >= max_value)
+            return tl::unexpected(Error{ErrorCode::kInvalidArgument,
+                                         "tile 值超出该层值域"});
+    }
+    auto& dst = impl_->layer_tiles[static_cast<std::size_t>(layer_index)];
+    dst = tiles;
+    int nonempty = 0;
+    for (const int value : dst) if (value != -1) ++nonempty;
+    impl_->layers[static_cast<std::size_t>(layer_index)].nonempty = nonempty;
+    return {};
+}
+
 int SceneAsset::animation_set_count() const {
     return static_cast<int>(impl_->anim_sets.size());
 }
@@ -786,9 +822,10 @@ expected<void, Error> parse_sprite(const json& s, std::string_view where,
     return {};
 }
 
-// 解析内嵌 animations。
-expected<void, Error> parse_animations(const json& a, std::string_view where,
-                                       detail::SceneImpl& out) {
+// 校验 animations 对象并构造拥有的数据；内嵌与独立资产共用。
+expected<AnimData, Error> parse_animation_data_impl(
+    const json& a, std::string_view where, std::uint64_t asset_id,
+    std::string_view name) {
     if (!a.is_object()) return tl::unexpected(
         err(ErrorCode::kSchemaViolation, at(where, "必须为 object")));
     for (const auto& kv : a.items()) {
@@ -811,7 +848,8 @@ expected<void, Error> parse_animations(const json& a, std::string_view where,
                                   at(where, "animations 超过 kAnimClipsPerEntityMax")));
 
     AnimData data;
-    data.asset_id = out.id;
+    data.asset_id = asset_id;
+    data.name = name;
     // textures：可为空（空时 animations 必为空，否则帧引用越界拒绝）
     data.textures.reserve(tex_it->size());
     for (std::size_t i = 0; i < tex_it->size(); ++i) {
@@ -925,8 +963,7 @@ expected<void, Error> parse_animations(const json& a, std::string_view where,
     if (data.textures.empty() && !data.clips.empty()) return tl::unexpected(
         err(ErrorCode::kSchemaViolation,
             at(where, "textures 为空但 clips 非空")));
-    out.anims.push_back(std::move(data));
-    return {};
+    return data;
 }
 
 // 解析单个 entity。
@@ -1039,14 +1076,25 @@ expected<void, Error> parse_entity(const json& e, std::size_t index,
     // animations（可选；null 拒绝）；动画集名 = 所属 entity id（entity→动画集映射键；
     // ent 已被 move，从 entities 取回 id）
     if (auto a = e.find("animations"); a != e.end()) {
-        if (auto r = parse_animations(*a, where + ".animations", out); !r)
-            return tl::unexpected(r.error());
-        out.anims.back().name = out.entities.back().id;
+        auto parsed = detail::parse_animation_data(
+            *a, where + ".animations", out.id, out.entities.back().id);
+        if (!parsed) return tl::unexpected(parsed.error());
+        out.anims.push_back(std::move(*parsed));
     }
     return {};
 }
 
 }  // namespace
+
+namespace detail {
+
+expected<AnimData, Error> parse_animation_data(
+    const json& object, std::string_view where, std::uint64_t asset_id,
+    std::string_view name) {
+    return parse_animation_data_impl(object, where, asset_id, name);
+}
+
+}  // namespace detail
 
 // ════════════════════ 公共加载入口 ════════════════════
 
@@ -1118,12 +1166,12 @@ private:
     // meta（宽容）
     if (auto r = parse_meta(root, *impl); !r) return tl::unexpected(r.error());
 
-    // tilemap 必须存在且为 object
+    // 没有地形时允许省略 tilemap；缺省值等价于空对象。
     const auto tm_it = root.find("tilemap");
-    if (tm_it == root.end() || !tm_it->is_object())
+    if (tm_it != root.end() && !tm_it->is_object())
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  "tilemap 必须存在且为 object"));
-    const json& tm = *tm_it;
+                                  "tilemap 必须为 object"));
+    const json tm = tm_it == root.end() ? json::object() : *tm_it;
 
     // 模式判定（顺序固定）
     const bool has_tilesets = tm.contains("tilesets");
@@ -1284,14 +1332,14 @@ std::optional<Vec2> world_to_tile(float wx, float wy, const LayerInfo& li,
                                   int tile_w, int tile_h) {
     if (tile_w <= 0 || tile_h <= 0) return std::nullopt;
     if (!std::isfinite(wx) || !std::isfinite(wy)) return std::nullopt;
-    const float tx = std::floor((wx - static_cast<float>(li.origin_x)) /
-                                static_cast<float>(tile_w));
-    const float ty = std::floor((wy - static_cast<float>(li.origin_y)) /
-                                static_cast<float>(tile_h));
-    if (tx < 0 || ty < 0 || tx >= static_cast<float>(li.width) ||
-        ty >= static_cast<float>(li.height))
+    const double tx = std::floor((static_cast<double>(wx) - li.origin_x) /
+                                 static_cast<double>(tile_w));
+    const double ty = std::floor((static_cast<double>(wy) - li.origin_y) /
+                                 static_cast<double>(tile_h));
+    if (tx < 0.0 || ty < 0.0 || tx >= static_cast<double>(li.width) ||
+        ty >= static_cast<double>(li.height))
         return std::nullopt;  // 层外 = 无数据 = 不阻挡
-    return Vec2{tx, ty};
+    return Vec2{static_cast<float>(tx), static_cast<float>(ty)};
 }
 
 }  // namespace
@@ -1408,9 +1456,9 @@ TileLookupResult tile_grid(const SceneAsset& asset, int layer_index, int tx,
     const auto& tiles = impl.layer_tiles[static_cast<std::size_t>(layer_index)];
     bool any = false;
     for (int j = 0; j < h; ++j) {
-        const int tyi = ty + j;
+        const long long tyi = static_cast<long long>(ty) + j;
         for (int i = 0; i < w; ++i) {
-            const int txi = tx + i;
+            const long long txi = static_cast<long long>(tx) + i;
             int v = -1;  // 层外/空格
             if (txi >= 0 && tyi >= 0 && txi < info.width && tyi < info.height)
                 v = tiles[static_cast<std::size_t>(tyi) *
@@ -1436,9 +1484,9 @@ TileQueryResult solid_mask(const SceneAsset& asset, int tx, int ty, int w,
     for (std::size_t k = 0; k < n; ++k) out_mask[k] = 0;
     bool any_solid = false;
     for (int j = 0; j < h; ++j) {
-        const int tyi = ty + j;
+        const long long tyi = static_cast<long long>(ty) + j;
         for (int i = 0; i < w; ++i) {
-            const int txi = tx + i;
+            const long long txi = static_cast<long long>(tx) + i;
             bool solid = false;
             for (std::size_t li = 0; li < impl.layers.size(); ++li) {
                 const LayerInfo& info = impl.layers[li];

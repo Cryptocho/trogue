@@ -4,6 +4,7 @@
 // 多 solid 层（不同 origin）、层外、error；sweep_move 的暴力对照（0.05px 步进
 // rect_hits_solid，复刻「先 X 后 Y」轴序）、接触语义、沿墙滑动、多 origin、层外、
 // 大位移不穿透、退化/非法、确定性。
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -439,6 +440,59 @@ bool test_sweep_semantics() {
     return true;
 }
 
+bool test_solid_grid_views() {
+    LoadedScene s;
+    REQUIRE(load(two_origin_scene(), s));
+    const SceneAsset& asset = *s.asset;
+
+    std::array<std::uint8_t, 16> mask0{};
+    std::array<std::uint8_t, 16> mask1{};
+    mask0[1 * 4 + 1] = 1;
+    mask1[2 * 4 + 2] = 1;
+    const tg::SolidGridView views[] = {
+        {4, 4, 16, 16, 0, 0, mask0.data(), 0, 0},
+        {4, 4, 16, 16, 8, 8, mask1.data(), 0, 1},
+    };
+
+    const Vec2 point{48, 48};
+    CHECK(tg::is_solid_at(views, 2, point) ==
+          tg::is_solid_at(asset, point));
+    const Rect rect{40, 40, 16, 16};
+    CHECK(tg::rect_hits_solid(views, 2, rect) ==
+          tg::rect_hits_solid(asset, rect));
+
+    const auto asset_hit = tg::segment_hits_solid(asset, Vec2{0, 0},
+                                                   Vec2{63, 63});
+    const auto view_hit = tg::segment_hits_solid(views, 2, Vec2{0, 0},
+                                                  Vec2{63, 63});
+    CHECK(view_hit.result == asset_hit.result);
+    CHECK(view_hit.layer == asset_hit.layer);
+    CHECK(view_hit.tx == asset_hit.tx && view_hit.ty == asset_hit.ty);
+    CHECK(std::fabs(view_hit.t - asset_hit.t) < 1e-6f);
+
+    const auto asset_sweep =
+        tg::sweep_move(asset, Rect{0, 40, 16, 16}, Vec2{100, 0});
+    const auto view_sweep =
+        tg::sweep_move(views, 2, Rect{0, 40, 16, 16}, Vec2{100, 0});
+    CHECK(view_sweep.box == asset_sweep.box);
+    CHECK(view_sweep.blocked_x == asset_sweep.blocked_x);
+    CHECK(view_sweep.blocked_y == asset_sweep.blocked_y);
+    CHECK(view_sweep.result == asset_sweep.result);
+
+    const tg::SolidGridView invalid[] = {{4, 4, 16, 16, 0, 0, nullptr, 0, 7}};
+    CHECK(tg::is_solid_at(invalid, 1, point) == tg::TileQueryResult::clear);
+    CHECK(tg::rect_hits_solid(invalid, 1, rect) == tg::TileQueryResult::clear);
+    CHECK(tg::segment_hits_solid(invalid, 1, Vec2{0, 0}, Vec2{63, 63}).result ==
+          tg::TileQueryResult::clear);
+    CHECK(tg::sweep_move(invalid, 1, Rect{0, 0, 8, 8}, Vec2{10, 10}).result ==
+          tg::TileQueryResult::clear);
+    const tg::SolidGridView bad_stride[] = {{4, 4, 16, 16, 0, 0,
+                                               mask0.data(), 3, 0}};
+    CHECK(tg::is_solid_at(bad_stride, 1, point) == tg::TileQueryResult::clear);
+    CHECK(tg::rect_hits_solid(bad_stride, 1, rect) == tg::TileQueryResult::clear);
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -447,6 +501,7 @@ int main() {
     ok = test_segment() && ok;
     ok = test_sweep_bruteforce() && ok;
     ok = test_sweep_semantics() && ok;
+    ok = test_solid_grid_views() && ok;
     std::printf("[collision_test] checks=%d failures=%d\n", tg_test::g_checks,
                 tg_test::g_failures);
     if (tg_test::g_failures == 0 && ok) {

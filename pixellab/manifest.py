@@ -12,6 +12,7 @@ import json
 import os
 import time
 
+
 MANIFEST_PATH = os.path.join("assets", "pixellab_manifest.json")
 
 

@@ -1,7 +1,7 @@
 # trogue 游戏项目模板
 
 用 [trogue](https://github.com/Cryptocho/trogue) 引擎从零开发一个游戏的**起点**。
-本目录是一个自包含的项目骨架：复制它、构建它、然后在 `game/` 里写你的游戏。
+本目录是一个自包含的项目骨架：复制它、构建它、然后在 `game/` 里写你的游戏。模板中的 `AGENTS.md` 是体验优先的游戏开发指南，引擎 API 只在附录中作为参考。
 
 ## 创建新项目
 
@@ -82,5 +82,4 @@ tl::expected 1.x、支持 C++20 协程的编译器。
 
 ## 更多
 
-面向 Agent 的开发指南见 `AGENTS.md`（引擎公共 API 边界、tro-* 资产 schema、
-IPC 协议、调试工作流、PixelLab 管线）。
+游戏开发指南见 `AGENTS.md`（先定体验与深度，再实现、试玩和迭代；引擎边界、tro-* 资产 schema、IPC 与调试流程收在附录）。

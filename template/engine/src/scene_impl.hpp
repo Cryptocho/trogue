@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "trogue/animation.hpp"  // AnimationSet（动画集视图）
 #include "trogue/scene.hpp"      // LayerInfo/SceneEntity/SpriteDesc（公共值类型）
 #include "trogue/terrain.hpp"    // TerrainSetInfo/TerrainTileEntry（tileset terrain 数据）
@@ -39,6 +41,11 @@ struct AnimData {
     std::vector<std::string> textures;   // assets-relative 路径
     std::vector<AnimClip> clips;
 };
+
+// 共享 tro-animations v1 内部对象校验；调用方负责外层文档校验。
+expected<AnimData, Error> parse_animation_data(
+    const nlohmann::json& object, std::string_view where,
+    std::uint64_t asset_id, std::string_view name);
 
 // SceneImpl：资产私有数据载体（detail 公有 struct；解析器/查询/渲染自由函数
 // 直接访问字段，公共头只持不透明指针）。

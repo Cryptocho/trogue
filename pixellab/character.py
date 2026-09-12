@@ -11,19 +11,16 @@ import io
 
 from PIL import Image
 
-from api import fetch_bytes
+from api import fetch_many
 from gridcheck import detect_and_downscale
 
 SHEET_MAX = 4096
 
 
-def _load_frame(url: str, name: str) -> Image.Image:
-    data = fetch_bytes(url)
-    data, _factor = detect_and_downscale(data, f"{name} ({url})")
-    return Image.open(io.BytesIO(data)).convert("RGBA")
 
 
-def build(meta: dict, name: str, fps: int, loop_clips: set[str]) -> tuple[bytes, dict]:
+def build(meta: dict, name: str, fps: int, loop_clips: set[str],
+          max_workers: int = 8) -> tuple[bytes, dict]:
     """从角色元数据构建 spritesheet + tro-animations 文档。
 
     返回 (png_bytes, animations_doc)。帧 URL 来自 meta['animations']。
@@ -32,16 +29,32 @@ def build(meta: dict, name: str, fps: int, loop_clips: set[str]) -> tuple[bytes,
     if not anims:
         raise ValueError(f"{name}: 元数据无 animations（先 animate_character）")
 
-    # 展开为 (clip_name, [frames])，clip 顺序 = 元数据序（确定性）
-    clips: list[tuple[str, list[Image.Image]]] = []
+    # 先固定输入顺序，再并发下载；ThreadPoolExecutor.map 保持结果顺序。
+    clip_specs: list[tuple[str, list[str]]] = []
+    seen_clips: set[str] = set()
+    urls: list[str] = []
     for anim_name, info in anims.items():
         dirs = info["directions"]
         multi = len(dirs) > 1
         for d in sorted(dirs):
             clip = f"{anim_name}_{d}" if multi else anim_name
-            frames = [_load_frame(u, f"{name}/{clip}[{i}]")
-                      for i, u in enumerate(dirs[d])]
-            clips.append((clip, frames))
+            if clip in seen_clips:
+                raise ValueError(f"{name}: clip 名重复 {clip!r}；请隔离 rotation/animation 命名")
+            seen_clips.add(clip)
+            frame_urls = list(dirs[d])
+            clip_specs.append((clip, frame_urls))
+            urls.extend(frame_urls)
+    raw_frames = fetch_many(urls, max_workers=max_workers)
+    frames_by_url: dict[int, Image.Image] = {}
+    for index, (url, raw) in enumerate(zip(urls, raw_frames)):
+        normalized, _factor = detect_and_downscale(raw, f"{name} ({url})")
+        frames_by_url[index] = Image.open(io.BytesIO(normalized)).convert("RGBA")
+    clips: list[tuple[str, list[Image.Image]]] = []
+    cursor = 0
+    for clip, frame_urls in clip_specs:
+        frames = [frames_by_url[cursor + i] for i in range(len(frame_urls))]
+        cursor += len(frame_urls)
+        clips.append((clip, frames))
 
     # 布局：每 clip 一行
     row_heights = [max(f.height for f in fs) for _, fs in clips]

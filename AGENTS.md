@@ -53,7 +53,7 @@
 - **Godot 源文件**（`.tscn`、`.tres`、导入资源）只是可选的上游创作输入，不能成为运行时依赖，也不自动等价于 ECS 实体、组件、系统或状态机。
 - **`tro-scene.entities` 是通用 spawn descriptor**：它描述场景中放置对象的初始数据、空间属性和视觉资源，不是 ECS 专属实体定义，也不是 engine 的运行时实体池。engine 只把它作为场景资产中的只读描述暴露给调用方；game 可以把它导入自己的 OOP 对象、ECS 组件，也可以完全忽略它。当前 API（里程碑 5 已实现）通过调用方拥有的 copy-out 快照（`tg::SceneEntity` 值类型）取得 descriptor，不暴露 asset 内部可写指针。
 - **统一 spawn descriptor 是已拍板的资产边界**：无论对象最终由 game 的 OOP、ECS 还是其他用户自定义模型接管，都使用同一种 `entities[]` 描述格式；不为 ECS 另造一套场景实体 schema，也不把 ECS 组件名写进 `tro-scene`。
-- **`solid` 是通用导入提示，不是 engine 运行时策略**：它表示描述中的初始空间属性，但不等价于添加 ECS `Solid` 组件，也不自动进入 engine 的实体碰撞集合。game 完全决定是否把它导入 OOP 碰撞对象、ECS 组件或忽略；engine 只对 tile 层提供低层静态查询。
+- **`solid` 是通用导入提示，不是 engine 运行时策略**：它表示描述中的初始空间属性，但不等价于添加 ECS `Solid` 组件，也不自动进入 engine 的实体碰撞集合。game 完全决定是否把它导入 OOP 碰撞对象、ECS 组件或忽略；engine 只对 tile 层提供低层静态查询。程序生成或动态修改地形时，game 可用 `SceneAsset::update_layer_tiles` 更新既有层，或用 `SolidGridView` 自持碰撞真值；引擎不替 game 重建实体状态。
 - **统一 spawn descriptor 不等于统一运行时模型**：同一描述可由 game 映射到 OOP 或 ECS，但只能由 game 的一个明确所有者维护可变位置与生命周期；engine 不保存第二份运行时实体状态。
 - **引擎不规定游戏架构**：`TgWorld`、`TgEntity`、ECS registry、组件、系统和对象生命周期都属于使用者的 `game/`；engine 只提供资源、场景资产、绘制原语、tile 查询、窗口/输入底层和 IPC 传输能力。一个 game 可以选择 OOP、ECS，或两者并存。
 - **Agent 可以绕过 Godot**：对于规则明确的场景、测试关卡、随机地牢、出生点和简单资产，优先直接生成或修改 `assets/` 中的 `tro-*` 文件。
@@ -154,7 +154,8 @@
 > **2026-09-11 新增（里程碑 15）**：
 > - **渲染可观测性**：`tg::RenderStats` + `tg::render_stats()`/`render_reset_stats()`（公共只读快照：参数失败/窗口检查/贴图尝试三项计数；供 Agent/调试断言「渲染确实发生」及失败类别）。
 > - **离屏渲染**：`tg::render_scene_to_png(asset, w, h, path)`（把 tile 层渲染到离屏 FBO 并导出 PNG；恒等相机，**不含实体/HUD**；需 GL 上下文（隐藏窗口即可）；离屏取像不翻转→内部 `ImageFlipVertical`）。含实体的完整帧截图由 game 自建离屏区间（demo 的 `capture_offscreen_png` 是范例）。
-> - **批量 tile 查询**：`tg::tile_grid`（某层一块 tile 值，行主序；层外写 -1）/ `tg::solid_mask`（全部 solid 层可走性合成掩码）；区域以 **tile 坐标**表达（非像素）。
+ > - **批量 tile 查询**：`tg::tile_grid`（某层一块 tile 值，行主序；层外写 -1）/ `tg::solid_mask`（全部 solid 层可走性合成掩码）；区域以 **tile 坐标**表达（非像素）。
+> - **碰撞输入载体**：静态碰撞查询既可消费 `SceneAsset`，也可消费调用方自持的 `tg::SolidGridView` 数组；逐 solid 层物化时保留各层 origin，`solid_mask` 只适合共享原点/网格的直接合成。
 > - **协程推进**：`tg::TaskRunner`（启动/回收 `tg::task<>` 的容器；**不**每帧重 resume 挂起协程——等待由事件同步驱动；析构不隐式 cancel，调用方需显式 `cancel_all()`）。补全了「引擎返回 `task` 却无推进器」的缺口。
 
 > **2026-09-11 新增（里程碑 16）**：
@@ -295,7 +296,7 @@ python3 tools/ipc_smoke.py
 |------|------|
 | 版本 | format 必须为 "tro-scene" 且 version 必须为 2；其他值拒绝载入（v2 为破坏性升级，不读 v1） |
 | 坐标系 | 像素，原点 = tilemap 左上角，y 向下；实体 x/y 为**左上角** |
-| 三态模式 | ① `tilesets` 存在 → 图集模式；② 有 `palette` 无 `tilesets` → palette 模式（tiles = 调色板索引，语义同 v1）；③ 两者皆无（且 `tilesets` 未写）→ **bare 纯实体场景**，仅当 `layers` 为空 `[]` 或缺省（三个条件同时成立）才合法。图集与 palette **互斥**，同时出现拒绝载入；「无 tilesets/palette 但有层」「有 palette 又有 tilesets」拒绝载入 |
+| 三态模式 | ① `tilesets` 存在 → 图集模式；② 有 `palette` 无 `tilesets` → palette 模式（tiles = 调色板索引，语义同 v1）；③ 没有地形数据 → **bare 纯实体场景**。图集与 palette **互斥**，同时出现拒绝载入；没有地形数据却声明非空层拒绝载入 |
 | tilesets | 1..8 项 `{name, path}`，path 相对 assets/；name 场景内唯一；每个 tileset 的 tile 尺寸必须与场景 tile_width/height 一致 |
 | 层 tileset | tilesets 非空时每层必填 `tileset`（引用 name）；palette 模式下层不得携带该字段。Godot 一层混用多个贴图组时，导出插件自动拆为多个输出层（首组沿用层名、其余加 `_组序号` 后缀），不再要求一层一贴图 |
 | tiles | 行主序一维数组，长度必须 = width×height；`-1`=空；图集模式值域 `[0, 所引 tileset.count)`，palette 模式 `[0, palette_count)` |
@@ -365,18 +366,24 @@ python3 tools/ipc_smoke.py
 
 > **定位**：PixelLab MCP（外部像素美术生成服务）→ tro-* 运行时资产的**上游转换层**，与 `editor/`（Godot 导出管线）平级——都是「上游创作输入 → assets/ 中的 tro-*」。引擎与 game 运行时零 PixelLab 概念；本层是纯离线工具（Python，依赖仅 Pillow + stdlib）+ `tools/scene_gen.cpp`（复用引擎 `pick_tile`）。
 
+> **瓦片集标注分工拍板（2026-09-12）**：地形/Wang 瓦片集的 **terrain/peering_bits 标注归用户 + Godot**——用户在 Godot 建 TileSet（.tres）用地形画笔逐格标注，经 scene_exporter 导出 tro-tileset（或直接提供 Godot 格式瓦片集）；Agent 不再为此开发 MCP 侧的自动标注/顶点级输入管线（功能简化）。**MCP 生成的 tileset（数据流 B 产物）降级为占位资产**：可临时用于视觉占位与测试，但其自动转换的 peering_bits/归池只保证格级特征——实测结论：格级地形输入（含 `get_map` ASCII）与多数投票归约原理上表达不了顶点居中特征（1 格洞等），选择语义（peering_bits corners ≡ 角匹配 Wang）与映射本身已验证无误，缺口仅在输入端。需要顶点级特征时由用户在 Godot 手工逐格摆瓦片（Godot 画笔把变体烘进 cell，无粒度损失）。
+
 - **MCP 调用纪律**：调用任何 PixelLab 工具前先查官方文档 `https://api.pixellab.ai/mcp/docs`；批量生成前 `get_balance`；pro 模式必须走 confirm_cost 报价流程（先报价 → 用户确认 → 再调）。全局 skill `pixellab-mcp`（`~/.agents/skills/`）承载操作指南。
 - **数据流**（三条，产物全部落 `assets/`）：
-  - **A 角色/动画**：`create_character`/`animate_character` → Agent 保存 `get_character` 响应为元数据 JSON → `python3 pixellab/pxlab.py import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle]` → `assets/textures/pixellab/<n>.png`（spritesheet，每 clip 一行）+ `assets/animations/<n>.json`。fps/loop 为显式参数（PixelLab 不提供）。
+  - **A 角色/动画**：逐帧路径为 `create_character`/`animate_character` → 保存 `get_character` 响应 → `python3 pixellab/pxlab.py import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle] [--jobs 8]`；API v2 路径为 `GET /characters/{id}/spritesheet` → `python3 pixellab/pxlab.py import-character-sheet --character-id <id> --sheet-url <zip> --name <n>`。两者都产出 `assets/textures/pixellab/<n>.png` + `assets/animations/<n>.json`，后者直接按官方 layout JSON 读取统一 cell 网格。fps/loop 为显式参数（PixelLab 不提供）。
   - **B Wang 瓦片集**：`create_topdown_tileset`（16-tile 4×4，standard）→ 保存 metadata JSON（`.../metadata` 端点，含每 tile `corners`+`bounding_box`）→ `pxlab.py import-tileset --meta <json> --image-url <png URL> --lower <名> --upper <名>` → `assets/tilesets/pixellab/<n>.json`（corners mode + peering_bits + 归池 terrain）+ 贴图。
   - **C 地图**：`get_map` ASCII terrain 网格 → `pxlab.py import-map --grid <文件|-> --tileset <tro-tileset> --scene <名> --out <assets 相对路径>` → 顶点采样（`mapping.vertex_corners`）→ 候选池 = **顶点 pattern 的归池**（`mapping.pool_of_vertices`，与 tile 归池同规则；不用格自身 terrain——少数角格会落错池降级）→ `tools/scene_gen`（引擎 `pick_tile` 按该池烤 tile id + `load_json` 回读自检）→ `assets/scenes/<n>.json`（tiles 烤死）。
 - **映射三要素（W2 实测锁定，fixture `pixellab/fixtures/`）**：① PixelLab tile `corners{NW,NE,SW,SE}`（字面枚举 lower/upper）↔ 引擎 4 角位（NW→top_left 等）；② 归池 = 多数角（≥3 upper → upper 池，平分归 lower）——16/16 组合精确命中零降级；③ 顶点采样 = 四邻格（含自身）多数投票，平分取 self 优先。单测 `pixellab/tests/`（入 ctest）。
 - **确定性**：同输入重跑产物 byte-identical（已验证）；`assets/pixellab_manifest.json` 按 (源类型, 源 id) upsert 记录来源 URL + 产物 sha256；`pxlab.py verify` 复核。下载 URL 可能过期——**产物 + sha256 为权威**，重导入需重新提供 MCP 元数据。
 - **明确损失**：25-tile（transition_size=1.0）4×8 Wang 集、tile_size 非 16/32、spritesheet 边 > 4096px、图像尺寸 <8px → 一律拒绝导入并报错，不静默伪造兼容。像素网格检测只做**整数倍放大还原**（检测到 ≥2× 则还原真实网格）；未检测到 = 按原生图接受（无法用块一致性证明非整数倍放大，不做拒绝）——这是检测能力边界，非静默伪造。
-- **独立 tro-animations 无运行时加载器**：引擎只消费场景实体**内嵌** `animations`（动画集名 = entity id）；`assets/animations/*.json` 是转换中间产物，消费时把 `textures`/`animations` 两键内嵌进场景实体（同构 `assets/scenes/soldier_animated_sprite_2d.json`）。
+- **独立 tro-animations 有运行时加载器**：`tg::AnimationAsset::load/load_json` 消费 `tro-animations` v1，返回在资产生命周期内有效的 `AnimationSet` 视图；实体内嵌 `animations` 仍由 `SceneAsset::animation_set` 提供。
+- **导入验收**：`python3 pixellab/pxlab.py check-grid --image <png>` 只在检测到整数倍块放大时降采样；`python3 pixellab/pxlab.py verify` 校验 manifest 中每个产物的 sha256。
+- **PixelLab spritesheet 双路径**：MCP 工具返回的角色详情继续使用逐方向/逐帧 URL；API v2 `GET /characters/{id}/spritesheet` 返回统一网格 PNG+layout JSON ZIP，可由 `pixellab/pxlab.py import-character-sheet` 导入。
 - **双路径不变**：规则明确的资产仍直接手写 tro-*；PixelLab 路径只在需要美术生成力时使用。
 
-## 项目模板（template/，plan-14）
+## 项目模板（template/）
+
+模板中的 `AGENTS.md` 是面向派生游戏项目的体验与开发指南，不是本仓库根文档的复制品；引擎 API 只作为附录参考。
 
 > **目的**：让「用 trogue 从零自主开发一个游戏」可复制——`template/` 是一个**最小**自包含项目骨架，复制它即得到能构建、能运行、能被 Agent 迭代的新游戏起点。
 
@@ -490,7 +497,7 @@ python3 tools/ipc_smoke.py
 
 > **截图视觉验收（2026-09-10 修订，取代 2026-09-09 的分工版）**：当前对话模型**已支持图片输入**——read 工具可直接读图（PNG/JPEG/WebP 等），视觉验收应由 **Agent 自己读截图并下结论**，不再默认推给用户目测。约定：
 > ① read 工具**不接受项目外路径**（如 `/tmp`）与 `build/` 等目录——截图写在这些位置时，先用 terminal 拷进项目内可读路径（用完即删，避免污染仓库）再 read；
-> ② 仍建议辅以**数值自证**（Python 像素级比对、IPC 实体快照/transform 视图）——亚像素残差/截断类问题肉眼易漏，机器判定优先（见「数值精度纪律」）；
+> ② **禁止用代码对图片做逐像素处理/比对**（Python/PIL 等一律不用）——视觉验收以 Agent 直接 read 图片下结论为准；数值自证只允许走 IPC 实体快照/transform 视图等**结构化观测**，不做像素级图像处理；细节取舍由用户目测拍板（2026-09-12 修订：逐像素比对脚本曾产生与肉眼结论相悖的伪差异，空耗大量时间，废弃该流程）；
 > ③ 若换回不支持图片输入的模型/工具，回退旧流程：把截图路径与具体核对要点交给用户目测，**不得假装已看图**，也不得就此放弃视觉验收。
 
 ## 编码规范
@@ -585,8 +592,16 @@ python3 tools/ipc_smoke.py
 - [x] **帧动画消费（2026-09-10 完成）**：`AnimationSet::name()` 返回所属 entity id + game `Actor::anim_set` 导入绑定 + 绘制循环采样 `current_frame()` 组合 offset + IPC 快照 `anim:{clip,frame}`；E2E 帧序列/像素比对验证（计划 `docs/plan-10.md` 已通过审查并落地）
 - [x] **项目模板（template/，2026-09-11 完成）**：最小自包含骨架——vendored 快照（engine/pixellab/editor/tools/scene_gen）+ 起步 game 骨架（内置内存场景）+ 模板自有 `AGENTS.md`（不含本仓库测试套件/fixture）；单份 `sync_from_source.sh` 兼顾安装（空目录运行→铺模板）/更新（项目根运行→临时克隆上游、只刷新 vendored 快照、保留 game/）/维护者模式（template 内运行→刷新快照）；独立副本构建零告警 + 起服/冒烟/截图验证（计划 `docs/plan-14.md`）
 - [x] **引擎缺口修复与 Agent-first 原语（2026-09-11 完成）**：`AnimationPlayer::play()` 复位 loop 覆盖（修跨 clip 粘连致 `done()` 永久挂起）+ 删死常量 `kMaxSpriteTextures` + 同步 `screenshot`（离屏 FBO）+ `render_scene_to_png` + 公共 `RenderStats` + 批量查询 `tile_grid`/`solid_mask` + `TaskRunner`；实战反馈驱动（计划 `docs/plan-15.md` 三轮审查通过并落地）
-- [x] **碰撞几何原语（2026-09-11 完成）**：`collision.hpp` —— `aabb_overlap`（纯谓词）/`segment_hits_solid`（线段 vs solid 层保守 supercover DDA，逐层 origin）/`sweep_move`（轴分离 swept 滑移，停在前缘相切）；引擎只回答「矩形/线段与静态地形几何的关系」，动态碰撞规则/物理/寻路仍归 game；`tools/tests/collision_test.cpp`（含 40 组暴力对照）+ demo `probe_collide` IPC 命令；模板快照已刷新（计划 `docs/plan-16.md` 两轮审查通过并落地）
-- [ ] 二进制资产格式（可选，JSON 为准）
+- [x] **碰撞几何原语（2026-09-11 完成）**：`collision.hpp` —— `aabb_overlap`（纯谓词）/ `segment_hits_solid`（线段 vs solid 层保守 supercover DDA，逐层 origin）/ `sweep_move`（轴分离 swept 滑移，停在前缘相切）；引擎只回答「矩形/线段与静态地形几何的关系」，动态实体碰撞规则/物理/寻路仍归 game；`tools/tests/collision_test.cpp`（含 40 组暴力对照）+ demo `probe_collide` IPC 命令；模板快照已刷新（计划 `docs/plan-16.md` 两轮审查通过并落地）
+- [x] **下游可用性与输入载体补全（2026-09-11）**：`render_sprite` 缩放、bare 场景省略地形容器、独立 `AnimationAsset`、`SolidGridView`（game 自持碰撞掩码）、受限 `SceneAsset::update_layer_tiles`、模板游戏开发指南与 CJK 字体参考实现；模板同步脚本支持临时克隆安装/更新；计划 `docs/plan-17.md`
+- [ ] **动态运动与物理能力评估（下一主线）**：以模板派生项目的实际需求为输入，先定义跨游戏的确定性运动/碰撞执行原语，再决定是否增加动态实体 broad-phase、连续碰撞、约束/刚体或留在 game；不得把一款游戏的规则系统塞进 engine
+- [x] **PixelLab 资产 skill/管线改进（2026-09-12）**：API v2 spritesheet ZIP 导入（统一 cell + layout JSON）与逐帧 URL 双路径、角色帧下载并发上限 8、rotation/animation clip 命名冲突检查、tileset metadata 的 16-tile/尺寸/bounding-box 校验、`check-grid` 网格判据命令、manifest sha256 产物验收；全局 `pixellab-mcp` skill 同步 MCP/v2 双路径与成本/验收规则
+
+### 下一主线的边界说明
+
+动态运动与物理的**执行原语评估**属于引擎主线，因为固定步长推进、连续运动、静态/动态形状查询、广义碰撞检测、接触求解和确定性数值行为都是跨游戏复用、与美学无关、可无头测试的机制能力。它们如果留在某个 `game/`，会被某款游戏的重力、跳跃、伤害或敌人规则绑死。
+
+引擎只应提供通用执行能力：时间步进、运动积分、形状查询、sweep/broad-phase、接触结果和确定性约束求解；game 仍拥有实体、碰撞层策略、重力/加速度参数、跳跃规则、伤害/触发器、单向平台等玩法决策。是否实现完整刚体物理，必须先由模板派生项目的真实需求和无头测试判据决定，不能因为“物理常见”就把玩法规则塞进 engine。
 
 ### 引擎能力验证线（探针：`game/`；非交付物）
 

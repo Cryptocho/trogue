@@ -188,8 +188,10 @@ RenderResult render_scene(const SceneAsset& asset) {
                     const tg::Color c = impl.palette[static_cast<std::size_t>(v)];
                     const float wx = static_cast<float>(info.origin_x + tx * impl.tile_w);
                     const float wy = static_cast<float>(info.origin_y + ty * impl.tile_h);
-                    DrawRectangle(static_cast<int>(wx), static_cast<int>(wy),
-                                  impl.tile_w, impl.tile_h, to_raylib(c));
+                    DrawRectanglePro(::Rectangle{wx, wy,
+                                                 static_cast<float>(impl.tile_w),
+                                                 static_cast<float>(impl.tile_h)},
+                                     ::Vector2{0.0f, 0.0f}, 0.0f, to_raylib(c));
                 }
             }
         }
@@ -199,7 +201,7 @@ RenderResult render_scene(const SceneAsset& asset) {
 }
 
 RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
-                           Vec2 pos, Color tint) {
+                           Vec2 pos, Color tint, Vec2 scale) {
     auto& impl = *asset.impl_;
     // ① 参数/归属校验（失败才计入 param_failures）
     const auto param_fail = [&](const char* why) {
@@ -213,6 +215,9 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
     }
     if (!std::isfinite(pos.x) || !std::isfinite(pos.y))
         return param_fail("sprite 位置非有限");
+    if (!std::isfinite(scale.x) || !std::isfinite(scale.y) ||
+        scale.x <= 0.0f || scale.y <= 0.0f)
+        return param_fail("sprite 缩放必须为有限正数");
     if (sprite.tileset_index >= 0) {
         const std::size_t ts = static_cast<std::size_t>(sprite.tileset_index);
         if (ts >= impl.tilesets.size()) return param_fail("tileset_index 越界");
@@ -246,9 +251,16 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
         // 图集形态锚点语义不变：pos + offset = 纹理左上（region 自动含多格尺寸）。
         // Godot 的 cell 中心对齐/texture_origin 是 tile 层语义；实体 sprite 的
         // Godot 等效摆放由 game 经 SpriteDesc.offset 自行表达。
-        DrawTextureRec(tex, ::Rectangle{r.x, r.y, r.w, r.h},
-                       ::Vector2{pos.x + sprite.offset.x, pos.y + sprite.offset.y},
-                       to_raylib(tint));
+        const ::Rectangle source{r.x, r.y, r.w, r.h};
+        const ::Vector2 dest_pos{pos.x + sprite.offset.x, pos.y + sprite.offset.y};
+        if (scale.x == 1.0f && scale.y == 1.0f) {
+            DrawTextureRec(tex, source, dest_pos, to_raylib(tint));
+        } else {
+            DrawTexturePro(tex, source,
+                           ::Rectangle{dest_pos.x, dest_pos.y,
+                                       r.w * scale.x, r.h * scale.y},
+                           ::Vector2{0.0f, 0.0f}, 0.0f, to_raylib(tint));
+        }
         return RenderResult::Drawn;
     }
     // 独立贴图形态
@@ -264,9 +276,15 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
         rh = static_cast<float>(tex_sp->tex.height);
     }
     const ::Rectangle rec{sprite.region.x, sprite.region.y, rw, rh};
-    DrawTextureRec(tex_sp->tex, rec,
-                   ::Vector2{pos.x + sprite.offset.x, pos.y + sprite.offset.y},
-                   to_raylib(tint));
+    const ::Vector2 dest_pos{pos.x + sprite.offset.x, pos.y + sprite.offset.y};
+    if (scale.x == 1.0f && scale.y == 1.0f) {
+        DrawTextureRec(tex_sp->tex, rec, dest_pos, to_raylib(tint));
+    } else {
+        DrawTexturePro(tex_sp->tex, rec,
+                       ::Rectangle{dest_pos.x, dest_pos.y,
+                                   rw * scale.x, rh * scale.y},
+                       ::Vector2{0.0f, 0.0f}, 0.0f, to_raylib(tint));
+    }
     return RenderResult::Drawn;
 }
 

@@ -12,10 +12,15 @@
 #include <algorithm>  // std::clamp
 #include <cmath>      // std::floor / std::fmod
 #include <cstdint>
+#include <fstream>
 #include <string>
 #include <utility>
 
-#include "scene_impl.hpp"  // detail::AnimData / AnimClip / frame（解析产物）
+#include <nlohmann/json.hpp>
+
+#include "scene_impl.hpp"
+#include "util/json_check.hpp"
+#include "util/path_check.hpp"  // detail::AnimData / AnimClip / frame（解析产物）
 
 namespace tg {
 
@@ -43,6 +48,130 @@ bool AnimationSet::has_clip(std::string_view clip) const {
         if (c.name == clip) return true;
     }
     return false;
+}
+
+// ════════════════════ AnimationAsset（拥有型独立动画资产） ════════════════════
+
+namespace {
+
+using nlohmann::json;
+
+Error animation_error(ErrorCode code, std::string message) {
+    return Error{code, std::move(message)};
+}
+
+expected<std::string, Error> read_animation_file(std::string_view path) {
+    std::ifstream in(std::string(path), std::ios::binary);
+    if (!in) return tl::unexpected(animation_error(
+        ErrorCode::kIoError, "animations: 无法读取文件: " + std::string(path)));
+    std::string text((std::istreambuf_iterator<char>(in)),
+                     std::istreambuf_iterator<char>());
+    if (in.bad()) return tl::unexpected(animation_error(
+        ErrorCode::kIoError, "animations: 读取文件失败: " + std::string(path)));
+    return text;
+}
+
+expected<json, Error> parse_animation_json(std::string_view text,
+                                           std::string_view name) {
+    try {
+        return json::parse(text);
+    } catch (const std::exception& e) {
+        return tl::unexpected(animation_error(
+            ErrorCode::kParseError, std::string(name) + ": " + e.what()));
+    }
+}
+
+std::string animation_basename(std::string_view path) {
+    const auto slash = path.find_last_of('/');
+    return std::string(path.substr(slash == std::string_view::npos ? 0 : slash + 1));
+}
+
+expected<detail::AnimData, Error> load_animation_document(
+    const json& root, std::string_view source, std::string_view asset_name) {
+    if (!root.is_object()) return tl::unexpected(animation_error(
+        ErrorCode::kSchemaViolation, std::string(source) + ": root 必须为 object"));
+    if (detail::json_max_depth(root, 1, kJsonDepthMax) > kJsonDepthMax)
+        return tl::unexpected(animation_error(ErrorCode::kSchemaViolation,
+                                              std::string(source) + ": JSON 嵌套深度超限"));
+    if (auto bad = detail::json_any_object_too_many_keys(root, kPayloadKeysMax))
+        return tl::unexpected(animation_error(ErrorCode::kSchemaViolation,
+                                              std::string(source) + ": object 键数超限于 " + *bad));
+    if (auto bad = detail::json_any_embedded_nul(root))
+        return tl::unexpected(animation_error(ErrorCode::kSchemaViolation,
+                                              std::string(source) + ": 文本内嵌 NUL 于 " + *bad));
+    if (root.dump().size() > kAssetPayloadBytesMax)
+        return tl::unexpected(animation_error(ErrorCode::kSchemaViolation,
+                                              std::string(source) + ": 资产序列化字节超限"));
+    const auto fmt = root.find("format");
+    if (fmt == root.end() || !fmt->is_string() ||
+        fmt->get_ref<const std::string&>() != "tro-animations")
+        return tl::unexpected(animation_error(
+            ErrorCode::kSchemaViolation,
+            std::string(source) + ": format 必须为 tro-animations"));
+    const auto ver = root.find("version");
+    if (ver == root.end() || !ver->is_number_integer() || ver->get<int>() != 1)
+        return tl::unexpected(animation_error(
+            ErrorCode::kSchemaViolation, std::string(source) + ": version 必须为 1"));
+
+    json object = json::object();
+    if (auto it = root.find("textures"); it != root.end()) object["textures"] = *it;
+    if (auto it = root.find("animations"); it != root.end()) object["animations"] = *it;
+    auto parsed = detail::parse_animation_data(object, source, 0, asset_name);
+    if (!parsed) return tl::unexpected(parsed.error());
+    return std::move(*parsed);
+}
+
+}  // namespace
+
+AnimationAsset::AnimationAsset(std::unique_ptr<detail::AnimData> data)
+    : data_(std::move(data)) {
+    if (data_) view_.set_data(*data_);
+}
+
+AnimationAsset::AnimationAsset(AnimationAsset&& other) noexcept
+    : data_(std::move(other.data_)) {
+    if (data_) view_.set_data(*data_);
+    other.view_ = AnimationSet{};
+}
+
+AnimationAsset& AnimationAsset::operator=(AnimationAsset&& other) noexcept {
+    if (this == &other) return *this;
+    data_ = std::move(other.data_);
+    view_ = AnimationSet{};
+    if (data_) view_.set_data(*data_);
+    other.view_ = AnimationSet{};
+    return *this;
+}
+
+AnimationAsset::~AnimationAsset() = default;
+
+const AnimationSet& AnimationAsset::view() const { return view_; }
+std::string_view AnimationAsset::name() const { return view_.name(); }
+
+expected<AnimationAsset, Error> AnimationAsset::load_json(
+    std::string_view text, std::string_view name) {
+    auto root = parse_animation_json(text, name);
+    if (!root) return tl::unexpected(root.error());
+    auto parsed = load_animation_document(*root, name, name);
+    if (!parsed) return tl::unexpected(parsed.error());
+    return AnimationAsset(std::make_unique<detail::AnimData>(std::move(*parsed)));
+}
+
+expected<AnimationAsset, Error> AnimationAsset::load(std::string_view path) {
+    if (path.empty() || path.size() >= static_cast<std::size_t>(kPathMax) ||
+        path.find('\0') != std::string_view::npos ||
+        !detail::is_valid_utf8(path) || !detail::is_safe_relative_path(path))
+        return tl::unexpected(animation_error(
+            ErrorCode::kInvalidArgument,
+            "animations 路径非法（须为相对路径）"));
+    auto text = read_animation_file(path);
+    if (!text) return tl::unexpected(text.error());
+    auto root = parse_animation_json(*text, path);
+    if (!root) return tl::unexpected(root.error());
+    const std::string name = animation_basename(path);
+    auto parsed = load_animation_document(*root, path, name);
+    if (!parsed) return tl::unexpected(parsed.error());
+    return AnimationAsset(std::make_unique<detail::AnimData>(std::move(*parsed)));
 }
 
 // ════════════════════ AnimationPlayer ════════════════════

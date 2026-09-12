@@ -16,3 +16,8 @@ target_link_libraries(trogue PRIVATE trogue_engine)
 # target_include_directories(my_game_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # add_test(NAME my_game_test COMMAND my_game_test)
 # set_tests_properties(my_game_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# 顶层 CMakeLists.txt 已 include(CTest)，取消注释即可被 ctest 收集。
+#
+# 可选 CJK 烘焙字体参考实现：只有需要图集字体时才把 ui_font.cpp 加入目标：
+# target_sources(trogue PRIVATE src/ui_font.cpp)
+# target_include_directories(trogue PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

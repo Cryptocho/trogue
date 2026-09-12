@@ -2,6 +2,72 @@
 
 ## [Unreleased]
 
+### 导出器与 demo：Godot 标注兼容性修复与窗口参数
+
+- 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`game/src/main.cpp`、`AGENTS.md`、`template/AGENTS.md`
+
+#### Bug Fixes
+- scene_exporter 导出 tro-tileset 时，Godot「属于 terrain set 但未指定 terrain」的瓦片（terrain = -1）不再写出 `terrain_set`/`terrain` 与 `peering_bits`——成对有效才写，无地形瓦片按纯图块导出，否则违反 tro-tileset 成对约束导致引擎拒绝载入整个瓦片集。
+
+#### Added
+- demo 新增 `--width`/`--height` 命令行参数，支持小窗口/离屏渲染验证（此前写死 1920×1080）。
+
+#### Architecture
+- 拍板（2026-09-12）：地形/Wang 瓦片集的 terrain/peering_bits 标注归用户 + Godot（.tres 地形画笔逐格标注，scene_exporter 导出或直接提供 Godot 格式瓦片集）；Agent 不再开发 MCP 侧自动标注/顶点级输入管线。MCP 生成的 tileset 降级为占位资产（自动转换只保证格级特征；格级地形与多数投票归约原理上表达不了顶点居中特征，映射与选择语义已验证无误，缺口仅在输入端）；需要顶点级特征时由用户在 Godot 手工逐格摆瓦片。
+
+#### Documentation
+- 截图视觉验收修订：禁止用代码对图片做逐像素处理/比对（曾因逐像素比对脚本产生与肉眼结论相悖的伪差异、空耗大量时间），视觉验收以直接 read 图片下结论为准，数值自证仅走 IPC 快照/transform 视图等结构化观测。
+- 模板 `AGENTS.md` 同步瓦片集标注分工拍板。
+
+### 文档：收敛后续路线图边界
+
+- 影响的文件: `AGENTS.md`
+
+#### Architecture
+- 从 Roadmap 删除“可选二进制资产格式”；JSON `tro-*` 继续作为当前唯一资产契约。
+- 补充动态运动与物理主线的边界：engine 评估并提供通用、确定、可无头测试的执行原语；game 保留重力、跳跃、伤害、触发器、单向平台等玩法策略。
+
+### 引擎：下游可用性与碰撞输入载体补全
+
+- 影响的文件: `engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/animation.hpp`、`engine/src/animation.cpp`、`engine/src/scene_impl.hpp`、`engine/include/trogue/collision.hpp`、`engine/src/collision.cpp`、`tools/tests/render_test.cpp`、`tools/tests/scene_schema_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/collision_test.cpp`、`tools/tests/animations_load_test.cpp`、`tools/CMakeLists.txt`、`template/`、`AGENTS.md`、`docs/plan-17.md`
+
+#### Added
+- `render_sprite` 支持正数有限的 `Vec2 scale`，保持默认缩放的原绘制路径，并统一图集/独立贴图的缩放语义。
+- `tg::AnimationAsset` 独立加载 `tro-animations` v1，拥有动画数据并以存活期有效的 `AnimationSet` 视图暴露；独立动画帧使用 `asset_id == 0`。
+- `SceneAsset::update_layer_tiles` 提供原子、受限的 tile 值更新，并同步 `LayerInfo::nonempty`。
+- `tg::SolidGridView` 及四个静态查询/几何重载，允许 game 使用自持碰撞掩码，同时保留 SceneAsset 路径和每层 origin 语义。
+- 模板 `gen_font.py` 与 `ui_font.*` 提供可选 CJK atlas/metrics 字体参考实现；优先支持独立 `.ttf`/`.otf` 直接加载。
+
+#### Bug Fixes
+- palette tile 绘制改用浮点 `DrawRectanglePro`，与其它绘制原语保持一致。
+- bare 纯实体场景允许真正省略地形容器；显式非 object 仍拒绝。
+- 静态碰撞和批量 tile 查询补齐 stride、极端坐标和 `2^63` 边界防御，避免越界或不可表示整数转换。
+
+#### Documentation
+- 重构模板 `AGENTS.md`：以体验目标、设计深度、实现、试玩和迭代为主线；引擎 API、资产和 IPC 契约降为附录参考。
+- 明确 `engine/` 是唯一交付物、`game/` 是能力验证台，并在 Roadmap 拆分引擎能力线与验证线。
+- 更新模板同步/安装说明：通过临时浅克隆直接把模板铺到当前目录，更新时只覆盖 vendored 快照。
+
+#### Tests
+- 新增独立动画资产、受限 tile 更新、缩放参数、SolidGridView 等价性、非法 stride 与极端坐标回归覆盖。
+- Debug/Release 构建通过，CTest 14/14 通过，模板快照已同步。
+
+### PixelLab：API v2 spritesheet 导入与资产验收
+
+- 影响的文件: `pixellab/api.py`、`pixellab/character.py`、`pixellab/sheet.py`、`pixellab/pxlab.py`、`pixellab/tests/test_sheet.py`、`template/pixellab/`、`~/.agents/skills/pixellab-mcp/SKILL.md`、`AGENTS.md`
+
+#### Added
+- 新增 `import-character-sheet`：消费 API v2 `/characters/{id}/spritesheet` 返回的 ZIP，读取统一 cell PNG 与 layout JSON，跳过 rotation 行并生成 `tro-animations v1`。
+- 角色逐帧 URL 导入支持 `--jobs 1..8`，并发下载保持输入顺序和确定性输出。
+- 新增 `check-grid` 判据命令；补充 clip 命名冲突、sheet 尺寸、columns、row 越界和 frame_count 校验。
+
+#### Tests
+- 新增 synthetic v2 sheet ZIP fixture 测试、rotation/animation 行解析、region、hash 换行和非法 ZIP 回归。
+- PixelLab Python 测试共 11 项通过；CLI help 和 `git diff --check` 通过。
+
+#### Documentation
+- skill 和根项目文档同步 MCP 逐帧 URL / API v2 spritesheet ZIP 双路径、并发上限 8、metadata 校验、网格判据和 manifest 验收规则。
+
 ### 引擎：碰撞几何原语（静态 tile 层）
 
 - 影响的文件: `engine/include/trogue/collision.hpp`（新增）、`engine/src/collision.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/collision_test.cpp`（新增）、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/**`、`AGENTS.md`、`docs/plan-16.md`（新增）
