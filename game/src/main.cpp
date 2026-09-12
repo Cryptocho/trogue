@@ -625,7 +625,8 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         static const char* cmds[] = {
             "ping", "help", "status", "list_entities", "get_entity",
             "query_entities", "set_entity", "spawn", "despawn",
-            "layers", "solid_at", "get_tile", "probe_collide", "reload",
+            "layers", "solid_at", "get_tile", "set_tile", "probe_collide",
+            "reload",
             "reload_texture", "screenshot",
             "log", "quit", "turn", "move", "wait", "genmap",
             "subscribe", "unsubscribe", "connections", "events",
@@ -891,6 +892,37 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
         data = tg::Json::object();
         (*data)["tiles"] = tiles;
         (*data)["solid"] = solid;
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "set_tile") {
+        // 地形写入探针：Agent 运行时挖墙/填墙（set_tile → solid_at/get_tile
+        // 立即断言）。坐标为层局部 tile 坐标（与 get_tile/solid_at 的世界像素
+        // 坐标不同口径）：tx = floor((px − 层origin_x) / tile_w)。
+        // 内存修改不落盘：watcher/F5/reload 会以磁盘内容覆盖（预期行为）。
+        for (const char* k : {"layer", "tx", "ty", "value"}) {
+            if (!req.contains(k) || !req[k].is_number_integer()) {
+                error = std::string("set_tile needs integer ") + k;
+                return tg::IpcStatus::error;
+            }
+        }
+        if (!d.asset) {
+            error = "no scene";
+            return tg::IpcStatus::error;
+        }
+        const auto r = d.asset->set_tile_at(req["layer"].get<int>(),
+                                            req["tx"].get<int>(),
+                                            req["ty"].get<int>(),
+                                            req["value"].get<int>());
+        if (!r) {
+            error = r.error().message;
+            return tg::IpcStatus::error;
+        }
+        data = tg::Json::object();
+        (*data)["set"] = true;
+        (*data)["layer"] = req["layer"];
+        (*data)["tx"] = req["tx"];
+        (*data)["ty"] = req["ty"];
+        (*data)["value"] = req["value"];
         return tg::IpcStatus::handled;
     }
     if (cmd == "probe_collide") {

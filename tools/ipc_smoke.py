@@ -427,6 +427,33 @@ def main():
     b_sock.close()
     time.sleep(0.3)
 
+    print("== 地形写入（set_tile → 查询立即可见）==")
+    # 依赖 demo 场景（palette 模式，walls 层 index 1 solid），须在 genmap 换场景之前。
+    # 坐标口径：set_tile 收层局部 tile 坐标；get_tile/solid_at 收世界像素坐标。
+    r = rpc(cmd="solid_at", x=8, y=8)
+    check("solid_at (0,0) 基线为墙", r.get("ok") and r["data"]["solid"] is True, r)
+    r = rpc(cmd="set_tile", layer=1, tx=0, ty=0, value=-1)
+    check("set_tile 挖墙成功",
+          r.get("ok") and r["data"].get("set") is True
+          and r["data"].get("tx") == 0, r)
+    r = rpc(cmd="solid_at", x=8, y=8)
+    check("挖墙后 solid_at 翻转", r.get("ok") and r["data"]["solid"] is False, r)
+    r = rpc(cmd="get_tile", x=8, y=8)
+    check("get_tile 墙格立即可见为空",
+          r.get("ok") and all(t["layer"] != 1 for t in r["data"]["tiles"]), r)
+    r = rpc(cmd="set_tile", layer=1, tx=0, ty=0, value=1)
+    check("set_tile 填墙成功", r.get("ok"), r)
+    r = rpc(cmd="solid_at", x=8, y=8)
+    check("填墙后 solid_at 还原", r.get("ok") and r["data"]["solid"] is True, r)
+    r = rpc(cmd="set_tile", layer=1, tx=0, ty=0, value=99)
+    check("set_tile 值超值域报错", r.get("ok") is False, r)
+    r = rpc(cmd="set_tile", layer=1, tx=999, ty=0, value=-1)
+    check("set_tile 坐标越界报错", r.get("ok") is False, r)
+    r = rpc(cmd="set_tile", layer=1, tx=0, ty=0)
+    check("set_tile 缺参报错", r.get("ok") is False, r)
+    r = rpc(cmd="help")
+    check("help 登记 set_tile", "set_tile" in r["data"]["commands"], r)
+
     print("== 程序生成地图（genmap 确定性契约）==")
     # 注意：genmap 会 swap 场景（实体清空、reloads 自增），故置于实体相关段之后；
     # reloads 为计数器字段，两次调用必然不同，不参与内容一致性比较。

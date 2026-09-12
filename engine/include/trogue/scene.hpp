@@ -125,6 +125,17 @@ public:
     ErrorOr<void> update_layer_tiles(int layer_index,
                                      const std::vector<int>& tiles);
 
+    // 写入一层的一个 tile 格（层局部 tile 坐标，不含层 origin 像素偏移）。
+    // value == -1 表空格；其余值须在该层值域内（图集模式 [0, tileset.count)、
+    // palette 模式 [0, palette.size)）。成功后该格立即对 tile 查询与渲染可见
+    //（同缓冲区，无失效步骤），层 nonempty 计数 O(1) 原地维护。
+    // 错误（kInvalidArgument，资产不被修改）：layer_index 越界 / (tx,ty) 不在
+    // [0,width)×[0,height) / bare 场景（无可写层）/ 值超值域。
+    // 与查询的层外语义刻意不对称：查询层外 = 不阻挡（对任意世界位置作答），
+    // 写入层外 = 参数错误（对具体层内格子寻址）。
+    // 单线程：与 asset swap 同纪律——不在绘制调用进行中调用（主循环两次绘制间）。
+    ErrorOr<void> set_tile_at(int layer_index, int tx, int ty, int value);
+
     // ── 动画集访问 ──
     // 每个含 animations 的 entity 对应一个 AnimationSet（0..count-1）；
     // 引用仅在 asset 存活期内有效。无动画集 → count()==0，animations(idx) 断言。

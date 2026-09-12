@@ -123,6 +123,28 @@ Color SceneAsset::palette_color(int index) const {
 int SceneAsset::tile_width() const { return impl_->tile_w; }
 int SceneAsset::tile_height() const { return impl_->tile_h; }
 
+namespace {
+
+// 层可写值上限推导（update_layer_tiles / set_tile_at 共享，防两处漂移）：
+// 图集层 → 所引 tileset 的 tile_count；palette 层 → palette 大小；
+// bare 场景无可写层。失效的层 tileset 索引属引擎内部不一致 → kInternal。
+ErrorOr<int> layer_value_max(const detail::SceneImpl& impl,
+                             const LayerInfo& info) {
+    if (info.tileset_index >= 0) {
+        const std::size_t ts = static_cast<std::size_t>(info.tileset_index);
+        if (ts >= impl.tilesets.size())
+            return tl::unexpected(
+                Error{ErrorCode::kInternal, "层 tileset 索引失效"});
+        return impl.tilesets[ts].tile_count;
+    }
+    if (impl.mode == detail::SceneImpl::Mode::palette)
+        return static_cast<int>(impl.palette.size());
+    return tl::unexpected(
+        Error{ErrorCode::kInvalidArgument, "bare 场景没有可更新的 tile 层"});
+}
+
+}  // namespace
+
 ErrorOr<void> SceneAsset::update_layer_tiles(int layer_index,
                                               const std::vector<int>& tiles) {
     if (layer_index < 0 ||
@@ -134,20 +156,10 @@ ErrorOr<void> SceneAsset::update_layer_tiles(int layer_index,
     if (tiles.size() != expected)
         return tl::unexpected(Error{ErrorCode::kInvalidArgument,
                                      "tile 数量与层尺寸不一致"});
-    int max_value = 0;
-    if (info.tileset_index >= 0) {
-        const std::size_t ts = static_cast<std::size_t>(info.tileset_index);
-        if (ts >= impl_->tilesets.size())
-            return tl::unexpected(Error{ErrorCode::kInternal, "层 tileset 索引失效"});
-        max_value = impl_->tilesets[ts].tile_count;
-    } else if (impl_->mode == detail::SceneImpl::Mode::palette) {
-        max_value = static_cast<int>(impl_->palette.size());
-    } else {
-        return tl::unexpected(Error{ErrorCode::kInvalidArgument,
-                                     "bare 场景没有可更新的 tile 层"});
-    }
+    const auto max_or = layer_value_max(*impl_, info);
+    if (!max_or) return tl::unexpected(max_or.error());
     for (const int value : tiles) {
-        if (value < -1 || value >= max_value)
+        if (value < -1 || value >= *max_or)
             return tl::unexpected(Error{ErrorCode::kInvalidArgument,
                                          "tile 值超出该层值域"});
     }
@@ -156,6 +168,28 @@ ErrorOr<void> SceneAsset::update_layer_tiles(int layer_index,
     int nonempty = 0;
     for (const int value : dst) if (value != -1) ++nonempty;
     impl_->layers[static_cast<std::size_t>(layer_index)].nonempty = nonempty;
+    return {};
+}
+
+ErrorOr<void> SceneAsset::set_tile_at(int layer_index, int tx, int ty,
+                                      int value) {
+    if (layer_index < 0 ||
+        layer_index >= static_cast<int>(impl_->layers.size()))
+        return tl::unexpected(Error{ErrorCode::kInvalidArgument, "layer 索引越界"});
+    LayerInfo& info = impl_->layers[static_cast<std::size_t>(layer_index)];
+    if (tx < 0 || ty < 0 || tx >= info.width || ty >= info.height)
+        return tl::unexpected(Error{ErrorCode::kInvalidArgument,
+                                     "tile 坐标超出层范围"});
+    const auto max_or = layer_value_max(*impl_, info);
+    if (!max_or) return tl::unexpected(max_or.error());
+    if (value < -1 || value >= *max_or)
+        return tl::unexpected(Error{ErrorCode::kInvalidArgument,
+                                     "tile 值超出该层值域"});
+    auto& dst = impl_->layer_tiles[static_cast<std::size_t>(layer_index)];
+    const int old = dst[static_cast<std::size_t>(ty) * info.width + tx];
+    // nonempty O(1) 原地维护（-1 与非 -1 互换才变化）
+    if ((old == -1) != (value == -1)) info.nonempty += (value == -1) ? -1 : 1;
+    dst[static_cast<std::size_t>(ty) * info.width + tx] = value;
     return {};
 }
 

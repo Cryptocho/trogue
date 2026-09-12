@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### 引擎：单格 tile 写入（SceneAsset::set_tile_at）
+
+- 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`tools/tests/scene_query_test.cpp`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-20.md`
+
+#### Added
+- 新增 `SceneAsset::set_tile_at(layer, tx, ty, value)`：受限可变窗口（`update_layer_tiles`）的窄化补充——层局部 tile 坐标（不含层 origin；写入与查询的层外语义刻意不对称：查询层外 = 不阻挡，写入层外 = 参数错误）、值域规则与整层更新共享同一推导（图集 → 所引 tileset count、palette → palette 大小、bare 不可写）、nonempty O(1) 原地维护（保持 `layer()` 引用语义）、失败零修改、写后查询/渲染立即可见（同缓冲区）。批量/区域写入不进引擎（game 侧循环每格 O(1)）；autotile 联动重排与地形指派仍归 game。
+- demo 新增 IPC 命令 `set_tile`（`layer`/`tx`/`ty`/`value` 各必填 int；引擎错误透传错误包络）并登记 `help`——Agent 运行时地形实验：挖墙/填墙 → `solid_at`/`get_tile` 立即断言。
+
+#### Refactored
+- `update_layer_tiles` 的值域推导提取为共享 helper（`layer_value_max`），行为零变化。
+
+#### Tests
+- `scene_query_test` 新增 `test_set_tile_at`：nonempty 三态、solid 联动挖/填往返、palette/图集值域上下界、坐标/层越界、每类错误后读回原值、混合 O(1) 写入与整层重算的交叉对账、多格 tile（`size_in_atlas`）一格一 cell 回归；既有测试零改动。
+- `ipc_smoke.py` 新增 10 项断言（置于 genmap 段之前——依赖 demo 场景），基线 74 → 84 项。
+- 人工 E2E：`set_tile` 挖墙 → 截图目视确认该格消失 → 填回 → 还原图与基线 byte-identical。
+- Debug + Release 构建零告警；CTest 15/15 通过；模板快照同步且独立副本构建通过。
+
 ### 引擎：独立贴图缓存失效（reload_texture）
 
 - 影响的文件: `engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-19.md`

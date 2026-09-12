@@ -363,6 +363,120 @@ bool test_update_layer_tiles() {
     return ok;
 }
 
+// 图集模式场景（引用真实磁盘 tileset，16 tiles；值域上界 = count）
+std::string atlas_scene() {
+    return R"({"format":"tro-scene","version":2,"tilemap":{
+        "tile_width":16,"tile_height":16,
+        "tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],
+        "layers":[
+          {"name":"g","width":4,"height":4,"solid":true,"tileset":"ts",
+           "tiles":[0,-1,-1,-1,
+                    -1,-1,-1,-1,
+                    -1,-1,-1,-1,
+                    -1,-1,-1,-1]} ]},"entities":[]})";
+}
+
+bool test_set_tile_at() {
+    bool ok = true;
+    // ── palette 场景：合法写入 / nonempty O(1) / solid 联动 / 错误路径 / 交叉对账 ──
+    {
+        const std::string p = write_scene(single_solid_scene());
+        auto r = SceneAsset::load(p);
+        std::remove(p.c_str());
+        REQUIRE(r.has_value());
+        const auto& layer_ref = r->layer(0);
+        CHECK(layer_ref.nonempty == 1);
+
+        // nonempty 三态：非空→非空不变；空→非空 +1；非空→空 −1
+        CHECK(r->set_tile_at(0, 0, 0, 1).has_value());
+        CHECK(layer_ref.nonempty == 1);
+        CHECK(r->set_tile_at(0, 1, 1, 0).has_value());
+        CHECK(layer_ref.nonempty == 2);
+        CHECK(r->set_tile_at(0, 1, 1, -1).has_value());
+        CHECK(layer_ref.nonempty == 1);
+        int v = 99;
+        CHECK(tile_at(*r, 0, tg::Vec2{24, 24}, &v) == TileLookupResult::empty);
+
+        // solid 联动：挖墙/填墙往返
+        CHECK(is_solid_at(*r, tg::Vec2{8, 8}) == TileQueryResult::solid);
+        CHECK(r->set_tile_at(0, 0, 0, -1).has_value());
+        CHECK(is_solid_at(*r, tg::Vec2{8, 8}) == TileQueryResult::clear);
+        CHECK(r->set_tile_at(0, 0, 0, 1).has_value());
+        CHECK(is_solid_at(*r, tg::Vec2{8, 8}) == TileQueryResult::solid);
+
+        // 错误路径（palette 2 色）：值 ≥ palette_count / 值 < -1 / 坐标越界 /
+        // 层越界 → 全部拒绝；每类错误后 tile_at 读回原值 + nonempty 不变
+        //（「失败零修改」完整钉死）
+        CHECK(!r->set_tile_at(0, 0, 0, 2).has_value());
+        CHECK(tile_at(*r, 0, tg::Vec2{8, 8}, &v) == TileLookupResult::occupied &&
+              v == 1);
+        CHECK(!r->set_tile_at(0, 0, 0, -2).has_value());
+        CHECK(tile_at(*r, 0, tg::Vec2{8, 8}, &v) == TileLookupResult::occupied &&
+              v == 1);
+        CHECK(!r->set_tile_at(0, -1, 0, 0).has_value());
+        CHECK(!r->set_tile_at(0, 0, 4, 0).has_value());
+        CHECK(!r->set_tile_at(5, 0, 0, 0).has_value());
+        CHECK(tile_at(*r, 0, tg::Vec2{8, 8}, &v) == TileLookupResult::occupied &&
+              v == 1);
+        CHECK(layer_ref.nonempty == 1);
+
+        // 交叉对账：混合 O(1) 写入（−1/+1/不变）→ tile_grid 物化 →
+        // update_layer_tiles 写回（整层重算）→ nonempty 一致
+        CHECK(r->set_tile_at(0, 2, 2, 1).has_value());   // +1 → 2
+        CHECK(r->set_tile_at(0, 0, 0, -1).has_value());  // −1 → 1
+        CHECK(r->set_tile_at(0, 3, 3, 1).has_value());   // +1 → 2
+        std::vector<int> grid(16, -1);
+        CHECK(tile_grid(*r, 0, 0, 0, 4, 4, grid.data()) ==
+              TileLookupResult::occupied);
+        CHECK(r->update_layer_tiles(0, grid).has_value());
+        CHECK(layer_ref.nonempty == 2);
+    }
+    // ── 图集场景：值域上界 = tileset count ──
+    {
+        const std::string p = write_scene(atlas_scene());
+        auto r = SceneAsset::load(p);
+        std::remove(p.c_str());
+        REQUIRE(r.has_value());
+        CHECK(r->set_tile_at(0, 1, 1, 15).has_value());  // count-1 合法
+        int v = -9;
+        CHECK(tile_at(*r, 0, tg::Vec2{24, 24}, &v) == TileLookupResult::occupied);
+        CHECK(v == 15);
+        CHECK(!r->set_tile_at(0, 1, 1, 16).has_value());  // ≥ count 拒绝
+        CHECK(!r->set_tile_at(0, 1, 1, -2).has_value());
+    }
+    // ── 多格 tile（size_in_atlas）：一格一 cell，写其 cell 不影响其他 cell ──
+    {
+        // test_tileset.json：单 tile、size_in_atlas [3,5]（渲染 region 扩展，
+        // 逻辑仍占一个 cell）
+        constexpr const char* kMulti =
+            R"({"format":"tro-scene","version":2,"tilemap":{
+                "tile_width":16,"tile_height":16,
+                "tilesets":[{"name":"ts","path":"tilesets/test_tileset.json"}],
+                "layers":[
+                  {"name":"g","width":4,"height":4,"solid":true,"tileset":"ts",
+                   "tiles":[0,-1,-1,-1,
+                            -1,-1,-1,-1,
+                            -1,-1,-1,-1,
+                            -1,-1,-1,-1]} ]},"entities":[]})";
+        const std::string p = write_scene(kMulti);
+        auto r = SceneAsset::load(p);
+        std::remove(p.c_str());
+        REQUIRE(r.has_value());
+        CHECK(r->set_tile_at(0, 1, 1, 0).has_value());  // tile(1,1) 写入
+        int v = -9;
+        CHECK(tile_at(*r, 0, tg::Vec2{24, 24}, &v) == TileLookupResult::occupied);
+        CHECK(v == 0);
+        // 相邻 cell 不受影响（含多格 tile 覆盖到的渲染区域 cell）
+        v = -9;
+        CHECK(tile_at(*r, 0, tg::Vec2{8, 24}, &v) == TileLookupResult::empty);
+        v = -9;
+        CHECK(tile_at(*r, 0, tg::Vec2{24, 8}, &v) == TileLookupResult::empty);
+        v = -9;
+        CHECK(tile_at(*r, 0, tg::Vec2{40, 40}, &v) == TileLookupResult::empty);
+    }
+    return ok;
+}
+
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
     test_is_solid_at();
@@ -370,6 +484,7 @@ int main() {
     test_tile_at();
     test_batch_grid_and_mask();
     test_update_layer_tiles();
+    test_set_tile_at();
     test_asset_id_and_safety();
     test_asset_id_exhaustion_seam();
     std::printf("[query test] checks=%d failures=%d\n", ::tg_test::g_checks,
