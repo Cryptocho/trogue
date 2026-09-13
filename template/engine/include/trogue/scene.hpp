@@ -18,9 +18,11 @@
 #include <string_view>
 #include <vector>
 
+#include <nlohmann/json.hpp>  // props 透传载体（值拷贝；运行时依赖，随公共头传播）
+#include <tl/expected.hpp>
+
 #include "trogue/config.hpp"
 #include "trogue/types.hpp"
-#include <tl/expected.hpp>
 
 namespace tg {
 
@@ -44,6 +46,8 @@ enum class TileLookupResult { error, empty, occupied };
 
 // 实体/动画帧的视觉描述。
 // region.w/h==0 表示整图（render 期按贴图尺寸补齐）。
+// offset = 绘制锚点偏移（pos + offset = 纹理左上），两形态统一。
+// flip_x/flip_y = 镜像采样（显式翻转；缩放因子负值不构成翻转语义）。
 struct SpriteDesc {
     bool has = false;
     std::uint64_t asset_id = 0;  // 归属校验（取快照时填所属 asset_id）；0=无
@@ -52,10 +56,16 @@ struct SpriteDesc {
     std::string texture;         // 独立贴图路径（assets-relative，独立贴图形态）
     Rect region{0, 0, 0, 0};
     Vec2 offset{0, 0};
+    bool flip_x = false;
+    bool flip_y = false;
 };
 
 // 通用 spawn descriptor 快照（非运行时实体）。
 // animations 不复制进此快照：经 asset 的动画集查询取得。
+// rotation = 初始朝向提示（度；纯数据透传，game 自行解释；不改变 w/h 的
+// AABB 语义，也不参与任何引擎碰撞/查询判定）。
+// props = 自由透传 object（值拷贝；引擎不解释任何键，语义归 game）；
+// 缺省与空 object 等价。
 struct SceneEntity {
     std::string id;
     std::string type;            // 不透明 archetype/spawn 标识，engine 不分支
@@ -64,6 +74,8 @@ struct SceneEntity {
     int z = 0;
     Color color{255, 255, 255, 255};
     bool solid = false;          // 仅 game 导入提示；engine 查询不读它
+    float rotation = 0.0f;       // 度；spawn 朝向提示，不进碰撞语义
+    nlohmann::json props = nlohmann::json::object();  // 透传，不解释
     SpriteDesc sprite;
 };
 
@@ -104,6 +116,10 @@ public:
     std::uint64_t asset_id() const;
     // 场景名（meta.name 缺省 → 空串）；引用仅在 asset 存活期内有效。
     std::string_view name() const;
+
+    // 场景级自由透传 object（meta.props；缺省 → 空 object）；引用仅在
+    // asset 存活期内有效。引擎不解释任何键；场景级初始参数的语义归 game。
+    const nlohmann::json& meta_props() const;
 
     int layer_count() const;
     // 只读引用（存活期）；index 越界 → 断言失败（调用方先查 layer_count）。
@@ -165,7 +181,7 @@ private:
     friend RenderResult render_scene(const SceneAsset& asset);
     friend RenderResult render_sprite(const SceneAsset& asset,
                                       const SpriteDesc& sprite, Vec2 pos,
-                                      Color tint, Vec2 scale);
+                                      Color tint, Vec2 scale, float rotation);
 };
 
 // ════════════════════ tile-only 查询（自由函数） ════════════════════

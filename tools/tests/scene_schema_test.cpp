@@ -401,6 +401,126 @@ bool test_sprite() {
     return ok;
 }
 
+// ════════════ 描述符增量字段（v2.2）：props/rotation/图集 offset/flip ════════════
+
+bool test_descriptor_extras() {
+    bool ok = true;
+    auto scene_with = [](const std::string& entity_json) {
+        return R"({"format":"tro-scene","version":2,"tilemap":{"layers":[]},"entities":[)" +
+               entity_json + R"(]})";
+    };
+    // 图集形态 offset/flip 现已合法（拒绝正例需带 tilesets 的场景，见下方
+    // atlas-sprite-extras；region 仅独立贴图形态，此处先验证其拒绝）
+    ok &= expect_reject(
+        "sprite 图集形态 region 仍拒绝",
+        scene_with(
+            R"({"id":"a","sprite":{"tileset":"x","tile":0,"region":[0,0,8,8]}})"),
+        tg::ErrorCode::kSchemaViolation);
+    // flip 非 bool 拒绝（两形态同规则）
+    ok &= expect_reject(
+        "sprite flip_x 非 bool",
+        scene_with(R"({"id":"a","sprite":{"texture":"t.png","flip_x":1}})"),
+        tg::ErrorCode::kSchemaViolation);
+    ok &= expect_reject(
+        "sprite flip_y 非 bool",
+        scene_with(R"({"id":"a","sprite":{"texture":"t.png","flip_y":"yes"}})"),
+        tg::ErrorCode::kSchemaViolation);
+    // offset 两形态统一（独立贴图形态缺省整段已在 test_sprite 覆盖数值非法）
+    ok &= expect_reject(
+        "sprite offset 非 2 元",
+        scene_with(R"({"id":"a","sprite":{"texture":"t.png","offset":[3]}})"),
+        tg::ErrorCode::kSchemaViolation);
+    // rotation 非有限拒绝；props 非 object 拒绝
+    ok &= expect_reject("entity rotation 非有限",
+                        scene_with(R"({"id":"a","rotation":1e39})"),
+                        tg::ErrorCode::kSchemaViolation);
+    ok &= expect_reject("entity props 非 object",
+                        scene_with(R"({"id":"a","props":[1,2]})"),
+                        tg::ErrorCode::kSchemaViolation);
+
+    // 正例：rotation/props/独立贴图 offset+flip 存储进快照；缺省等价
+    {
+        auto r = SceneAsset::load_json(
+            scene_with(
+                R"({"id":"a","rotation":90.5,"props":{"hp":3,"tags":["x"]},)"
+                R"("sprite":{"texture":"t.png","offset":[2,-4],"flip_x":true}})"),
+            "descriptor-extras");
+        if (!r) {
+            ::tg_test::record_failure(__FILE__, __LINE__,
+                                      "descriptor 正例加载失败: " + r.error().message);
+            return false;
+        }
+        auto e = r->entity(0);
+        CHECK(e.rotation == 90.5f);
+        CHECK(e.props.is_object());
+        CHECK(e.props["hp"] == 3);
+        CHECK(e.props["tags"][0] == "x");
+        CHECK(e.sprite.flip_x == true);
+        CHECK(e.sprite.flip_y == false);
+        CHECK(e.sprite.offset.x == 2.0f && e.sprite.offset.y == -4.0f);
+    }
+    // 正例（图集形态）：offset/flip 合法化后接受并进快照（region 仍拒绝）
+    {
+        auto r = SceneAsset::load_json(
+            R"({"format":"tro-scene","version":2,"tilemap":{"tile_width":16,"tile_height":16,)"
+            R"("tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],)"
+            R"("layers":[]},)"
+            R"("entities":[{"id":"b","sprite":{"tileset":"ts","tile":0,)"
+            R"("offset":[1,2],"flip_x":true,"flip_y":true}}]})",
+            "atlas-sprite-extras");
+        if (!r) {
+            ::tg_test::record_failure(__FILE__, __LINE__,
+                                      "图集形态 offset/flip 正例加载失败: " +
+                                          r.error().message);
+            return false;
+        }
+        auto e = r->entity(0);
+        CHECK(e.sprite.tileset_index == 0);
+        CHECK(e.sprite.offset.x == 1.0f && e.sprite.offset.y == 2.0f);
+        CHECK(e.sprite.flip_x && e.sprite.flip_y);
+    }
+    // 缺省：rotation==0、props 为空 object、flip 均 false
+    {
+        auto r = SceneAsset::load_json(scene_with(R"({"id":"a"})"),
+                                       "descriptor-defaults");
+        if (!r) {
+            ::tg_test::record_failure(__FILE__, __LINE__,
+                                      "descriptor 缺例加载失败: " + r.error().message);
+            return false;
+        }
+        auto e = r->entity(0);
+        CHECK(e.rotation == 0.0f);
+        CHECK(e.props.is_object() && e.props.empty());
+        CHECK(!e.sprite.flip_x && !e.sprite.flip_y);
+    }
+    // meta.props：正例存储 + 访问器；非 object 拒绝；缺省空 object
+    {
+        auto r = SceneAsset::load_json(
+            R"({"format":"tro-scene","version":2,"meta":{"props":{"level":7}},"tilemap":{"layers":[]},"entities":[]})",
+            "meta-props");
+        if (!r) {
+            ::tg_test::record_failure(__FILE__, __LINE__,
+                                      "meta.props 正例加载失败: " + r.error().message);
+            return false;
+        }
+        CHECK(r->meta_props()["level"] == 7);
+    }
+    ok &= expect_reject(
+        "meta.props 非 object",
+        R"({"format":"tro-scene","version":2,"meta":{"props":"x"},"tilemap":{"layers":[]},"entities":[]})",
+        tg::ErrorCode::kSchemaViolation);
+    {
+        auto r = SceneAsset::load_json(bare_scene(), "meta-props-default");
+        if (!r) {
+            ::tg_test::record_failure(__FILE__, __LINE__,
+                                      "meta.props 缺例加载失败: " + r.error().message);
+            return false;
+        }
+        CHECK(r->meta_props().is_object() && r->meta_props().empty());
+    }
+    return ok;
+}
+
 bool test_animations() {
     bool ok = true;
     auto scene_anim = [](const std::string& anim_json) {
@@ -799,6 +919,7 @@ int main() {
     test_tiles_array();
     test_entities();
     test_sprite();
+    test_descriptor_extras();
     test_animations();
     test_animation_names();
     test_payload_limits();

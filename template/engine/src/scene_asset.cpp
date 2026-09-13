@@ -94,6 +94,7 @@ expected<json, Error> parse_json_text(const std::string& text,
 
 std::uint64_t SceneAsset::asset_id() const { return impl_->id; }
 std::string_view SceneAsset::name() const { return impl_->name; }
+const nlohmann::json& SceneAsset::meta_props() const { return impl_->meta_props; }
 int SceneAsset::layer_count() const {
     return static_cast<int>(impl_->layers.size());
 }
@@ -241,6 +242,13 @@ expected<void, Error> parse_meta(const json& root, detail::SceneImpl& out) {
         if (!c) return tl::unexpected(err(ErrorCode::kSchemaViolation,
                                           at("meta.background", "非法颜色")));
         out.background = *c;
+    }
+    // meta.props：场景级自由透传 object（与实体 props 同策略：只校验形状、
+    // 不解释键；缺省/空 object 等价）。其余未知 key 仍宽容忽略。
+    if (auto p = it->find("props"); p != it->end()) {
+        if (!p->is_object()) return tl::unexpected(
+            err(ErrorCode::kSchemaViolation, at("meta.props", "必须是 object")));
+        out.meta_props = *p;
     }
     // meta 内其它未知 key：宽容忽略（对导出器扩展留口）
     return {};
@@ -789,8 +797,12 @@ expected<void, Error> parse_sprite(const json& s, std::string_view where,
         err(ErrorCode::kSchemaViolation,
             at(where, "sprite 图集与独立贴图形态互斥")));
     if (has_ts) {
+        // 公共可选键 offset/flip_x/flip_y 在两形态统一（见函数尾）；
+        // region 仅独立贴图形态（region 与图集 tile 语义相斥，白名单不含）。
         for (const auto& kv : s.items()) {
-            if (kv.key() != "tileset" && kv.key() != "tile")
+            if (kv.key() != "tileset" && kv.key() != "tile" &&
+                kv.key() != "offset" && kv.key() != "flip_x" &&
+                kv.key() != "flip_y")
                 return tl::unexpected(err(ErrorCode::kSchemaViolation, at(
                     where, "图集形态 sprite 未知键 " + kv.key())));
         }
@@ -815,35 +827,36 @@ expected<void, Error> parse_sprite(const json& s, std::string_view where,
         dst.has = true;
         dst.tileset_index = idx;
         dst.tile = tile;
-        return {};
+    } else {
+        for (const auto& kv : s.items()) {
+            const std::string& k = kv.key();
+            if (k != "texture" && k != "region" && k != "offset" &&
+                k != "flip_x" && k != "flip_y")
+                return tl::unexpected(err(ErrorCode::kSchemaViolation, at(
+                    where, "独立贴图形态 sprite 未知键 " + k)));
+        }
+        const auto tex_it = s.find("texture");
+        if (tex_it == s.end() || !tex_it->is_string() ||
+            !detail::is_safe_relative_path(tex_it->get_ref<const std::string&>()))
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(where, "sprite.texture 路径非法")));
+        dst.has = true;
+        dst.texture = tex_it->get_ref<const std::string&>();
+        if (auto r = s.find("region"); r != s.end()) {
+            if (!r->is_array() || r->size() != 4) return tl::unexpected(
+                err(ErrorCode::kSchemaViolation, at(where, "region 必须为 [x,y,w,h]")));
+            auto x = detail::json_as_finite_float((*r)[0]);
+            auto y = detail::json_as_finite_float((*r)[1]);
+            auto w = detail::json_as_finite_float((*r)[2]);
+            auto h = detail::json_as_finite_float((*r)[3]);
+            if (!x || !y || !w || !h) return tl::unexpected(
+                err(ErrorCode::kSchemaViolation, at(where, "region 数值非法")));
+            if (*x < 0 || *y < 0 || *w <= 0 || *h <= 0) return tl::unexpected(
+                err(ErrorCode::kSchemaViolation, at(where, "region x/y>=0 且 w/h>0")));
+            dst.region = Rect{*x, *y, *w, *h};
+        }
     }
-    // 独立贴图形态
-    for (const auto& kv : s.items()) {
-        const std::string& k = kv.key();
-        if (k != "texture" && k != "region" && k != "offset")
-            return tl::unexpected(err(ErrorCode::kSchemaViolation, at(
-                where, "独立贴图形态 sprite 未知键 " + k)));
-    }
-    const auto tex_it = s.find("texture");
-    if (tex_it == s.end() || !tex_it->is_string() ||
-        !detail::is_safe_relative_path(tex_it->get_ref<const std::string&>()))
-        return tl::unexpected(err(ErrorCode::kSchemaViolation,
-                                  at(where, "sprite.texture 路径非法")));
-    dst.has = true;
-    dst.texture = tex_it->get_ref<const std::string&>();
-    if (auto r = s.find("region"); r != s.end()) {
-        if (!r->is_array() || r->size() != 4) return tl::unexpected(
-            err(ErrorCode::kSchemaViolation, at(where, "region 必须为 [x,y,w,h]")));
-        auto x = detail::json_as_finite_float((*r)[0]);
-        auto y = detail::json_as_finite_float((*r)[1]);
-        auto w = detail::json_as_finite_float((*r)[2]);
-        auto h = detail::json_as_finite_float((*r)[3]);
-        if (!x || !y || !w || !h) return tl::unexpected(
-            err(ErrorCode::kSchemaViolation, at(where, "region 数值非法")));
-        if (*x < 0 || *y < 0 || *w <= 0 || *h <= 0) return tl::unexpected(
-            err(ErrorCode::kSchemaViolation, at(where, "region x/y>=0 且 w/h>0")));
-        dst.region = Rect{*x, *y, *w, *h};
-    }
+    // 公共可选键（两形态统一）：offset / flip_x / flip_y
     if (auto o = s.find("offset"); o != s.end()) {
         if (!o->is_array() || o->size() != 2) return tl::unexpected(
             err(ErrorCode::kSchemaViolation, at(where, "offset 必须为 [ox,oy]")));
@@ -852,6 +865,16 @@ expected<void, Error> parse_sprite(const json& s, std::string_view where,
         if (!ox || !oy) return tl::unexpected(
             err(ErrorCode::kSchemaViolation, at(where, "offset 数值非法")));
         dst.offset = Vec2{*ox, *oy};
+    }
+    if (auto f = s.find("flip_x"); f != s.end()) {
+        if (!f->is_boolean()) return tl::unexpected(
+            err(ErrorCode::kSchemaViolation, at(where, "flip_x 必须为 boolean")));
+        dst.flip_x = f->get<bool>();
+    }
+    if (auto f = s.find("flip_y"); f != s.end()) {
+        if (!f->is_boolean()) return tl::unexpected(
+            err(ErrorCode::kSchemaViolation, at(where, "flip_y 必须为 boolean")));
+        dst.flip_y = f->get<bool>();
     }
     return {};
 }
@@ -1011,13 +1034,13 @@ expected<void, Error> parse_entity(const json& e, std::size_t index,
         const std::string& k = kv.key();
         if (k != "id" && k != "type" && k != "x" && k != "y" && k != "w" &&
             k != "h" && k != "z" && k != "color" && k != "solid" &&
-            k != "sprite" && k != "animations" && k != "props")
+            k != "rotation" && k != "sprite" && k != "animations" &&
+            k != "props")
             return tl::unexpected(err(ErrorCode::kSchemaViolation,
                                       at(where, "未知键 " + k)));
     }
-    // props：Godot 侧玩法 metadata 透传（v1.1 起预留字段，导出器持续写入）。引擎只
-    // 校验形状、不读取不存储——只携带不解释，语义由 game 导入 descriptor 时决定；
-    // 未来消费时再扩展 SceneEntity 快照（需求驱动）。
+    // props：玩法/关卡 metadata 自由透传。引擎只校验为 object、不解释任何键，
+    // 语义由 game 导入 descriptor 时决定；快照值拷贝携带（SceneEntity::props）。
     if (auto p = e.find("props"); p != e.end() && !p->is_object())
         return tl::unexpected(err(ErrorCode::kSchemaViolation,
                                   at(where, "props 必须为 object")));
@@ -1100,6 +1123,17 @@ expected<void, Error> parse_entity(const json& e, std::size_t index,
     // solid：仅 true 字面量生效，其余一律缺省 false（取值宽容，语义不放宽）
     if (auto s = e.find("solid"); s != e.end() && s->is_boolean()) {
         ent.solid = s->get<bool>();
+    }
+    // rotation：度；有限 number 缺省 0。仅 spawn 朝向提示（透传），不进碰撞语义。
+    if (auto r = e.find("rotation"); r != e.end()) {
+        auto v = detail::json_as_finite_float(*r);
+        if (!v) return tl::unexpected(
+            err(ErrorCode::kSchemaViolation, at(where, "rotation 数值非法")));
+        ent.rotation = *v;
+    }
+    // props：形状已在上方白名单段校验；此处值拷贝存储（缺省保持空 object）。
+    if (auto p = e.find("props"); p != e.end()) {
+        ent.props = *p;
     }
     // sprite（可选）
     if (auto sp = e.find("sprite"); sp != e.end()) {

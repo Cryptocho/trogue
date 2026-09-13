@@ -22,11 +22,16 @@ RenderResult render_scene(const SceneAsset& asset);
 // 绘制一个显式 sprite 快照。pos = 期望的左上角世界坐标（game 决定来源）。
 // 归属校验：sprite.asset_id == asset.asset_id()，否则 Invalid + 错误日志。
 // region 缺省(w/h==0)时按贴图尺寸补齐；锚点 = pos + sprite.offset。
+// flip_x/flip_y = 镜像采样（显式翻转）。rotation = 度，绕锚点（pos+offset）
+// 顺时针（对齐 DrawTexturePro 的角度约定与 y 向下坐标系）；flip/rotation/
+// scale 可组合。scale 必须为有限正数——负值不构成翻转（Invalid），翻转只走
+// 显式 flip 字段。
 // 注：**pos 始终为纹理左上角**（不因 region 缺省而改为居中）；需居中请由 game
 // 自行设 offset（引擎不做隐式对齐）。
 RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
                            Vec2 pos, Color tint = Color{255, 255, 255, 255},
-                           Vec2 scale = Vec2{1.0f, 1.0f});
+                           Vec2 scale = Vec2{1.0f, 1.0f},
+                           float rotation = 0.0f);
 
 // 便捷色块（palette/bare/无贴图时 game 可用）；不做任何实体语义。
 RenderResult draw_rect(Rect world_rect, Color color);

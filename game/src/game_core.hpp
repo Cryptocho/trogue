@@ -120,6 +120,8 @@ struct Actor {
     tg::Color color{255, 255, 255, 255};
     int z = 0;               // 视觉层级提示（descriptor 透传，渲染排序用）
     tg::SpriteDesc sprite;   // 视觉快照（无贴图时 has==false，渲染为色块）
+    float rotation = 0.0f;   // 初始朝向提示（descriptor 透传，度）
+    nlohmann::json props;    // descriptor 自由透传（game 自行解释）
     int anim_set = -1;       // 动画集索引（-1=无动画；名=entity id 映射）
     // ── 战斗/AI 状态（惰性实体一律 nullopt/空） ──
     std::optional<Hp> hp;                 // nullopt = 无 hp（不参与战斗）

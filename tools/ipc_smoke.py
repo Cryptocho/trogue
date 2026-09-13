@@ -101,6 +101,18 @@ def main():
     r = rpc(cmd="get_entity", id="smoke_coin")
     check("despawn 后查询报错", r.get("ok") is False, r)
 
+    print("== 描述符增量字段（rotation/props/flip）==")
+    r = rpc(cmd="get_entity", id="transform_probe")
+    ent = r.get("data", {}).get("entity", {})
+    check("探针实体 rotation 透传",
+          r.get("ok") and abs(ent.get("rotation", 0.0) - 30.0) < 1e-5, r)
+    check("探针实体 props 透传",
+          ent.get("props", {}).get("hp") == 3
+          and ent["props"].get("note") == "descriptor 表达力探针", r)
+    check("探针实体 sprite.flip_x",
+          ent.get("sprite", {}).get("flip_x") is True
+          and "flip_y" not in ent.get("sprite", {}), r)
+
     print("== 观测命令（v1.1）==")
     # radius 按实体中心距离判定：从实体快照取 w/h 算中心，不硬编码尺寸
     r = rpc(cmd="get_entity", id="player")

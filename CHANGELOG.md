@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### 引擎：tro-scene 描述符表达力泛化（v2.2 只增字段）
+
+- 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`template/API.md`、`template/AGENTS.md`、`template/scripts/sync_from_source.sh`、`AGENTS.md`、`docs/plan-21.md`
+
+#### Added
+- 实体 `props` 从「校验后丢弃」改为存储并经 `SceneEntity::props` 值拷贝暴露；新增场景级 `meta.props`（`SceneAsset::meta_props()` 返回随 asset 存活的 const 引用）。引擎只校验为 object、不解释任何键，语义归 game。
+- `SpriteDesc` 新增 `flip_x`/`flip_y`（镜像采样显式字段）；sprite 两形态统一接受 `offset`（图集形态此前直接拒绝载入；`region` 仍仅独立贴图形态）。
+- 实体新增可选 `rotation`（度，缺省 0）：spawn 初始朝向提示，纯数据透传，不改变 w/h 的 AABB 碰撞语义。
+- `render_sprite` 新增 flip（负宽/高 source-rect 镜像）与 rotation（绕锚点 pos+offset 顺时针）增量参数，均带缺省值零破坏；fast-path 判据扩为「scale==1 且 rotation==0 且无 flip」。scale 钉死为有限正数——负 scale 维持 Invalid，翻转只走显式 flip 字段。
+
+#### Refactored
+- `parse_sprite` 重构为「形态核心 + 公共可选键」（offset/flip 两形态统一解析）。
+- game 层 `draw_entity_sprite` 增量 `rotation` 参数透传引擎（帧动画帧与静态 sprite 一并生效）；demo 实体快照新增 `rotation`/`props`/`sprite.flip_x/flip_y` 输出（仅非缺省时出现）。
+- 模板结构重构（同日拍板，随本变更集）：模板 `AGENTS.md` 拆出 `API.md`（设计定稿后再读）；`sync_from_source.sh` 的 `pixellab/`、`editor/` 快照改为 `--with-pixellab`/`--with-editor` 可选安装/刷新；模板文档去除题材/工具链倾向性表述。
+
+#### Tests
+- `scene_schema_test` 新增 `test_descriptor_extras`（props/rotation/offset/flip 接受与拒绝全集 + 图集形态 offset/flip 正例 + meta.props）；`scene_query_test` 新增 `test_props_snapshot_semantics`（快照值拷贝隔离 + meta_props 存活期）；`render_test` 新增 `test_flip_rotation_params`（非有限 rotation/负 scale 段①拒绝、单 flip 位走段②）。
+- demo.json 新增 `transform_probe` 探针实体（flip_x + rotation 30° + props）；`ipc_smoke.py` 新增 3 项快照断言，基线 84 → 87；consumer smoke 实体基线 7 → 8。
+- 人工 E2E：截图确认探针实体相对对照实体旋转 30° 且镜像绘制；Debug + Release 构建零告警；CTest 15/15；冒烟 87/87；模板快照同步且独立副本构建零告警。
+
+#### Documentation
+- AGENTS.md：资产规范 v2.2 修订（rotation/props/meta.props 行、sprite 行更正「图集形态 offset 拒绝」旧表述）、引擎公共 API 边界追加里程碑 21 块、IPC 命令表快照字段更新、Roadmap 勾选（P4-③ 兑现）；模板 `API.md` 资产摘要同步。
+
 ### 引擎：单格 tile 写入（SceneAsset::set_tile_at）
 
 - 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`tools/tests/scene_query_test.cpp`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-20.md`

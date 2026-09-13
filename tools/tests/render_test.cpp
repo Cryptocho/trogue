@@ -6,6 +6,7 @@
 //   ② 合法调用但未建窗口 → window_checks 增、texture_attempts==0（段②不执行段③）；
 //   ③ draw_rect 非法矩形 → param_failures 增；合法矩形未建窗口 → window_checks 增。
 // 本机无窗口（不 InitWindow），render_* 应全程安全 no-op 不崩、不触碰 GPU。
+#include <limits>
 #include <cstdio>
 #include <string>
 
@@ -137,12 +138,58 @@ bool test_reload_texture_contract() {
     return ok;
 }
 
+// flip/rotation 增量参数：非有限 rotation 段①拒绝；其余值无窗口时走段②。
+bool test_flip_rotation_params() {
+    bool ok = true;
+    render_test_reset_stats();
+
+    auto asset_or = make_asset();
+    REQUIRE(asset_or.has_value());
+
+    SpriteDesc sp;
+    sp.has = true;
+    sp.asset_id = asset_or->asset_id();
+    sp.texture = "textures/x.png";
+    sp.flip_x = true;
+    sp.flip_y = true;
+
+    // 非有限 rotation → 段① Invalid（窗口检查前）
+    CHECK(render_sprite(*asset_or, sp, tg::Vec2{0, 0},
+                        tg::Color{255, 255, 255, 255}, tg::Vec2{1, 1},
+                        std::numeric_limits<float>::infinity()) ==
+          RenderResult::Invalid);
+    // 负 scale 维持现状 = Invalid（翻转只走显式 flip 字段，负 scale 不参与）
+    CHECK(render_sprite(*asset_or, sp, tg::Vec2{0, 0},
+                        tg::Color{255, 255, 255, 255}, tg::Vec2{-1, 1},
+                        45.0f) == RenderResult::Invalid);
+
+    const RenderStats after_param = render_test_stats();
+    CHECK(after_param.param_failures == 2);
+    CHECK(after_param.window_checks == 0);
+
+    // flip + 合法 rotation、无窗口 → 段②（参数全过，窗口检查执行）
+    CHECK(render_sprite(*asset_or, sp, tg::Vec2{0, 0},
+                        tg::Color{255, 255, 255, 255}, tg::Vec2{1, 1},
+                        45.0f) == RenderResult::WindowUnavailable);
+    // 仅 flip_x（单 flip 位）同样走段②（fast-path 判据按位判断）
+    SpriteDesc sp_x = sp;
+    sp_x.flip_y = false;
+    CHECK(render_sprite(*asset_or, sp_x, tg::Vec2{0, 0}) ==
+          RenderResult::WindowUnavailable);
+    const RenderStats after_win = render_test_stats();
+    CHECK(after_win.window_checks == 2);
+    CHECK(after_win.param_failures == 2);
+    CHECK(after_win.texture_attempts == 0);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
     test_param_failures_precede_window();
     test_window_unavailable_no_draw();
     test_reload_texture_contract();
+    test_flip_rotation_params();
     // 清理独立贴图缓存（未加载任何东西，幂等）
     tg::shutdown_render();
     std::printf("[render test] checks=%d failures=%d\n", ::tg_test::g_checks,

@@ -173,6 +173,11 @@
 > **2026-09-13 新增（里程碑 20）**：
 > - **单格 tile 写入**（`SceneAsset::set_tile_at(layer, tx, ty, value)`）：受限可变窗口（`update_layer_tiles`）的窄化补充——层局部 tile 坐标（不含层 origin；写入与查询的层外语义刻意不对称：查询层外=不阻挡，写入层外=参数错误）、值域规则与整层更新共享推导（图集 → 所引 tileset count、palette → palette 大小、bare 不可写）、nonempty O(1) 原地维护、失败零修改、写后 `tile_at`/`is_solid_at`/渲染立即可见（同缓冲区）。**不进引擎**：批量/区域写入（game 循环即 O(1)/格）、autotile 联动重排与地形指派（玩法决策归 game，复刻「engine 不保存地形状态、不做扩散式重排」边界）。工具/探针侧 demo IPC `set_tile` 命令可直接验证。
 
+> **2026-09-13 新增（里程碑 21，tro-scene v2.2 只增字段）**：
+> - **descriptor 透传补全**：`SceneEntity::props`（实体 `props` object 从「校验后丢弃」改为存储并值拷贝暴露；nlohmann 随公共头传播）+ `SceneAsset::meta_props()`（场景级 `meta.props`，引用随 asset 存活）——引擎只校验形状、不解释任何键，语义归 game。
+> - **视觉描述增量**：`SpriteDesc::flip_x/flip_y`（镜像采样显式字段；两形态统一接受 `offset`，图集形态 `region` 仍拒绝）+ `SceneEntity::rotation`（spawn 朝向提示，度，纯数据——不改变 AABB 碰撞语义）。
+> - **绘制原语**：`render_sprite` 增量参数 flip（负宽/高 source-rect 镜像，DrawTexturePro 语义）与 rotation（绕锚点 pos+offset 顺时针，度）；fast-path 判据扩为「scale==1 且 rotation==0 且无 flip」。**scale 钉死为有限正数**——负 scale 维持 Invalid，翻转只走显式 flip 字段（P4-③ 兑现）。**不进引擎**：背景层/视差/渐变（game 直调 raylib）、descriptor 级 scale、动画帧 flip、自动朝向、旋转碰撞（谁旋转、怎么碰撞归 game）。
+
 > `world.c`/`TgWorld`/`TgEntity`/`tg_*` 等历史 C API 已在 **里程碑 5（2026-09-07）** 整体删除/迁移到 `game/`（见「文档有效性与历史实现降级」），引擎不再拥有这些类型；不得再以兼容名义把它们引回 engine。
 
 ### 文档有效性与历史实现降级
@@ -207,7 +212,7 @@ trogue/
 │   └── addons/scene_exporter/  # 导出插件 v4（菜单 + headless，v2.1 schema + 动画）
 ├── docs/                  # 里程碑计划书（plan-<M>.md，开工前闭环送审）+ 历史归档 history.md
 ├── tools/
-│   ├── ipc_smoke.py       # IPC 冒烟测试（84 项断言）
+│   ├── ipc_smoke.py       # IPC 冒烟测试（87 项断言）
 │   ├── scene_gen.cpp      # 离线场景生成 CLI（pixellab 管线数据流 C 机制半，复用 pick_tile）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── pixellab/              # PixelLab MCP → tro-* 转换层（上游资产管线，与 editor/ 平级；见「PixelLab 资产管线」）
@@ -307,6 +312,7 @@ python3 tools/ipc_smoke.py
 |------|------|
 | 版本 | format 必须为 "tro-scene" 且 version 必须为 2；其他值拒绝载入（v2 为破坏性升级，不读 v1） |
 | 坐标系 | 像素，原点 = tilemap 左上角，y 向下；实体 x/y 为**左上角** |
+| meta | `name`（可选 string，长度 < kNameMax）与 `background`（可选 `#rrggbb`）之外，另有可选 `props`（object，v2.2）：场景级自由透传（关卡参数等），引擎不解释任何键，经 `SceneAsset::meta_props()` 暴露（引用随 asset 存活）；缺省与空 object 等价。meta 其余未知键宽容忽略 |
 | 三态模式 | ① `tilesets` 存在 → 图集模式；② 有 `palette` 无 `tilesets` → palette 模式（tiles = 调色板索引，语义同 v1）；③ 没有地形数据 → **bare 纯实体场景**。图集与 palette **互斥**，同时出现拒绝载入；没有地形数据却声明非空层拒绝载入 |
 | tilesets | 1..8 项 `{name, path}`，path 相对 assets/；name 场景内唯一；每个 tileset 的 tile 尺寸必须与场景 tile_width/height 一致 |
 | 层 tileset | tilesets 非空时每层必填 `tileset`（引用 name）；palette 模式下层不得携带该字段。Godot 一层混用多个贴图组时，导出插件自动拆为多个输出层（首组沿用层名、其余加 `_组序号` 后缀），不再要求一层一贴图 |
@@ -316,10 +322,11 @@ python3 tools/ipc_smoke.py
 | 实体 id | 必填、场景内唯一；asset loader 遇重复 id 直接拒绝；runtime object 的冲突处理由 game 自己定义，不由 engine 自动追加 `_N` |
 | 实体 type | 默认 `"unknown"`；schema 只把它作为不透明的 archetype/spawn 标识，不定义玩法。engine 不读取或分支处理 `type`；演示应用如需 `player` 规则，只能由 `game/` 自己实现 |
 | 实体 z | 可选 number（缺省 0，浮点取整）：通用视觉层级提示，作为 descriptor 提供给 game；engine 不自动排序或解释它 |
+| 实体 rotation | 可选 number（缺省 0，度，须有限）：spawn 初始朝向提示，纯数据透传；不改变 w/h 的 AABB 语义，不参与任何引擎碰撞/查询判定（2026-09-13 v2.2） |
 | 实体 solid | 可选 bool（缺省 false）：通用的初始空间/导入提示；engine tile-only 查询不读取它，也不自动把实体 AABB 加入碰撞。game 接管对象时可自行决定是否导入 OOP/ECS 碰撞组件；仅 `true` 字面量生效，其余值按缺省 false 处理 |
-| 实体 sprite | 可选对象，两种形态互斥：图集形态 `{"tileset": name, "tile": id}`（name 必须在场景 tilesets 中；不接受 region/offset，写了被忽略）或独立贴图形态 `{"texture": "textures/x.png", "region": [x,y,w,h]?, "offset": [ox,oy]?}`；region 缺省整图，offset 缺省 `[0,0]`；绘制锚点 = 实体 x/y + offset，贴图按原始像素尺寸绘制（不缩放） |
+| 实体 sprite | 可选对象，两种形态互斥：图集形态 `{"tileset": name, "tile": id, "offset"?: [ox,oy], "flip_x"?: bool, "flip_y"?: bool}`（name 必须在场景 tilesets 中；**region 不接受，拒绝载入**——region 与图集 tile 语义相斥）或独立贴图形态 `{"texture": "textures/x.png", "region"?: [x,y,w,h], "offset"?: [ox,oy], "flip_x"?: bool, "flip_y"?: bool}`；`offset` 缺省 `[0,0]`（v2.2 起两形态统一，图集形态曾直接拒绝），绘制锚点 = 实体 x/y + offset；`flip_x/flip_y` 缺省 false = 镜像采样显式字段（非 bool 拒绝；负 scale 不构成翻转——`render_sprite` 的 scale 须有限正数）。贴图按原始像素尺寸绘制（不缩放）（2026-09-13 v2.2 修订） |
 | 实体 animations | 可选对象（v2.1）：动画帧表 `{"textures": [贴图路径索引表], "animations": [{"name": ..., "fps": N, "loop": bool, "frames": [{"texture": 索引, "region": [x,y,w,h]?, "offset": [ox,oy]?}]}]}`；`textures` 路径相对 assets/ 且去重，帧经索引引用；region 缺省整图，offset 缺省 `[0,0]`；结构同「tro-animations v1」。引擎已消费（C++ 里程碑起由 `tg::AnimationSet`/`tg::AnimationPlayer` 播放，见「引擎公共 API 边界」）；历史 C 阶段曾透传不消费 |
-| 实体 props | 可选 object（v1.1 起预留字段）：Godot 侧实体 metadata 的自由透传——导出器把非保留名 metadata 收进该对象，逐实体玩法标注/移植初值的载体；引擎只校验为 object、**忽略不存**（只携带不解释，语义由 game 导入 spawn descriptor 时自行决定）；未来按需消费（扩展 `SceneEntity` 快照），不预做 API。非 object 拒绝载入；实体序列化字节限额照常约束它 |
+| 实体 props | 可选 object（v1.1 起预留字段；v2.2 起引擎存储并经 `SceneEntity::props` 值拷贝暴露）：实体 metadata 的自由透传——导出器把非保留名 metadata 收进该对象，逐实体玩法标注/移植初值的载体；引擎只校验为 object、不解释任何键（语义由 game 导入 spawn descriptor 时自行决定）。非 object 拒绝载入；实体序列化字节限额照常约束它 |
 | color | `#rrggbb` 或 `#rrggbbaa`，缺省白色；有 sprite 时作染色 tint（缺省白 = 原样绘制），无 sprite 时为色块颜色 |
 | 渲染顺序 | engine 只保证 tile 层按资产数组序绘制；entity descriptor 不由 engine 自动绘制或排序。game 自己决定显式 sprite 的调用顺序、y-sort、z-sort 和实体色块绘制 |
 | 校验 | format/version 不符、tiles 长度或值域不对、tileset 引用不存在、尺寸不一致、三态组合不合法（图集+palette 同现、无 tilesets/palette 但有层）→ 拒绝载入并保留旧场景 |
@@ -394,17 +401,17 @@ python3 tools/ipc_smoke.py
 
 ## 项目模板（template/）
 
-模板中的 `AGENTS.md` 是面向派生游戏项目的体验与开发指南，不是本仓库根文档的复制品；引擎 API 只作为附录参考。
+模板中的 `AGENTS.md` 是面向派生游戏项目的体验与开发指南，不是本仓库根文档的复制品；引擎 API 参考拆分在同目录的 `API.md`——`AGENTS.md` 明确要求 Agent **设计文档定稿后再读** `API.md`，防止引擎能力清单作为上下文先行注入而收窄游戏设计（2026-09-13 拍板，附录混入指南的示范引力教训）。
 
 > **目的**：让「用 trogue 从零自主开发一个游戏」可复制——`template/` 是一个**最小**自包含项目骨架，复制它即得到能构建、能运行、能被 Agent 迭代的新游戏起点。
 
-- **内容（最小起点，不含框架自用测试）**：`engine/`、`pixellab/`（仅转换脚本）、`editor/`、`tools/scene_gen.cpp` 的 **vendored 快照** + **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`tools/CMakeLists.txt`/`tools/ipc_smoke.py`。
+- **内容（最小起点，不含框架自用测试）**：`engine/`、`tools/scene_gen.cpp` 的 **vendored 快照** + **可选 vendored 快照** `pixellab/`（仅转换脚本）/`editor/`（安装与更新时用 `--with-pixellab`/`--with-editor` 显式选择，缺省不装——派生游戏不预设美术生成管线与 Godot 工具链，2026-09-13 拍板）+ **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`API.md`/`tools/CMakeLists.txt`/`tools/ipc_smoke.py`。
 - **不含本仓库的测试套件与 fixture**：`tools/tests/`（引擎单测）与 `pixellab/tests/`、`pixellab/fixtures/` 是本仓库验证 trogue 引擎自用，**不进模板**（游戏项目另建自己的测试）。
 - **权威源**：vendored 文件的权威源是**本仓库**；模板内 vendored 文件禁止手改，上游更新后在仓库内重跑 `template/scripts/sync_from_source.sh` 刷新（维护者模式：engine/pixellab/editor 整目录替换 + tools 逐文件；永不触碰模板自有文件）。
-- **派生与更新（一份脚本）**：`template/scripts/sync_from_source.sh` 随模板分发给派生项目——在**空目录**运行=新建项目（铺入模板并剥离 `README.md`/引导脚本）；在**已有项目根**运行=更新引擎（从上游临时克隆取快照，只刷新 vendored 集合，保留 `game/`/`assets/`/项目自有文件）。在源仓库的 `template/` 内运行=维护者模式（源仓库根 → 模板快照）。上游 URL/分支可用 `--url`/`--ref` 覆盖（私有库可传带凭证 URL；日志内凭证自动遮盖）；`--source <dir>` 用本地源仓库代替克隆。
+- **派生与更新（一份脚本）**：`template/scripts/sync_from_source.sh` 随模板分发给派生项目——在**空目录**运行=新建项目（铺入模板并剥离 `README.md`/引导脚本）；在**已有项目根**运行=更新引擎（从上游临时克隆取快照，只刷新 vendored 集合，保留 `game/`/`assets/`/项目自有文件）。可选快照 `pixellab/`/`editor/` 用 `--with-pixellab`/`--with-editor` 显式安装或刷新，缺省跳过（已装的项目更新时不加标志也不删除）。在源仓库的 `template/` 内运行=维护者模式（源仓库根 → 模板快照，不受标志影响）。上游 URL/分支可用 `--url`/`--ref` 覆盖（私有库可传带凭证 URL；日志内凭证自动遮盖）；`--source <dir>` 用本地源仓库代替克隆。
 - **验证**：空目录运行→独立副本构建零告警、起服 + `tools/ipc_smoke.py` 全过；已有项目运行→`game/`/`README.md` 不被覆盖、engine 被刷新。
 - **非目标**：不改 engine 公共 API / tro-* schema；不把 roguelike 玩法或框架测试带入模板；不做参数化脚手架；不自动建 git。
-- **遗留**：模板 `AGENTS.md` 的 schema 段落与根 `AGENTS.md` 双份维护（模板顶部已声明权威源）；模板 `tools/CMakeLists.txt`/`ipc_smoke.py` 随上游变化需手工跟进。
+- **遗留**：模板 `API.md` 的 schema 段落与根 `AGENTS.md` 双份维护（`API.md` 顶部已声明以引擎实现/上游为权威源）；模板 `tools/CMakeLists.txt`/`ipc_smoke.py` 随上游变化需手工跟进。
 
 ## 热重载规范
 
@@ -445,7 +452,7 @@ python3 tools/ipc_smoke.py
 | `help` | — | `{commands:[...]}` |
 | `events` | — | `{events:[{name, when, data, filter}]}`（game 事件注册表；plan-9 起 6 事件实表：StateChanged/MoveSucceeded/AbilityUsed/DamageDealt/EntityDied/TurnEnded，可 filter 字段=entity/source/target，逐条目文档化） |
 | `status` | — | `{scene, reloads, entities, phase, fps, uptime_s, port}` |
-| `list_entities` | — | `{entities:[{id,type,x,y,w,h,color, z?, transform:{visual,moving}, sprite?, hp?:[cur,max], ai?:{state,target}, anim?:{clip,frame}}], count}`（z≠0 才出现；hp/ai 仅战斗原型，plan-9；anim 仅动画集被绑定的实体，plan-10；transform 为 inspector 视图，见下方说明） |
+| `list_entities` | — | `{entities:[{id,type,x,y,w,h,color, z?, rotation?, props?, transform:{visual,moving}, sprite?, hp?:[cur,max], ai?:{state,target}, anim?:{clip,frame}}], count}`（z≠0 / rotation≠0 / props 非空才出现；sprite 含 flip_x/flip_y 仅 true 时出现；hp/ai 仅战斗原型，plan-9；anim 仅动画集被绑定的实体，plan-10；transform 为 inspector 视图，见下方说明） |
 | `get_entity` | `id` | `{entity:{...}}`（字段同 list_entities） |
 | `query_entities` | 半径模式 `x` `y` `radius` 必填；或矩形模式 `rect:[x,y,w,h]`（同时提供时**半径模式优先**）；可选 `type` 过滤 | `{entities:[...], count}`；radius 按实体中心距查询点距离 ≤ radius，rect 按 AABB 相交 |
 | `set_entity` | `id`，`x?` `y?` `color?` | `{entity:{...}}`（改后快照） |
@@ -502,7 +509,7 @@ python3 tools/ipc_smoke.py
 
 0. **文件工具纪律（2026-09-09 拍板，多次踩坑教训）**：修改任何文件前必须先用 **read 工具**读它——禁止用 bash（`cat`/`head`/`sed -n` 等）代替读取。edit/write 工具以 read 工具的读取记录为准：未经 read 读过或读后文件已变更（含自己经 bash 改动过），edit/write 一律拒绝（「edit requires reading first」「file changed since it was read」）。已多次因此报错中断，此为硬性前置步骤。
 1. 起服：`cmake --build build && (./build/bin/trogue > /tmp/trogue_run.log 2>&1 &)`
-2. 冒烟：`python3 tools/ipc_smoke.py`（84 项断言全过为基线）
+2. 冒烟：`python3 tools/ipc_smoke.py`（87 项断言全过为基线）
 3. 调试循环：`status`/`list_entities` 观测 → 改 `assets/scenes/*.json` → 0.5s 后 `status.reloads` 自增即为生效 → `screenshot` 拿画面 → `set_entity`/`spawn` 做实体运行时实验、`set_tile` 做地形运行时实验（挖墙/填墙 → `solid_at` 立即断言）
 4. 收尾：`{"cmd":"quit"}` 让引擎干净退出
 5. 日志在 stdout（TraceLog 格式），解析失败原因可在其中检索 `[scene]`
@@ -613,7 +620,8 @@ python3 tools/ipc_smoke.py
 - [ ] **固定步长累加器（原 P1 后半，移交主线）**：仓库内零消费方，按「需求驱动、不预先纳入」纪律并入「动态运动与物理能力评估」主线的时间步进评估；届时定义 advance(dt) → 整步数 + 插值 alpha 的原语形态（插值与否由 game 决定）
 - [x] **独立贴图缓存失效 API（2026-09-13 完成）**：`tg::reload_texture(path)`——进程级独立贴图缓存的失效原语（卸载 + 清失败哨兵，下次绘制重读盘；合法路径恒 true、不触碰 RenderStats 计数，仅非法路径 +1 `param_failures`；图集贴图随 asset RAII 不在范围）；demo IPC `reload_texture` 探针命令 + demo.json `tex_probe` 独立贴图实体；失效时机与文件监听策略仍归 game（计划 `docs/plan-19.md` 两轮审查通过并落地）
 - [x] **单格 tile 写入（2026-09-13 完成）**：`SceneAsset::set_tile_at(layer, tx, ty, value)`——受限可变窗口的窄化补充（层局部 tile 坐标、值域规则与整层更新共享 helper、nonempty O(1) 原地维护、失败零修改、写后查询/渲染立即可见）；「小区域填充」裁定为 game 侧循环（零引擎语义），不进引擎；demo IPC `set_tile` 探针命令（Agent 运行时地形实验：挖墙/填墙 → solid_at/get_tile 断言）；autotile 重排与地形指派仍归 game（计划 `docs/plan-20.md` 审查通过并落地）
-- [ ] **API 语义文档收尾（P4，零 API 增量，2026-09-13 拍板）**：① tween-as-timer idiom（`add_float(0,0,{duration,delay}, 忽略采样, on_complete)` + `co_await wait(id)` 串演出序列）文档化；② `TweenSpec.repeats` 补写正值语义与无限循环下 `on_complete` 是否逐轮触发；③ `render_sprite` 翻转语义（文档化负 scale 行为或加显式 flip）；④ 模板/指南并列展示多种消费方式（OOP 与 ECS 各一个最小例），把「引擎不规定架构」从声明变成可见事实（缓解示范引力）
+- [ ] **API 语义文档收尾（P4，2026-09-13 拍板）**：① tween-as-timer idiom（`add_float(0,0,{duration,delay}, 忽略采样, on_complete)` + `co_await wait(id)` 串演出序列）文档化；② `TweenSpec.repeats` 补写正值语义与无限循环下 `on_complete` 是否逐轮触发；③ ~~`render_sprite` 翻转语义~~（**已完成于里程碑 21**：加显式 `flip_x/flip_y`，负 scale 钉死为 Invalid）；④ 模板/指南并列展示多种消费方式（OOP 与 ECS 各一个最小例），把「引擎不规定架构」从声明变成可见事实（缓解示范引力）
+- [x] **tro-scene 描述符表达力泛化（2026-09-13 完成）**：v2.2 只增字段——实体 `props` 存储 + `SceneEntity::props` 值拷贝暴露、场景级 `meta.props` + `meta_props()`、`SpriteDesc::flip_x/flip_y` + 两形态统一 `offset`（图集 region 仍拒绝）、`SceneEntity::rotation`（spawn 朝向提示，不进碰撞语义）、`render_sprite` flip/rotation 增量参数（负 scale 钉死 Invalid，P4-③ 兑现）；探针实体 E2E + 冒烟 87 项（计划 `docs/plan-21.md` 审查通过并落地）
 
 ### 下一主线的边界说明
 

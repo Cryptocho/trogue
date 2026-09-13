@@ -22,10 +22,14 @@ namespace game {
 // 的 int 截断在移动插值中会 ±1px 错位/抖动）。
 // 返回 true = 画出了 sprite；false = 走了色块兜底（调用方一般无需再处理）。
 // 调用方决定传不传播放器（触发/绑定策略归调用方，本函数只做机制）。
+// rotation（度，绕 pos 顺时针）透传给引擎绘制，帧动画帧与静态 sprite 一并生效
+//（朝向是实体级属性）；static_sprite 自带的 flip/offset 随值语义直接生效，
+// 帧动画帧的 flip 未定义（tro-animations 无 flip 字段）。
 bool draw_entity_sprite(const tg::SceneAsset& asset,
                         const tg::AnimationPlayer* anim,
                         const tg::SpriteDesc& static_sprite, tg::Vec2 pos,
-                        tg::Color tint, float fallback_w, float fallback_h);
+                        tg::Color tint, float fallback_w, float fallback_h,
+                        float rotation = 0.0f);
 
 // 帧末截图（调用方排队、本函数执行）：先强制 flush 渲染批再读屏导出。
 // 返回是否导出成功（失败已记 warning 日志）。

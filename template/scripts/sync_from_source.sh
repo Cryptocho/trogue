@@ -2,9 +2,9 @@
 # sync_from_source.sh —— 从上游 trogue 仓库取模板，安装/更新到**当前目录**。
 #
 # 一份脚本覆盖两种场景：
-#   1) 新建项目：在空目录里运行 → 把上游模板完整铺到当前目录（含起步 game/）。
+#   1) 新建项目：在空目录里运行 → 把上游模板铺到当前目录（含起步 game/）。
 #   2) 更新引擎：在已有项目里运行 → 只刷新 vendored 快照
-#      （engine/、pixellab/、editor/、tools/scene_gen.cpp），**不动**你的游戏
+#      （engine/、tools/scene_gen.cpp 及已安装的可选快照），**不动**你的游戏
 #      代码、资产与项目自有文件（game/、assets/、CMakeLists.txt、README.md、
 #      .gitignore、AGENTS.md、tools/CMakeLists.txt、tools/ipc_smoke.py）。
 #
@@ -16,6 +16,8 @@
 #     --url <repo>     上游仓库 URL（缺省 $TROGUE_URL 或内置默认）
 #     --ref <ref>      上游分支/标签（缺省 $TROGUE_REF 或内置默认）
 #     --source <dir>   用本地 trogue 源仓库根代替克隆（开发/离线用）
+#     --with-pixellab  安装/刷新 pixellab/ 转换工具快照（可选，缺省不装）
+#     --with-editor    安装/刷新 editor/ Godot 工程快照（可选，缺省不装）
 #     --full           连项目自有文件也覆盖（整份模板重置；会覆盖 game/ 等，谨慎）
 #     -h | --help
 #
@@ -33,15 +35,19 @@ URL="${TROGUE_URL:-$DEF_URL}"
 REF="${TROGUE_REF:-$DEF_REF}"
 SOURCE_ARG=""
 FULL=0
+WITH_PIXELLAB=0
+WITH_EDITOR=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --url)    URL="$2"; shift 2 ;;
         --ref)    REF="$2"; shift 2 ;;
         --source) SOURCE_ARG="$2"; shift 2 ;;
+        --with-pixellab) WITH_PIXELLAB=1; shift ;;
+        --with-editor)   WITH_EDITOR=1; shift ;;
         --full)   FULL=1; shift ;;
         -h|--help)
-            sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *)
             echo "[sync] 未知参数: $1（用 --help 查看用法）" >&2
@@ -139,21 +145,25 @@ fi
 rm -rf "$DEST/engine"
 cp -r "$VROOT/engine" "$DEST/engine"
 
-# pixellab：仅顶层转换脚本（与模板约定一致；不含 tests/fixtures）
-rm -rf "$DEST/pixellab"
-mkdir -p "$DEST/pixellab"
-for f in "$VROOT"/pixellab/*.py; do
-    [ -e "$f" ] || continue
-    copy_file "$f" "pixellab/$(basename "$f")"
-done
+# pixellab：仅顶层转换脚本（与模板约定一致；不含 tests/fixtures）——可选快照
+if [ "$WITH_PIXELLAB" = "1" ]; then
+    rm -rf "$DEST/pixellab"
+    mkdir -p "$DEST/pixellab"
+    for f in "$VROOT"/pixellab/*.py; do
+        [ -e "$f" ] || continue
+        copy_file "$f" "pixellab/$(basename "$f")"
+    done
+fi
 
-# editor：视觉标注工程（仅 tracked 内容）
-rm -rf "$DEST/editor"
-mkdir -p "$DEST/editor/addons"
-for f in project.godot README.md .editorconfig .gitignore; do
-    [ -e "$VROOT/editor/$f" ] && copy_file "$VROOT/editor/$f" "editor/$f" || true
-done
-[ -d "$VROOT/editor/addons" ] && cp -r "$VROOT/editor/addons/." "$DEST/editor/addons/" || true
+# editor：视觉标注工程（仅 tracked 内容）——可选快照
+if [ "$WITH_EDITOR" = "1" ]; then
+    rm -rf "$DEST/editor"
+    mkdir -p "$DEST/editor/addons"
+    for f in project.godot README.md .editorconfig .gitignore; do
+        [ -e "$VROOT/editor/$f" ] && copy_file "$VROOT/editor/$f" "editor/$f" || true
+    done
+    [ -d "$VROOT/editor/addons" ] && cp -r "$VROOT/editor/addons/." "$DEST/editor/addons/" || true
+fi
 
 # tools：仅离线场景生成 CLI
 copy_file "$VROOT/tools/scene_gen.cpp" "tools/scene_gen.cpp"
@@ -204,5 +214,8 @@ echo "[sync] 完成。"
 if [ "$VENDORED_FROM_ROOT" = "1" ]; then
     echo "       下一步（上游维护者）：git add template/ && 提交"
 else
+    if [ "$WITH_PIXELLAB" = "0" ] || [ "$WITH_EDITOR" = "0" ]; then
+        echo "       可选快照：pixellab/（--with-pixellab）、editor/（--with-editor）未安装/未刷新。"
+    fi
     echo "       下一步：cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build"
 fi

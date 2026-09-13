@@ -53,6 +53,7 @@ struct SceneImpl {
     std::uint64_t id = 0;
     std::string name;                    // meta.name，缺省空
     Color background{16, 16, 24, 255};   // meta.background，缺省 #101018（对齐 demo）
+    nlohmann::json meta_props = nlohmann::json::object();  // meta.props 透传，缺省空
     int tile_w = 0, tile_h = 0;          // bare → 0
 
     // 模式：atlas / palette / bare（由解析时判定）

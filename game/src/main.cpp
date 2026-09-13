@@ -239,6 +239,8 @@ tg::Json actor_to_json(const Demo& d, const game::Actor& a) {
         j["transform"] = t;
     }
     if (a.z != 0) j["z"] = a.z;
+    if (a.rotation != 0.0f) j["rotation"] = a.rotation;
+    if (a.props.is_object() && !a.props.empty()) j["props"] = a.props;
     if (a.sprite.has) {
         tg::Json s = tg::Json::object();
         if (a.sprite.tileset_index >= 0) {
@@ -253,6 +255,8 @@ tg::Json actor_to_json(const Demo& d, const game::Actor& a) {
             if (a.sprite.offset.x != 0 || a.sprite.offset.y != 0)
                 s["offset"] = {a.sprite.offset.x, a.sprite.offset.y};
         }
+        if (a.sprite.flip_x) s["flip_x"] = true;
+        if (a.sprite.flip_y) s["flip_y"] = true;
         j["sprite"] = s;
     }
     // game 层扩展注入点（默认空；未来 ECS 组件观察在此注册）
@@ -436,7 +440,7 @@ void draw_frame(const Demo& d) {
                 ? &d.anim
                 : nullptr,
             a->sprite, tg::Vec2{wx, wy}, a->color, game::kTileSize,
-            game::kTileSize);
+            game::kTileSize, a->rotation);
     }
 
     EndMode2D();

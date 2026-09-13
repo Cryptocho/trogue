@@ -477,6 +477,31 @@ bool test_set_tile_at() {
     return ok;
 }
 
+// props/rotation 快照值语义：深拷贝隔离（改快照不污染 asset）+ rotation 透传。
+bool test_props_snapshot_semantics() {
+    const std::string scene =
+        R"({"format":"tro-scene","version":2,"meta":{"props":{"gravity":9.8}},"tilemap":{"layers":[]},)"
+        R"("entities":[{"id":"a","rotation":-30.0,"props":{"hp":2}}]})";
+    auto r = tg::SceneAsset::load_json(scene, "props-semantics");
+    if (!r) {
+        ::tg_test::record_failure(__FILE__, __LINE__,
+                                  "props-semantics 加载失败: " + r.error().message);
+        return false;
+    }
+    // meta_props 引用随 asset 存活
+    CHECK(r->meta_props()["gravity"] == 9.8);
+    // 快照值拷贝：修改快照 props 后再取一次，asset 侧不变
+    auto e1 = r->entity(0);
+    CHECK(e1.rotation == -30.0f);
+    e1.props["hp"] = 999;
+    e1.props["added"] = true;
+    auto e2 = r->entity(0);
+    CHECK(e2.props["hp"] == 2);
+    CHECK(e2.props.find("added") == e2.props.end());
+    CHECK(e2.rotation == -30.0f);
+    return true;
+}
+
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
     test_is_solid_at();
@@ -485,6 +510,7 @@ int main() {
     test_batch_grid_and_mask();
     test_update_layer_tiles();
     test_set_tile_at();
+    test_props_snapshot_semantics();
     test_asset_id_and_safety();
     test_asset_id_exhaustion_seam();
     std::printf("[query test] checks=%d failures=%d\n", ::tg_test::g_checks,

@@ -202,7 +202,7 @@ RenderResult render_scene(const SceneAsset& asset) {
 }
 
 RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
-                           Vec2 pos, Color tint, Vec2 scale) {
+                           Vec2 pos, Color tint, Vec2 scale, float rotation) {
     auto& impl = *asset.impl_;
     // ① 参数/归属校验（失败才计入 param_failures）
     const auto param_fail = [&](const char* why) {
@@ -219,6 +219,8 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
     if (!std::isfinite(scale.x) || !std::isfinite(scale.y) ||
         scale.x <= 0.0f || scale.y <= 0.0f)
         return param_fail("sprite 缩放必须为有限正数");
+    if (!std::isfinite(rotation))
+        return param_fail("sprite 旋转角非有限");
     if (sprite.tileset_index >= 0) {
         const std::size_t ts = static_cast<std::size_t>(sprite.tileset_index);
         if (ts >= impl.tilesets.size()) return param_fail("tileset_index 越界");
@@ -252,15 +254,20 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
         // 图集形态锚点语义不变：pos + offset = 纹理左上（region 自动含多格尺寸）。
         // Godot 的 cell 中心对齐/texture_origin 是 tile 层语义；实体 sprite 的
         // Godot 等效摆放由 game 经 SpriteDesc.offset 自行表达。
-        const ::Rectangle source{r.x, r.y, r.w, r.h};
+        // flip 用负宽/高 source-rect（DrawTexturePro：负宽翻转 X；负高先把
+        // source.y 回移再翻转 Y；dest 尺寸取绝对值）。
+        const ::Rectangle source{r.x, r.y,
+                                 sprite.flip_x ? -r.w : r.w,
+                                 sprite.flip_y ? -r.h : r.h};
         const ::Vector2 dest_pos{pos.x + sprite.offset.x, pos.y + sprite.offset.y};
-        if (scale.x == 1.0f && scale.y == 1.0f) {
+        if (scale.x == 1.0f && scale.y == 1.0f && rotation == 0.0f &&
+            !sprite.flip_x && !sprite.flip_y) {
             DrawTextureRec(tex, source, dest_pos, to_raylib(tint));
         } else {
             DrawTexturePro(tex, source,
                            ::Rectangle{dest_pos.x, dest_pos.y,
                                        r.w * scale.x, r.h * scale.y},
-                           ::Vector2{0.0f, 0.0f}, 0.0f, to_raylib(tint));
+                           ::Vector2{0.0f, 0.0f}, rotation, to_raylib(tint));
         }
         return RenderResult::Drawn;
     }
@@ -276,15 +283,18 @@ RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,
         rw = static_cast<float>(tex_sp->tex.width);
         rh = static_cast<float>(tex_sp->tex.height);
     }
-    const ::Rectangle rec{sprite.region.x, sprite.region.y, rw, rh};
+    const ::Rectangle rec{sprite.region.x, sprite.region.y,
+                          sprite.flip_x ? -rw : rw,
+                          sprite.flip_y ? -rh : rh};
     const ::Vector2 dest_pos{pos.x + sprite.offset.x, pos.y + sprite.offset.y};
-    if (scale.x == 1.0f && scale.y == 1.0f) {
+    if (scale.x == 1.0f && scale.y == 1.0f && rotation == 0.0f &&
+        !sprite.flip_x && !sprite.flip_y) {
         DrawTextureRec(tex_sp->tex, rec, dest_pos, to_raylib(tint));
     } else {
         DrawTexturePro(tex_sp->tex, rec,
                        ::Rectangle{dest_pos.x, dest_pos.y,
                                    rw * scale.x, rh * scale.y},
-                       ::Vector2{0.0f, 0.0f}, 0.0f, to_raylib(tint));
+                       ::Vector2{0.0f, 0.0f}, rotation, to_raylib(tint));
     }
     return RenderResult::Drawn;
 }

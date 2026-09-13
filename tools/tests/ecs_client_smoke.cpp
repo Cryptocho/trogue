@@ -99,7 +99,7 @@ bool test_import_and_systems() {
     const SceneAsset& asset = demo_asset();
     for (int i = 0; i < asset.entity_count(); ++i)
         spawn(w, asset.entity(i));
-    CHECK(w.ids.size() == 7);  // 含 tex_probe（独立贴图探针实体）
+    CHECK(w.ids.size() == 8);  // 含 tex_probe（独立贴图探针实体）
     CHECK(w.tag[0].tag.id == "player");
     CHECK(w.tag[0].tag.type == "player");
 

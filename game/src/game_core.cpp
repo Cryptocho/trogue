@@ -114,6 +114,8 @@ void import_scene(GameState& gs, const tg::SceneAsset& asset) {
         a.color = e.color;
         a.z = e.z;
         a.sprite = e.sprite;
+        a.rotation = e.rotation;
+        a.props = e.props;
         // 动画集映射：动画集名 = 所属 entity id；未命中 = -1
         for (int s = 0; s < asset.animation_set_count(); ++s) {
             if (asset.animation_set(s).name() == a.id) {

@@ -13,7 +13,8 @@ namespace game {
 bool draw_entity_sprite(const tg::SceneAsset& asset,
                         const tg::AnimationPlayer* anim,
                         const tg::SpriteDesc& static_sprite, tg::Vec2 pos,
-                        tg::Color tint, float fallback_w, float fallback_h) {
+                        tg::Color tint, float fallback_w, float fallback_h,
+                        float rotation) {
     // ① 帧动画采样（组合公式）：offset = 实体静态锚点 + 帧自身
     // 偏移（士兵 [-50,-50]+[0,0] 居中语义与静态帧一致）。采样成功但绘制失败
     // （贴图缺失 TextureMissing/region 非法 Invalid——asset load 不读纹理，
@@ -23,14 +24,17 @@ bool draw_entity_sprite(const tg::SceneAsset& asset,
         if (f.has) {
             f.offset = tg::Vec2{static_sprite.offset.x + f.offset.x,
                                 static_sprite.offset.y + f.offset.y};
-            if (tg::render_sprite(asset, f, pos, tint) ==
+            if (tg::render_sprite(asset, f, pos, tint,
+                                  tg::Vec2{1.0f, 1.0f}, rotation) ==
                 tg::RenderResult::Drawn)
                 return true;
         }
     }
-    // ② 静态 sprite 回退（画面永不空白）。
-    if (static_sprite.has && tg::render_sprite(asset, static_sprite, pos,
-                                               tint) == tg::RenderResult::Drawn)
+    // ② 静态 sprite 回退（画面永不空白）；flip/offset 随值语义生效。
+    if (static_sprite.has &&
+        tg::render_sprite(asset, static_sprite, pos, tint,
+                          tg::Vec2{1.0f, 1.0f}, rotation) ==
+            tg::RenderResult::Drawn)
         return true;
     // ③ 色块兜底：浮点原语绘制，与 tile 层同相机变换下严格对齐。
     DrawRectanglePro(::Rectangle{pos.x, pos.y, fallback_w, fallback_h},
