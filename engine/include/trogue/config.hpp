@@ -56,6 +56,9 @@ inline constexpr int kIpcPortDefault = 48764;
 inline constexpr int kIpcMaxClients = 8;
 inline constexpr std::size_t kIpcLineMax = 64 * 1024;  // 单行上限（含 \r）
 
+// ── 虚拟输入（注入通道；见 input.hpp） ──
+inline constexpr int kPendingMax = 1024;  // 未消费事件队列上限（超限丢最旧）
+
 // ── 热重载 ──
 inline constexpr int kWatchDebounceMs = 150;
 

@@ -6,6 +6,8 @@
 #include "trogue/config.hpp"
 #include "trogue/types.hpp"
 #include "trogue/random.hpp"
+#include "trogue/time.hpp"
+#include "trogue/input.hpp"
 #include "trogue/coro.hpp"
 #include "trogue/task_runner.hpp"
 #include "trogue/scene.hpp"

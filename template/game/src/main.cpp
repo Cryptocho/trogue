@@ -4,11 +4,15 @@
 //   - 场景默认**在内存里构造**（tg::SceneAsset::load_json），零资产文件即可运行；
 //     传 `--scene <assets 相对路径>` 则改从磁盘加载，失败回退内置场景；
 //   - render_scene 画 tile 层，显式绘制 game 自己的对象（色块/贴图）；
-//   - WASD / 方向键 单格移动：地形 solid 用引擎 tile 查询裁决，视觉用引擎
-//     TweenManager 驱动、播完精确落格（避免浮点残差与像素抖动）；
+//   - **固定步模拟**（1/60，tg::StepClock 驱动）：真实键盘边缘与 IPC move 都
+//     排队成动作、每个模拟步边界最多消费一个；视觉用引擎 TweenManager 以固定
+//     dt 推进、播完精确落格（暂停冻真实时间通道，授步照常完整执行步）；
+//   - 虚拟注入通道（tg::VirtualInput）：IPC input 命令的按键事件在固定步边界
+//     消费（对齐惯例：本地步序 i，步执行前 step_due(i*step)），无撕裂伪影；
 //   - 若存在 assets/scenes 目录则监听其 .json（热重载）+ F5 手动重载；
 //   - IPC（DEBUG）：status / list_entities / get_entity / move / screenshot /
-//     log / quit —— 非视觉 Agent 可据此观测与驱动游戏。
+//     log / quit + pause / resume / step_frames / input / input_flush /
+//     input_stats —— 非视觉 Agent 可据此观测、驱动与**确定性逐帧回归**。
 //
 // 只经 engine/include/trogue/*.hpp 公共头使用引擎；玩法（对象模型、输入、
 // 规则、AI、动画触发）都在本文件/本游戏内实现。把这里当成草稿纸，随游戏
@@ -20,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <string>
@@ -35,6 +40,7 @@ namespace {
 
 constexpr int kTileSize = 16;           // 场景 tile 尺寸
 constexpr float kMoveDuration = 0.12f;  // 单格移动动画时长（秒）
+constexpr double kFixedDt = 1.0 / 60.0;  // 固定模拟步长（秒）
 
 // ── 内置起步场景（palette 模式，四面墙 + 玩家 + 木箱）──
 // 用 tg::Json 逐层构造，避免手写超长 tiles 数组；与磁盘 tro-scene 完全同构。
@@ -117,7 +123,17 @@ struct Game {
     int map_w = 0, map_h = 0;
     int reloads = 0;
 
-    // 玩家视觉位置（引擎 TweenManager 驱动；静止时 == 逻辑格像素）
+    // 固定步模拟（tg::StepClock 驱动）：真实时间通道产生步、授步通道精确
+    // 逐帧（step_frames）；暂停冻真实时间、授步照常完整执行步。
+    tg::StepClock clock{kFixedDt, 5};
+    std::int64_t step_i = 0;  // 本地步序（已完成步数；对齐/观测锚点）
+    struct Action { int dx, dy; };
+    std::deque<Action> actions;  // 待消费动作（每步最多一个；键盘/IPC move 同队列）
+
+    // 虚拟注入通道（IPC input 命令；真实键盘不经过它）
+    tg::VirtualInput input;
+
+    // 玩家视觉位置（引擎 TweenManager 驱动，固定 dt 推进；静止时 == 逻辑格像素）
     float view_x = 0, view_y = 0;
     bool view_init = false;
     tg::TweenManager::Id view_tween = 0;
@@ -227,6 +243,37 @@ void init_player_view_if_needed(Game& g) {
     }
 }
 
+// ── 固定步推进：一个模拟步 = 消费注入事件 → 消费一个动作 → 固定 dt 视觉 ──
+// 键位映射（注入通道与真实键盘同一张表；返回 false = 非移动键）
+bool move_key_dir(int key, int& dx, int& dy) {
+    switch (key) {
+        case KEY_RIGHT: case KEY_D: dx = 1; dy = 0; return true;
+        case KEY_LEFT:  case KEY_A: dx = -1; dy = 0; return true;
+        case KEY_DOWN:  case KEY_S: dx = 0; dy = 1; return true;
+        case KEY_UP:    case KEY_W: dx = 0; dy = -1; return true;
+        default: return false;
+    }
+}
+
+void run_one_step(Game& g) {
+    // ① 注入事件在步边界消费（对齐惯例：本地步序 i，步执行前 step_due(i*step)）
+    auto evs = g.input.step_due(static_cast<double>(g.step_i) * kFixedDt);
+    for (const auto& e : evs) {
+        int dx = 0, dy = 0;
+        if (e.down && move_key_dir(e.key, dx, dy))
+            g.actions.push_back({dx, dy});  // down 边沿 → 动作；up 无玩法语义
+    }
+    // ② 每步最多消费一个动作（「N 步期望值」= 动作队列消费计数，确定性口径）
+    if (!g.actions.empty()) {
+        const auto a = g.actions.front();
+        g.actions.pop_front();
+        try_move(g, a.dx, a.dy);
+    }
+    // ③ 视觉 tween 以固定 dt 推进（暂停/授步语义由 StepClock 上层保证）
+    g.tween.tick(kFixedDt);
+    ++g.step_i;
+}
+
 bool dir_exists(const std::string& path) {
     struct stat st{};
     return ::stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
@@ -255,9 +302,11 @@ void load_scene(Game& g, const std::string& path) {
     g.asset = std::make_unique<tg::SceneAsset>(std::move(*loaded));
     import_scene(g, *g.asset);
     // 打断进行中的移动 tween（旧场景目标格已失效；否则回调会把视觉拉回旧目标，
-    // 造成逻辑/视觉永久失步）
+    // 造成逻辑/视觉永久失步）。动作队列一并清空：新场景 = 新输入起点，排队中
+    // 的旧动作不再跨 reload 生效（与 tween 打断对称）。
     g.tween.cancel_all();
     g.view_tween = 0;
+    g.actions.clear();
     g.view_init = false;  // 玩家视觉位置下一帧按新逻辑位置初始化
     g.reloads += 1;
     TraceLog(LOG_INFO, "[game] 场景已加载: %s (actors=%d)",
@@ -290,7 +339,9 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
     if (cmd == "help") {
         tg::Json arr = tg::Json::array();
         for (const char* c : {"status", "list_entities", "get_entity",
-                              "move", "screenshot", "log", "quit"})
+                              "move", "screenshot", "log", "quit",
+                              "pause", "resume", "step_frames", "input",
+                              "input_flush", "input_stats"})
             arr.push_back(c);
         data = tg::Json{{"commands", arr}};
         return tg::IpcStatus::handled;
@@ -300,7 +351,12 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
                         {"reloads", g.reloads},
                         {"entities", static_cast<int>(g.actors.size())},
                         {"fps", GetFPS()},
-                        {"port", g.port}};
+                        {"port", g.port},
+                        {"paused", g.clock.paused()},
+                        {"steps", g.clock.total_steps()},
+                        {"step_i", g.step_i},
+                        // uptime 保持墙钟（观测口径，不随暂停冻结）
+                        {"uptime_s", GetTime()}};
         return tg::IpcStatus::handled;
     }
     if (cmd == "list_entities") {
@@ -326,6 +382,7 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
         // dx/dy 必须为整数（拒绝 1.9 这类浮点静默截断）且 |d|≤1（单格移动；
         // 多格会被 try_move 只校验终点、绕过中间碰撞）。用 int64 判值再收窄，
         // 避免超范围整数经 get<int>() 截断后被误判为合法。
+        // 固定步语义：动作**排队**，下一个模拟步边界消费（pause 下冻结）。
         std::int64_t dx = 0, dy = 0;
         auto int64_of = [](const tg::Json& v, std::int64_t& out) {
             if (!v.is_number_integer()) return false;
@@ -340,8 +397,101 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
             err = "move dx/dy must be integers in [-1,1] (single-cell)";
             return tg::IpcStatus::error;
         }
-        const bool ok = try_move(g, static_cast<int>(dx), static_cast<int>(dy));
-        data = tg::Json{{"moved", ok}};
+        g.actions.push_back({static_cast<int>(dx), static_cast<int>(dy)});
+        data = tg::Json{{"queued", true},
+                        {"pending", static_cast<long long>(g.actions.size())}};
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "pause") {
+        g.clock.pause();
+        data = tg::Json{{"paused", true}};
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "resume") {
+        g.clock.resume();
+        data = tg::Json{{"paused", false}};
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "step_frames") {
+        // 精确推进 n 个固定步（授步通道：pause 下可用、与真实时间互不干扰）。
+        if (!req.contains("n") || !req.at("n").is_number_integer()) {
+            err = "step_frames needs field: n (integer)";
+            return tg::IpcStatus::error;
+        }
+        const std::int64_t n = req.at("n").get<std::int64_t>();
+        if (n < 1 || n > 3600) {
+            err = "step_frames n must be in [1,3600]";
+            return tg::IpcStatus::error;
+        }
+        g.clock.credit(static_cast<int>(n));
+        std::int64_t remaining = n;
+        while (remaining > 0) {
+            const auto t = g.clock.tick(0.0);  // 只弹出已授步
+            for (int s = 0; s < t.steps && remaining > 0; ++s) {
+                run_one_step(g);
+                --remaining;
+            }
+        }
+        data = tg::Json{{"stepped", n}, {"step_i", g.step_i},
+                        {"paused", g.clock.paused()}};
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "input") {
+        // 注入按键事件（虚拟输入通道；步边界消费，无撕裂）。
+        // key 接受平台键名（KEY_RIGHT/KEY_A/...）或 int 键值；t 缺省 =
+        // 上一边界 (i-1)*step（注入后立即下一步生效；对齐惯例见 input.hpp）。
+        if (!req.contains("key") || !req.contains("down") ||
+            !req.at("down").is_boolean()) {
+            err = "input needs fields: key, down (bool)";
+            return tg::IpcStatus::error;
+        }
+        int key = 0;
+        if (req.at("key").is_string()) {
+            const std::string name = req.at("key").get<std::string>();
+            auto match = [&](int k, const char* n) {
+                if (name == n) { key = k; return true; }
+                return false;
+            };
+            const bool ok = match(KEY_RIGHT, "KEY_RIGHT") ||
+                            match(KEY_D, "KEY_D") ||
+                            match(KEY_LEFT, "KEY_LEFT") || match(KEY_A, "KEY_A") ||
+                            match(KEY_DOWN, "KEY_DOWN") || match(KEY_S, "KEY_S") ||
+                            match(KEY_UP, "KEY_UP") || match(KEY_W, "KEY_W");
+            if (!ok) {
+                err = "input key: unknown name " + name;
+                return tg::IpcStatus::error;
+            }
+        } else if (req.at("key").is_number_integer()) {
+            key = req.at("key").get<int>();
+        } else {
+            err = "input key must be a name string or int";
+            return tg::IpcStatus::error;
+        }
+        const double t = req.contains("t") && req.at("t").is_number()
+                             ? req.at("t").get<double>()
+                             : (static_cast<double>(g.step_i) - 1.0) * kFixedDt;
+        g.input.push(key, req.at("down").get<bool>(), t);
+        data = tg::Json{{"queued", true},
+                        {"pending", g.input.pending()}};
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "input_flush") {
+        g.input.flush();
+        data = tg::Json{{"flushed", true}};
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "input_stats") {
+        // down 列表 = 注入通道状态视图，仅覆盖上方键位表内的 8 个移动键
+        //（真实键盘不经过本通道；注入未映射键只排队消费，不进此列表）
+        tg::Json downs = tg::Json::array();
+        for (int k : {KEY_RIGHT, KEY_D, KEY_LEFT, KEY_A, KEY_DOWN, KEY_S,
+                      KEY_UP, KEY_W}) {
+            if (g.input.down(k)) downs.push_back(k);
+        }
+        data = tg::Json{{"pending", g.input.pending()},
+                        {"dropped", g.input.dropped()},
+                        {"down", downs},
+                        {"step_i", g.step_i}};
         return tg::IpcStatus::handled;
     }
     if (cmd == "screenshot") {
@@ -414,15 +564,21 @@ int main(int argc, char** argv) {
         }
         if (IsKeyPressed(KEY_F5)) load_scene(g, g.scene_path);
 
-        // 输入 → 单格移动（4 向）
-        int dx = 0, dy = 0;
-        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) dx = 1;
-        else if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) dx = -1;
-        else if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) dy = 1;
-        else if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) dy = -1;
-        if (dx || dy) try_move(g, dx, dy);
+        // 真实键盘边缘 → 动作队列（与 IPC move 同队列；步边界统一消费）
+        {
+            int dx = 0, dy = 0;
+            for (int k : {KEY_RIGHT, KEY_D, KEY_LEFT, KEY_A, KEY_DOWN, KEY_S,
+                          KEY_UP, KEY_W}) {
+                if (IsKeyPressed(k) && move_key_dir(k, dx, dy)) {
+                    g.actions.push_back({dx, dy});
+                    break;
+                }
+            }
+        }
 
-        g.tween.tick(dt);
+        // 固定步推进：真实时间通道产出步（暂停时为 0）；模拟/视觉全部在步内
+        const auto ticked = g.clock.tick(dt);
+        for (int s = 0; s < ticked.steps; ++s) run_one_step(g);
 
         // ── 渲染 ──
         BeginDrawing();

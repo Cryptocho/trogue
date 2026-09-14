@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### 引擎：固定步时钟与虚拟输入（运动/物理主线第一期）
+
+- 影响的文件: `engine/include/trogue/time.hpp`、`engine/src/time.cpp`、`engine/include/trogue/input.hpp`、`engine/src/input.cpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/step_clock_test.cpp`、`tools/tests/virtual_input_test.cpp`、`tools/CMakeLists.txt`、`template/game/src/main.cpp`、`template/tools/ipc_smoke.py`、`template/engine/`、`template/AGENTS.md`、`template/API.md`、`AGENTS.md`、`docs/plan-22.md`
+
+#### Added
+- 新增 `tg::StepClock`（`trogue/time.hpp`）：固定步长模拟时钟——对外单车道、内部授步池/时间池双池（授步池优先扣减，授步永不因溢出丢弃，`step_frames n` 对任意 n 精确）；溢出丢弃仅作用时间通道超额整步、以时间池现有整步数为上限，每 tick 后时间池 < step 不变式；暂停 = 停止时间通道、授步照常排空（alpha 恒 0）；`alpha` 插值余量报告（用不用归 game）；构造参数非法抛 `std::logic_error`。纯算术无回调，黄金序列逐位冻结。
+- 新增 `tg::VirtualInput`（`trogue/input.hpp`）：确定性按键注入通道（与平台真实键盘无关）——`(t, 入队序)` 稳定序、固定步边界一次性消费（对齐惯例 = 调用方本地步序 i，步执行前 `step_due(i*step)`）、`down()` 消费时更新、可选 `min_hold_steps` 防撕裂（推迟 up / 推迟期新 down 丢弃未生效 up / flush 后 down 保持现值）、`kPendingMax=1024` 超限丢最旧 + `dropped()` 可观测。消灭「注入伪影误诊为游戏 bug」一类的排查成本。
+- 模板起步 game 确定性改造（模板自有文件）：固定步主循环（1/60，真实键盘与 IPC `move` 同动作队列、每步最多消费一个、reload 清队列）；新 IPC 命令 `pause`/`resume`/`step_frames {n}`/`input {key,down,t?}`/`input_flush`/`input_stats` 并登记 `help`；`move` 响应改 `{queued:true}`（排队语义）；`status` 增 `paused`/`steps`/`step_i`/`uptime_s`（uptime 保持墙钟）。pause 冻结真实时间通道（模拟+tween 全停），授步照常完整执行步。
+
+#### Tests
+- `step_clock_test`（58 checks）：二进制精确 dt 黄金序列（正常/暂停/授步混合）、`credit(max+2)` 反丢步、混合溢出（授步不丢/丢弃不越时间池界）、暂停冻结与恢复接续、逐位确定性、负 dt、构造非法抛异常。
+- `virtual_input_test`（48 checks）：乱序稳定序、`t==boundary` 归下一批、多步帧边界递增对齐、down 消费时更新、min_hold 推迟/到期/再 down 丢弃、同边界 up+down 放行顺序冻结、flush 保持 down 现值、上限丢最旧。
+- 模板冒烟重写为确定性断言口径（22 项）：pause 冻结 move、`step_frames 1` 精确 +1 格、注入步边界生效无撕裂、tween 整步边界 snap 后 `visual == 逻辑格`、resume 后真实时间步恢复。
+- 根仓库零回归：Debug + Release 零告警；CTest 17/17；冒烟 87/87；模板独立副本（`--source` 本地安装）构建零告警 + 冒烟 22/22。
+
+#### Architecture
+- 运动/物理主线第一期（M22a）落地，需求实证来自模板派生平台跳跃探针完结报告（手写累加器 + 注入队列 + 三处 game 循环手写 dt）；碰撞族（kinematic_step/resolve_overlap/单向平台/DynBox/SolidGrid）拆至 M22b 另行门禁。引擎不感知 IPC 命令、不持有游戏状态、不注册回调（库不翻转为框架）；手感参数与玩法策略归 game。
+- 随车记录：用户 2026-09-13 直接拍板的模板文档精简（`template/AGENTS.md` 重写、`template/API.md` 删除——Agent 直读引擎头文件）一并提交，见 `docs/plan-22.md` §6。
+
 ### 引擎：tro-scene 描述符表达力泛化（v2.2 只增字段）
 
 - 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`template/API.md`、`template/AGENTS.md`、`template/scripts/sync_from_source.sh`、`AGENTS.md`、`docs/plan-21.md`

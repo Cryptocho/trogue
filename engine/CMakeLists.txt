@@ -76,6 +76,8 @@ set(ENGINE_SOURCES
     src/ipc.cpp
     src/terrain.cpp
     src/random.cpp
+    src/time.cpp
+    src/input.cpp
     src/util/json_check.cpp
     src/util/path_check.cpp
     src/util/color_check.cpp

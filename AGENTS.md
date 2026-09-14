@@ -118,6 +118,8 @@
 │  tween       数值/位置/颜色补间执行原语          │
 │  terrain     autotile 匹配表 TerrainTable/pick_tile│
 │  random      确定性随机（坐标哈希 + 流式 PRNG）  │
+│  time        固定步时钟 StepClock（双池/护栏）   │
+│  input       虚拟注入通道（步边界消费/防撕裂）   │
 │  hotreload   文件变化通知（不自行替换游戏状态）   │
 │  ipc         JSON-lines 传输/事件推送/callback 分发│
 ├──────────────────────────────────────────────┤
@@ -177,6 +179,12 @@
 > - **descriptor 透传补全**：`SceneEntity::props`（实体 `props` object 从「校验后丢弃」改为存储并值拷贝暴露；nlohmann 随公共头传播）+ `SceneAsset::meta_props()`（场景级 `meta.props`，引用随 asset 存活）——引擎只校验形状、不解释任何键，语义归 game。
 > - **视觉描述增量**：`SpriteDesc::flip_x/flip_y`（镜像采样显式字段；两形态统一接受 `offset`，图集形态 `region` 仍拒绝）+ `SceneEntity::rotation`（spawn 朝向提示，度，纯数据——不改变 AABB 碰撞语义）。
 > - **绘制原语**：`render_sprite` 增量参数 flip（负宽/高 source-rect 镜像，DrawTexturePro 语义）与 rotation（绕锚点 pos+offset 顺时针，度）；fast-path 判据扩为「scale==1 且 rotation==0 且无 flip」。**scale 钉死为有限正数**——负 scale 维持 Invalid，翻转只走显式 flip 字段（P4-③ 兑现）。**不进引擎**：背景层/视差/渐变（game 直调 raylib）、descriptor 级 scale、动画帧 flip、自动朝向、旋转碰撞（谁旋转、怎么碰撞归 game）。
+
+> **2026-09-14 新增（里程碑 22，运动/物理主线第一期 M22a）**：
+> - **固定步时钟**（`trogue/time.hpp`）：`tg::StepClock`——对外单车道、内部授步池/时间池双池（授步池优先扣减，**授步永不因溢出丢弃**，`step_frames n` 对任意 n 精确）；溢出丢弃仅作用时间通道超额整步且以时间池现有整步数为上限，每 tick 后时间池 < step 不变式；暂停 = 停时间通道、授步照常排空（alpha 恒 0）；`alpha` 插值余量报告（用不用归 game）；构造参数非法抛 `std::logic_error`（coro.hpp 先例）。纯算术、黄金序列冻结、无回调无状态。
+> - **虚拟输入通道**（`trogue/input.hpp`）：`tg::VirtualInput`——确定性按键注入（与平台真实键盘无关）；`(t,入队序)` 稳定序、步边界一次性消费（对齐惯例 = 调用方本地步序 i，**步执行前** `step_due(i*step)`）；`down()` 消费时更新；可选 `min_hold_steps` 防撕裂（推迟 up / 推迟期新 down 丢弃未生效 up / flush 后 down 保持现值）；`kPendingMax=1024` 超限丢最旧 + `dropped()`。消灭「注入伪影误诊为游戏 bug」一类排查成本（平台探针 10+ 次假阳性的实证）。
+> - **模板参考接线**（模板自有文件）：起步 game 改固定步主循环（真实键盘与 IPC move 同动作队列、每步最多消费一个）；新命令 `pause`/`resume`/`step_frames {n}`（授步精确推进）/`input {key,down,t?}`（t 缺省 = 上一边界 (i−1)*step）/`input_flush`/`input_stats`；`move` 响应改 `{queued:true}`（模板自有命令语义）。pause 冻结真实时间通道（模拟+tween 全停）；授步照常完整执行步；uptime 保持墙钟。
+> - **明确不进引擎**：引擎不感知 IPC 命令（六条命令是模板 handler 对两原语的薄封装）；引擎不持有游戏状态、不注册 update 回调（库不翻转为框架）；土狼/输入缓冲/可变跳高/重力曲线等手感参数、边缘折返 AI 等玩法策略归 game。碰撞族（kinematic_step/resolve_overlap/单向平台/DynBox/SolidGrid）= M22b，另行门禁（`docs/plan-23.md`）。
 
 > `world.c`/`TgWorld`/`TgEntity`/`tg_*` 等历史 C API 已在 **里程碑 5（2026-09-07）** 整体删除/迁移到 `game/`（见「文档有效性与历史实现降级」），引擎不再拥有这些类型；不得再以兼容名义把它们引回 engine。
 
@@ -401,17 +409,17 @@ python3 tools/ipc_smoke.py
 
 ## 项目模板（template/）
 
-模板中的 `AGENTS.md` 是面向派生游戏项目的体验与开发指南，不是本仓库根文档的复制品；引擎 API 参考拆分在同目录的 `API.md`——`AGENTS.md` 明确要求 Agent **设计文档定稿后再读** `API.md`，防止引擎能力清单作为上下文先行注入而收窄游戏设计（2026-09-13 拍板，附录混入指南的示范引力教训）。
+模板中的 `AGENTS.md` 是面向派生游戏项目的体验与开发指南，不是本仓库根文档的复制品；保持精简：不写 API 摘要（Agent 直接读 `engine/include/trogue/` 头文件；曾试过 `API.md` 已废除），不写安装器用法，不预设题材与工具链。
 
 > **目的**：让「用 trogue 从零自主开发一个游戏」可复制——`template/` 是一个**最小**自包含项目骨架，复制它即得到能构建、能运行、能被 Agent 迭代的新游戏起点。
 
-- **内容（最小起点，不含框架自用测试）**：`engine/`、`tools/scene_gen.cpp` 的 **vendored 快照** + **可选 vendored 快照** `pixellab/`（仅转换脚本）/`editor/`（安装与更新时用 `--with-pixellab`/`--with-editor` 显式选择，缺省不装——派生游戏不预设美术生成管线与 Godot 工具链，2026-09-13 拍板）+ **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`API.md`/`tools/CMakeLists.txt`/`tools/ipc_smoke.py`。
+- **内容（最小起点，不含框架自用测试）**：`engine/`、`tools/scene_gen.cpp` 的 **vendored 快照** + **可选 vendored 快照** `pixellab/`（仅转换脚本）/`editor/`（安装与更新时用 `--with-pixellab`/`--with-editor` 显式选择，缺省不装——派生游戏不预设美术生成管线与 Godot 工具链，2026-09-13 拍板）+ **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`tools/CMakeLists.txt`/`tools/ipc_smoke.py`。
 - **不含本仓库的测试套件与 fixture**：`tools/tests/`（引擎单测）与 `pixellab/tests/`、`pixellab/fixtures/` 是本仓库验证 trogue 引擎自用，**不进模板**（游戏项目另建自己的测试）。
 - **权威源**：vendored 文件的权威源是**本仓库**；模板内 vendored 文件禁止手改，上游更新后在仓库内重跑 `template/scripts/sync_from_source.sh` 刷新（维护者模式：engine/pixellab/editor 整目录替换 + tools 逐文件；永不触碰模板自有文件）。
 - **派生与更新（一份脚本）**：`template/scripts/sync_from_source.sh` 随模板分发给派生项目——在**空目录**运行=新建项目（铺入模板并剥离 `README.md`/引导脚本）；在**已有项目根**运行=更新引擎（从上游临时克隆取快照，只刷新 vendored 集合，保留 `game/`/`assets/`/项目自有文件）。可选快照 `pixellab/`/`editor/` 用 `--with-pixellab`/`--with-editor` 显式安装或刷新，缺省跳过（已装的项目更新时不加标志也不删除）。在源仓库的 `template/` 内运行=维护者模式（源仓库根 → 模板快照，不受标志影响）。上游 URL/分支可用 `--url`/`--ref` 覆盖（私有库可传带凭证 URL；日志内凭证自动遮盖）；`--source <dir>` 用本地源仓库代替克隆。
 - **验证**：空目录运行→独立副本构建零告警、起服 + `tools/ipc_smoke.py` 全过；已有项目运行→`game/`/`README.md` 不被覆盖、engine 被刷新。
 - **非目标**：不改 engine 公共 API / tro-* schema；不把 roguelike 玩法或框架测试带入模板；不做参数化脚手架；不自动建 git。
-- **遗留**：模板 `API.md` 的 schema 段落与根 `AGENTS.md` 双份维护（`API.md` 顶部已声明以引擎实现/上游为权威源）；模板 `tools/CMakeLists.txt`/`ipc_smoke.py` 随上游变化需手工跟进。
+- **遗留**：模板 `tools/CMakeLists.txt`/`ipc_smoke.py` 随上游变化需手工跟进。
 
 ## 热重载规范
 
@@ -614,10 +622,11 @@ python3 tools/ipc_smoke.py
 - [x] **引擎缺口修复与 Agent-first 原语（2026-09-11 完成）**：`AnimationPlayer::play()` 复位 loop 覆盖（修跨 clip 粘连致 `done()` 永久挂起）+ 删死常量 `kMaxSpriteTextures` + 同步 `screenshot`（离屏 FBO）+ `render_scene_to_png` + 公共 `RenderStats` + 批量查询 `tile_grid`/`solid_mask` + `TaskRunner`；实战反馈驱动（计划 `docs/plan-15.md` 三轮审查通过并落地）
 - [x] **碰撞几何原语（2026-09-11 完成）**：`collision.hpp` —— `aabb_overlap`（纯谓词）/ `segment_hits_solid`（线段 vs solid 层保守 supercover DDA，逐层 origin）/ `sweep_move`（轴分离 swept 滑移，停在前缘相切）；引擎只回答「矩形/线段与静态地形几何的关系」，动态实体碰撞规则/物理/寻路仍归 game；`tools/tests/collision_test.cpp`（含 40 组暴力对照）+ demo `probe_collide` IPC 命令；模板快照已刷新（计划 `docs/plan-16.md` 两轮审查通过并落地）
 - [x] **下游可用性与输入载体补全（2026-09-11）**：`render_sprite` 缩放、bare 场景省略地形容器、独立 `AnimationAsset`、`SolidGridView`（game 自持碰撞掩码）、受限 `SceneAsset::update_layer_tiles`、模板游戏开发指南与 CJK 字体参考实现；模板同步脚本支持临时克隆安装/更新；计划 `docs/plan-17.md`
-- [ ] **动态运动与物理能力评估（下一主线）**：以模板派生项目的实际需求为输入，先定义跨游戏的确定性运动/碰撞执行原语，再决定是否增加动态实体 broad-phase、连续碰撞、约束/刚体或留在 game；不得把一款游戏的规则系统塞进 engine
+- [ ] **动态运动与物理能力评估（主线，进行中）**：以模板派生项目的实际需求为输入（平台跳跃探针完结报告 `FEEDBACK.md` 为首份实证），先定义跨游戏的确定性运动/碰撞执行原语，再决定是否增加动态实体 broad-phase、连续碰撞、约束/刚体或留在 game；不得把一款游戏的规则系统塞进 engine。**探针收敛结论（2026-09-14 回填）**：静态半边（sweep_move/aabb_overlap/rect_hits_solid）全程零翻车、segment_hits_solid 未被真正用上——静态几何查询不再扩展；缺口全在动态实体半边与时间步进
+- [x] **运动/物理主线第一期 M22a·时间步进与虚拟输入（2026-09-14 完成）**：engine `time.hpp`（`tg::StepClock` 固定步时钟：授步池/时间池双池、授步永不丢、螺旋死亡护栏、暂停=停时间通道、alpha 余量报告）+ `input.hpp`（`tg::VirtualInput` 确定性注入通道：稳定序/步边界消费/可选 min_hold 防撕裂/上限丢最旧可观测）；模板起步 game 固定步改造 + `pause`/`resume`/`step_frames`/`input`/`input_flush`/`input_stats` 参考接线（move 排队化）；E2E 断言口径 = pause 冻结/step_frames 1 精确 +1 格/注入步边界生效/tween 整步边界 snap。证据：平台探针手写累加器（建议 C）与注入队列（建议 A）、模板三处 game 循环手写 dt；需求来源 `~/workspace/engine_test/platformer/FEEDBACK.md`（计划 `docs/plan-22.md` 四轮审查通过并落地；碰撞族 = M22b 另行门禁）
 - [x] **PixelLab 资产 skill/管线改进（2026-09-12）**：API v2 spritesheet ZIP 导入（统一 cell + layout JSON）与逐帧 URL 双路径、角色帧下载并发上限 8、rotation/animation clip 命名冲突检查、tileset metadata 的 16-tile/尺寸/bounding-box 校验、`check-grid` 网格判据命令、manifest sha256 产物验收；全局 `pixellab-mcp` skill 同步 MCP/v2 双路径与成本/验收规则
 - [x] **通用原语补齐·确定性随机原语（2026-09-13 完成）**：engine `random.hpp`——`tg::hash_u64`/`hash_combine`（splitmix64 坐标哈希）+ `tg::Random`（xoshiro256**，算法钉死为可复现契约：`next_u64`/`next_int` 闭区间无模偏差/`next_double`/`next_bool`/`pick`/`shuffle`）；两消费方切换（game AI 的 `std::mt19937`→`tg::Random`、demo `genmap` 手写 `gen_hash`→引擎哈希）；`tools/tests/random_test.cpp`（黄金序列 + 独立参考实现第二来源对照冻结）+ `ipc_smoke.py` genmap 确定性断言（计划 `docs/plan-18.md` 两轮审查通过并落地）
-- [ ] **固定步长累加器（原 P1 后半，移交主线）**：仓库内零消费方，按「需求驱动、不预先纳入」纪律并入「动态运动与物理能力评估」主线的时间步进评估；届时定义 advance(dt) → 整步数 + 插值 alpha 的原语形态（插值与否由 game 决定）
+- [x] **固定步长累加器（原 P1 后半，2026-09-14 兑现于里程碑 22）**：`tg::StepClock`——advance(dt) → 整步数 + 插值 alpha 的原语形态已按承诺落地（插值与否由 game 决定）；平台跳跃探针的手写累加器（accum + guard=5）为首个消费实证，模板起步 game 为参考接线
 - [x] **独立贴图缓存失效 API（2026-09-13 完成）**：`tg::reload_texture(path)`——进程级独立贴图缓存的失效原语（卸载 + 清失败哨兵，下次绘制重读盘；合法路径恒 true、不触碰 RenderStats 计数，仅非法路径 +1 `param_failures`；图集贴图随 asset RAII 不在范围）；demo IPC `reload_texture` 探针命令 + demo.json `tex_probe` 独立贴图实体；失效时机与文件监听策略仍归 game（计划 `docs/plan-19.md` 两轮审查通过并落地）
 - [x] **单格 tile 写入（2026-09-13 完成）**：`SceneAsset::set_tile_at(layer, tx, ty, value)`——受限可变窗口的窄化补充（层局部 tile 坐标、值域规则与整层更新共享 helper、nonempty O(1) 原地维护、失败零修改、写后查询/渲染立即可见）；「小区域填充」裁定为 game 侧循环（零引擎语义），不进引擎；demo IPC `set_tile` 探针命令（Agent 运行时地形实验：挖墙/填墙 → solid_at/get_tile 断言）；autotile 重排与地形指派仍归 game（计划 `docs/plan-20.md` 审查通过并落地）
 - [ ] **API 语义文档收尾（P4，2026-09-13 拍板）**：① tween-as-timer idiom（`add_float(0,0,{duration,delay}, 忽略采样, on_complete)` + `co_await wait(id)` 串演出序列）文档化；② `TweenSpec.repeats` 补写正值语义与无限循环下 `on_complete` 是否逐轮触发；③ ~~`render_sprite` 翻转语义~~（**已完成于里程碑 21**：加显式 `flip_x/flip_y`，负 scale 钉死为 Invalid）；④ 模板/指南并列展示多种消费方式（OOP 与 ECS 各一个最小例），把「引擎不规定架构」从声明变成可见事实（缓解示范引力）

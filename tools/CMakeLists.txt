@@ -100,6 +100,22 @@ add_test(NAME random_test COMMAND trogue_random_test)
 set_tests_properties(random_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── 固定步时钟单测（纯公共 API，链接生产库） ──
+add_executable(trogue_step_clock_test tests/step_clock_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_step_clock_test PRIVATE trogue_engine
+                                                     ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME step_clock_test COMMAND trogue_step_clock_test)
+set_tests_properties(step_clock_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# ── 虚拟输入通道单测（纯公共 API，链接生产库） ──
+add_executable(trogue_virtual_input_test tests/virtual_input_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_virtual_input_test PRIVATE trogue_engine
+                                                        ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME virtual_input_test COMMAND trogue_virtual_input_test)
+set_tests_properties(virtual_input_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── pixellab 映射单测（无网络 Python 单测包一层 ctest） ──
 add_test(NAME pixellab_mapping_test
     COMMAND python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/pixellab/tests
