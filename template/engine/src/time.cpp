@@ -33,10 +33,13 @@ StepClock::Tick StepClock::tick(double frame_dt) {
         time_pool_ += frame_dt;
     }
 
-    const int time_whole_before =
-        static_cast<int>(std::floor(time_pool_ / step_seconds_));
+    // 时间池整步数（先钳到 max 量级再 cast，防天文级 dt 的 int 溢出 UB；
+    // pop 反正被 max 钳制，钳早钳晚语义一致且确定）。
+    const double time_whole_d = std::floor(time_pool_ / step_seconds_);
     const std::int64_t whole =
-        static_cast<std::int64_t>(time_whole_before) + credit_steps_;
+        static_cast<std::int64_t>(
+            std::min(time_whole_d, static_cast<double>(max_steps_))) +
+        credit_steps_;
     const int pop = static_cast<int>(std::min<std::int64_t>(whole, max_steps_));
 
     // 授步池优先扣减：弹出的步先吃授步池（整数精确），不足部分才动时间池。
@@ -48,8 +51,9 @@ StepClock::Tick StepClock::tick(double frame_dt) {
 
     // 溢出丢弃：仅时间通道的超额整步（护栏；授步池余量永不动）。
     // 扣减后时间池 < step 恒成立（本 tick 未及弹出的整步全部丢弃，无债务）。
-    const int time_whole_after =
-        static_cast<int>(std::floor(time_pool_ / step_seconds_));
+    // 丢弃数同样先钳再 cast（同上防溢出；极端 dt 下逐 tick 限量丢弃，确定）。
+    const int time_whole_after = static_cast<int>(std::min(
+        std::floor(time_pool_ / step_seconds_), static_cast<double>(max_steps_)));
     if (time_whole_after > 0) {
         time_pool_ -= static_cast<double>(time_whole_after) * step_seconds_;
         ++overflow_count_;

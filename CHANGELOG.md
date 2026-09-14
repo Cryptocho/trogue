@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### 引擎：动态实体半边碰撞原语（运动/物理主线第二期 M22b）
+
+- 影响的文件: `engine/include/trogue/collision.hpp`、`engine/src/collision.cpp`、`tools/tests/kinematic_test.cpp`、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-23.md`
+
+#### Added
+- 新增 `tg::kinematic_step`（views 版 / one_way 版 / SceneAsset 便捷重载）：sweep 位移 + 探针约定 + 事件派生收进引擎——探地（`kKinematicProbe=1px`）、landed 单条差分定义（`grounded(解算后) ∧ 原位同款探地未命中`）、探墙（`kWallProbeInset=2px` 内缩防相邻地面误判，右优先，只看静态层）、`hit_ceiling`/`hit_wall` 与 blocked 映射；返回内嵌 `SweepResult` + `KinematicEvents`。速度积分与手感参数归 game（收编连续位移角色约 70 行的探针脚手架）。
+- 单向平台进引擎（对里程碑 16 边界的反向修订，计划 §0 先行声明）：one_way 矩形数组重载 `sweep_move`/`kinematic_step`——单一阻挡谓词（仅下落参与、底边 ≤ 平台顶 + `kEpsilon=1e-3`、新底边抵达或越过均命中（含 `==` 不隧道化）、底边 > 顶+ε 即已在平台内不可逆）、贴台停位、探地纳入/探墙排除、与静态层取最紧；空数组与既有重载逐位一致。平台布局与下跳摘除归 game。
+- 新增 `tg::resolve_overlap`：最小轴一次脱出（四方向各算清空推距、每跳越过最远/最近 occupied 单元、逐层取最紧），取位移小者（相等取 X）；推距无上限、不做全局最小化、失败仅参数非法。
+- 新增 `tg::DynBox {box, delta}` + `tg::sweep_move_mixed`：阻挡集 = 静态层 ∪ 动态盒（本步内视为瞬时障碍，链式承载由调用方编序）；`hit_dyn_x/y` 报告截断候选中最小动态下标（静态不占下标），骑乘/携带位移增量由 game 自算；`sweep_move` 本体签名与语义一个不动。
+- 新增 `tg::SolidGrid` RAII 掩码类：`load`/`refresh`（非 solid 层 → error；O(w·h)）+ `set_tile(asset&, layer, tx, ty, value)` 把「写渲染 tile + 同步碰撞掩码」合并为一次调用，任何失败路径两份真值不分叉；拷贝禁用、移动自动修正指针。
+- demo 新增 `probe_kinematic` IPC 探针命令（op: kinematic/resolve/mixed，纯函数天然确定性）并登记 `help`；冒烟 87 → 93 项。
+
+#### Tests
+- `kinematic_test`（239 checks）：事件派生（landed 差分/探墙内缩判别用例/hit 映射）、单向平台规则逐条（ε 边界/== 不隧道化/先 X 后 Y/下跳摘除/静态取最紧/空数组逐位回归）、`resolve_overlap` 60 组随机暴力对照（引擎 `tg::Random{42}`）+ 多层取最紧 + 参数非法、`sweep_move_mixed` 最紧约束与下标语义（含静态+动态同轴）、`SolidGrid` load/refresh/set_tile 失败零修改与同步。
+- 零回归：Debug + Release 零告警；CTest 18/18；根冒烟 93/93；`template/engine` 快照与根仓库逐字一致（含 M22a 审查修正的快照补齐）。
+
+#### Architecture
+- 运动/物理主线第二期（M22b）落地，需求实证来自平台跳跃探针报告物-1~5；动态实体半边执行原语补齐（静态几何查询不再扩展）。引擎仍不拥有游戏状态：承载编序、平台布局、手感参数归 game；刚体物理/斜坡/`resolve_overlap` 的 DynBox 版等明确不进引擎。
+
 ### 引擎：固定步时钟与虚拟输入（运动/物理主线第一期）
 
 - 影响的文件: `engine/include/trogue/time.hpp`、`engine/src/time.cpp`、`engine/include/trogue/input.hpp`、`engine/src/input.cpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/step_clock_test.cpp`、`tools/tests/virtual_input_test.cpp`、`tools/CMakeLists.txt`、`template/game/src/main.cpp`、`template/tools/ipc_smoke.py`、`template/engine/`、`template/AGENTS.md`、`template/API.md`、`AGENTS.md`、`docs/plan-22.md`

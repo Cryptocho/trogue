@@ -84,6 +84,14 @@ add_test(NAME collision_test COMMAND trogue_collision_test)
 set_tests_properties(collision_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── 运动学/脱出/混合扫掠/SolidGrid 单测（纯公共 API，链接生产库） ──
+add_executable(trogue_kinematic_test tests/kinematic_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_kinematic_test PRIVATE trogue_engine
+                                                    ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME kinematic_test COMMAND trogue_kinematic_test)
+set_tests_properties(kinematic_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── terrain 匹配表/选择器单测（纯公共 API，链接生产库） ──
 add_executable(trogue_terrain_test tests/terrain_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_terrain_test PRIVATE trogue_engine

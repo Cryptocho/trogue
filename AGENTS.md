@@ -113,7 +113,7 @@
 │  scene_asset  tro-* 资产解析与只读 descriptor    │
 │  tileset     图集资源与 tile 区域                │
 │  render      tile 层/显式 sprite 绘制原语        │
-│  collision   tile 层查询 + 静态几何原语          │
+│  collision   tile 层查询 + 静态几何原语 + 动态实体半边   │
 │  animation   帧动画播放器（消费 tro-animations）│
 │  tween       数值/位置/颜色补间执行原语          │
 │  terrain     autotile 匹配表 TerrainTable/pick_tile│
@@ -163,7 +163,16 @@
 
 > **2026-09-11 新增（里程碑 16）**：
 > - **碰撞几何原语**（`trogue/collision.hpp`）：`tg::aabb_overlap`（纯谓词，委托 raylib `CheckCollisionRecs`）、`tg::segment_hits_solid`（线段 vs solid 层的保守 supercover 网格步进，逐层处理 origin；返回首个命中的层/tile/坐标/参数 `t`）、`tg::sweep_move`（轴分离 swept 滑移解算：先 X 后 Y，停在前缘恰好接触 solid 边界处，可沿墙滑动）。引擎只回答「矩形/线段与**静态地形几何**的关系」；**谁和谁碰、碰后如何**仍归 game。工具/探针侧 `probe_collide` IPC 命令（demo）可直接验证这三者。
-> - 明确**不进引擎**：动态实体碰撞**规则**、刚体物理/solver、单向平台/斜坡、分层碰撞矩阵、寻路（图搜索）、相机与绘制排序。
+> - 明确**不进引擎**：动态实体碰撞**规则**、刚体物理/solver、~~单向平台~~（2026-09-14 里程碑 23 反向修订：tile 矩形形状的机制性穿越规则进引擎，见下）/斜坡、分层碰撞矩阵、寻路（图搜索）、相机与绘制排序。
+
+> **2026-09-14 新增（里程碑 23，运动/物理主线 M22b·动态实体半边）**：
+> - **运动学步进**（`collision.hpp`）：`tg::kinematic_step`（views 版 + one_way 版 + SceneAsset 便捷重载）——sweep 位移 + 探针约定 + 事件派生收进引擎：探地（`kKinematicProbe=1px`）、landed **单条差分定义**（`grounded(解算后) ∧ 原位同款探地未命中`）、探墙（`kWallProbeInset=2px` 内缩防相邻地面误判，右优先；只看静态层）、`hit_ceiling`/`hit_wall` 与 blocked 映射；返回内嵌 `SweepResult` + `KinematicEvents`。**速度积分、土狼/缓冲/可变跳高、落地回充等手感与规则归 game**（探针玩家脚手架约 70 行的收编，物-1）。
+> - **单向平台**（对里程碑 16 的反向修订）：one_way 矩形数组重载进 `sweep_move`/`kinematic_step`——单一阻挡谓词（仅 `delta.y>0`、底边 ≤ 平台顶 + `kEpsilon=1e-3` 且新底边**抵达或越过**均命中（含 `==`，不隧道化）、底边 > 顶+ε 即已在平台内**不可逆**不阻挡、X 按先 X 解算后的跨度）、贴台停位 `box.y = plat.top - box.h`、探地纳入/探墙排除、与静态层取最紧；空数组与既有重载逐位一致。**平台布局与下跳摘除归 game**（数组成员决策）。
+> - **最小轴脱出**：`tg::resolve_overlap`——四方向各算清空推距（每跳越过最远/最近 occupied 单元，逐层取最紧），取位移小者（相等取 X）；后置条件 resolved ⇒ 不重叠；**推距无上限、不做全局最小化、失败仅参数非法**（替换探针 O(深度) 的 1px while 回退，物-3）。
+> - **混合扫掠**：`tg::DynBox {box, delta}` + `tg::sweep_move_mixed`——阻挡集 = 静态层 ∪ 动态盒（本步内视为瞬时障碍，链式承载由调用方编序）；`hit_dyn_x/y` 只报告**阻挡者中最小下标**（静态不占下标），骑乘/携带位移增量由 game 自算（引擎不保存关系记忆，物-2）；`sweep_move` 本体签名与语义一个不动。
+> - **SolidGrid**（`tg::SolidGrid` RAII 掩码类）：`load`/`refresh`（非 solid 层 → error；O(w·h)）+ `set_tile(asset&, layer, tx, ty, value)`——把「`SceneAsset::set_tile_at` 写渲染 + 掩码同步」合并为一次调用，任何失败路径两份真值不分叉（物-5）；拷贝禁用（拷贝会使 view_.mask 悬垂）、移动自动修正指针（移动赋值后源对象的 view() 失效）。
+> - **探针**：demo `probe_kinematic` IPC 命令（op: kinematic/resolve/mixed，纯函数天然确定性）+ `tools/tests/kinematic_test.cpp`；模板 engine 快照同步刷新（含 M22a 审查修正的补齐）。
+> - 明确**不进引擎**：刚体物理/solver、动态-动态互推传递解算、斜坡、圆/胶囊/旋转形状、`resolve_overlap` 的 DynBox 版（动态重叠解算归 game）。
 
 > **2026-09-13 新增（里程碑 18）**：
 > - **确定性随机原语**（`trogue/random.hpp`）：`tg::hash_u64`/`tg::hash_combine`（splitmix64 坐标哈希自由函数）+ `tg::Random`（xoshiro256** 种子化流式 PRNG，可复制值类型：`next_u64`/`next_int` 闭区间无模偏差/`next_double`/`next_bool`/`pick`/`shuffle`）。算法与常量在头文件注释中**钉死为可复现契约**（同 seed 同调用序列跨平台逐位一致，不依赖 std:: 随机设施；替换算法属破坏性变更）；前置条件违反（`next_int` lo>hi、`pick` 空容器）= 程序错误、不设断言（与 `layer(i)` 契约注释 + 直接索引同策略，避免 NDEBUG 行为分叉）。**生成策略（何用、阈值、分布形状）归 game**；不提供全局随机源、概率分布对象（无消费方，可用原语组合）。
@@ -471,6 +480,7 @@ python3 tools/ipc_smoke.py
 | `get_tile` | `x` `y`（像素） | `{tiles:[{layer,value}]（仅非空格）, solid}` |
 | `set_tile` | `layer` `tx` `ty` `value`（各必填 int；tx/ty 为**层局部 tile 坐标**，与 get_tile/solid_at 的像素坐标不同口径：`tx = floor((px − 层origin_x)/tile_w)`；value=-1 表空） | `{set:true, layer, tx, ty, value}`（运行时地形写入：写后 `solid_at`/`get_tile` 立即可见；内存修改不落盘，watcher/F5/reload 会以磁盘内容覆盖——预期行为；值域/坐标错误 → 错误包络） |
 | `probe_collide` | `a`/`b`（各 `[x,y]`，给则出 segment）；`rect`（`[x,y,w,h]`）+`delta`（`[dx,dy]`，给则出 sweep）；至少给一组 | `{segment?:{result,layer,tx,ty,t,point}, sweep?:{box,blocked_x,blocked_y,result}}`（`result` ∈ solid/clear/error；验证静态几何原语的 Agent 探针） |
+| `probe_kinematic` | `op`（必填：`kinematic`｜`resolve`｜`mixed`）；`kinematic`：`rect`+`delta`，可选 `one_way`（`[x,y,w,h]` 数组）；`resolve`：`rect`；`mixed`：`rect`+`delta`+可选 `others`（`{box:[x,y,w,h], delta:[dx,dy]}` 数组） | `kinematic`：`{box, blocked_x, blocked_y, result, grounded, landed, hit_ceiling, hit_wall, wall_dir}`；`resolve`：`{box, resolved}`；`mixed`：`{box, blocked_x, blocked_y, result, hit_dyn_x, hit_dyn_y}`（纯函数探针，天然确定性） |
 | `reload` | — | `{reloaded:true, reloads:N}` |
 | `reload_texture` | `path`（必填字符串，assets 相对路径） | `{reloaded:true, path}`（进程内独立贴图缓存失效，下次绘制重读盘；路径不安全 → 错误包络；图集贴图随 asset RAII 不在此列——改 png 后 Agent 无需重启进程） |
 | `genmap` | `seed` 必填 int；`w`/`h` 可选（缺省 40，∈[1,64]） | `{generated:true, seed, w, h, nonempty, reloads}`（程序生成地图：game 噪声指派 → pick_tile → load_json → swap；同 seed 同尺寸逐位一致，plan-12 §4.5；生成后 watcher/F5/reload 会以 scene_path 覆盖之——预期行为） |
@@ -622,6 +632,7 @@ python3 tools/ipc_smoke.py
 - [x] **引擎缺口修复与 Agent-first 原语（2026-09-11 完成）**：`AnimationPlayer::play()` 复位 loop 覆盖（修跨 clip 粘连致 `done()` 永久挂起）+ 删死常量 `kMaxSpriteTextures` + 同步 `screenshot`（离屏 FBO）+ `render_scene_to_png` + 公共 `RenderStats` + 批量查询 `tile_grid`/`solid_mask` + `TaskRunner`；实战反馈驱动（计划 `docs/plan-15.md` 三轮审查通过并落地）
 - [x] **碰撞几何原语（2026-09-11 完成）**：`collision.hpp` —— `aabb_overlap`（纯谓词）/ `segment_hits_solid`（线段 vs solid 层保守 supercover DDA，逐层 origin）/ `sweep_move`（轴分离 swept 滑移，停在前缘相切）；引擎只回答「矩形/线段与静态地形几何的关系」，动态实体碰撞规则/物理/寻路仍归 game；`tools/tests/collision_test.cpp`（含 40 组暴力对照）+ demo `probe_collide` IPC 命令；模板快照已刷新（计划 `docs/plan-16.md` 两轮审查通过并落地）
 - [x] **下游可用性与输入载体补全（2026-09-11）**：`render_sprite` 缩放、bare 场景省略地形容器、独立 `AnimationAsset`、`SolidGridView`（game 自持碰撞掩码）、受限 `SceneAsset::update_layer_tiles`、模板游戏开发指南与 CJK 字体参考实现；模板同步脚本支持临时克隆安装/更新；计划 `docs/plan-17.md`
+- [x] **运动/物理主线第二期 M22b·动态实体半边（2026-09-14 完成）**：engine `collision.hpp` 扩充——`kinematic_step`（sweep + 探地/探墙/landed 差分事件派生收编，手感归 game）、单向平台（对里程碑 16 边界的反向修订：tile 矩形机制性穿越规则，四条件兑现：常量钉死/规则进头注释/文档修订点名/规则表以头注释为准）、`resolve_overlap`（最小轴脱出，推距无上限、失败仅参数非法）、`DynBox` + `sweep_move_mixed`（动态盒最紧约束 + 阻挡者最小下标报告，承载增量归 game）、`SolidGrid`（渲染 tile + 碰撞掩码的原子同步写）；`tools/tests/kinematic_test.cpp`（事件派生/单向平台规则表/暴力对照/索引语义）+ demo `probe_kinematic` 探针命令；需求来源 platformer FEEDBACK 物-1~5（计划 `docs/plan-23.md` 两轮审查通过并落地）
 - [ ] **动态运动与物理能力评估（主线，进行中）**：以模板派生项目的实际需求为输入（平台跳跃探针完结报告 `FEEDBACK.md` 为首份实证），先定义跨游戏的确定性运动/碰撞执行原语，再决定是否增加动态实体 broad-phase、连续碰撞、约束/刚体或留在 game；不得把一款游戏的规则系统塞进 engine。**探针收敛结论（2026-09-14 回填）**：静态半边（sweep_move/aabb_overlap/rect_hits_solid）全程零翻车、segment_hits_solid 未被真正用上——静态几何查询不再扩展；缺口全在动态实体半边与时间步进
 - [x] **运动/物理主线第一期 M22a·时间步进与虚拟输入（2026-09-14 完成）**：engine `time.hpp`（`tg::StepClock` 固定步时钟：授步池/时间池双池、授步永不丢、螺旋死亡护栏、暂停=停时间通道、alpha 余量报告）+ `input.hpp`（`tg::VirtualInput` 确定性注入通道：稳定序/步边界消费/可选 min_hold 防撕裂/上限丢最旧可观测）；模板起步 game 固定步改造 + `pause`/`resume`/`step_frames`/`input`/`input_flush`/`input_stats` 参考接线（move 排队化）；E2E 断言口径 = pause 冻结/step_frames 1 精确 +1 格/注入步边界生效/tween 整步边界 snap。证据：平台探针手写累加器（建议 C）与注入队列（建议 A）、模板三处 game 循环手写 dt；需求来源 `~/workspace/engine_test/platformer/FEEDBACK.md`（计划 `docs/plan-22.md` 四轮审查通过并落地；碰撞族 = M22b 另行门禁）
 - [x] **PixelLab 资产 skill/管线改进（2026-09-12）**：API v2 spritesheet ZIP 导入（统一 cell + layout JSON）与逐帧 URL 双路径、角色帧下载并发上限 8、rotation/animation clip 命名冲突检查、tileset metadata 的 16-tile/尺寸/bounding-box 校验、`check-grid` 网格判据命令、manifest sha256 产物验收；全局 `pixellab-mcp` skill 同步 MCP/v2 双路径与成本/验收规则

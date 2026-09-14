@@ -1,4 +1,4 @@
-// collision.cpp —— 静态 solid tile 层的碰撞几何原语实现。
+// collision.cpp —— solid tile 层的碰撞几何原语实现（静态几何 + 动态盒输入）。
 //
 // SceneAsset 重载通过 scene 的公共查询 API 逐层物化为 SolidGridView，不触碰
 // SceneImpl 内部（无需 friend）。逐层处理是因为每个 solid 层有独立的
@@ -457,6 +457,460 @@ SweepResult sweep_move(const SceneAsset& asset, Rect box, Vec2 delta) {
     std::vector<std::vector<std::uint8_t>> masks;
     const std::vector<SolidGridView> views = materialize_views(asset, masks);
     return sweep_move(views.data(), static_cast<int>(views.size()), box, delta);
+}
+
+// ════════════════════ 运动学步进与混合扫掠（共享内核） ════════════════════
+
+namespace {
+
+// 单轴动态盒约束：沿 is_x 轴移动 (min_pos, size, delta) 时，与 cross 跨度
+// 相交的 DynBox 对该轴允许的最大位移（无约束 → +inf；已重叠 → 0）。
+double dyn_axis_gap(const DynBox& other, bool is_x, double min_pos,
+                    double size, double delta, double cross_min,
+                    double cross_size) {
+    const Rect& ob = other.box;
+    const double o_min = is_x ? static_cast<double>(ob.x)
+                              : static_cast<double>(ob.y);
+    const double o_size = is_x ? static_cast<double>(ob.w)
+                               : static_cast<double>(ob.h);
+    const double oc_min = is_x ? static_cast<double>(ob.y)
+                               : static_cast<double>(ob.x);
+    const double oc_size = is_x ? static_cast<double>(ob.h)
+                                : static_cast<double>(ob.w);
+    if (!(cross_min < oc_min + oc_size) || !(oc_min < cross_min + cross_size))
+        return std::numeric_limits<double>::infinity();  // cross 不相交
+    if (delta == 0.0) return std::numeric_limits<double>::infinity();
+    if (delta > 0.0) {
+        const double lead = min_pos + size;
+        if (o_min <= lead) return 0.0;  // 已重叠 → 0 位移
+        return o_min - lead;
+    }
+    const double o_trail = o_min + o_size;
+    if (min_pos <= o_trail) return 0.0;
+    return min_pos - o_trail;
+}
+
+// 单向平台的 Y 轴允许位移（规则 1/2：仅下落参与；ε 容差优先；抵达或越过均命中）。
+double one_way_axis_gap(const Rect& plat, double min_pos, double size,
+                        double delta, double cross_min, double cross_size) {
+    if (delta <= 0.0) return std::numeric_limits<double>::infinity();
+    const double plat_top = static_cast<double>(plat.y);
+    const double old_bottom = min_pos + size;
+    if (old_bottom > plat_top + static_cast<double>(kEpsilon))
+        return std::numeric_limits<double>::infinity();  // 已在平台内 → 永不阻挡
+    // cross（X）按当前（先 X 解算后的）跨度与平台半开相交
+    if (!(cross_min < static_cast<double>(plat.x) +
+                         static_cast<double>(plat.w)) ||
+        !(static_cast<double>(plat.x) < cross_min + cross_size))
+        return std::numeric_limits<double>::infinity();
+    if (old_bottom + delta < plat_top)
+        return std::numeric_limits<double>::infinity();  // 未抵达
+    const double gap = plat_top - old_bottom;
+    return gap > 0.0 ? gap : 0.0;
+}
+
+// 探地（静态层 + 单向平台）：探地矩形 [x, y+h, w, kKinematicProbe]。
+bool kinematic_grounded(const SolidGridView* views, int count,
+                        const Rect* one_way, int one_way_count, Rect box) {
+    const Rect probe{box.x, box.y + box.h, box.w, kKinematicProbe};
+    if (rect_hits_solid(views, count, probe) == TileQueryResult::solid)
+        return true;
+    for (int i = 0; i < one_way_count; ++i)
+        if (aabb_overlap(probe, one_way[i])) return true;
+    return false;
+}
+
+// 探墙（仅静态层；上下内缩防相邻地面误判）：+1 右 / -1 左 / 0 无（右优先）。
+int kinematic_wall_dir(const SolidGridView* views, int count, Rect box) {
+    const Rect right{box.x + box.w, box.y + kWallProbeInset, kKinematicProbe,
+                     box.h - 2.0f * kWallProbeInset};
+    if (rect_hits_solid(views, count, right) == TileQueryResult::solid)
+        return 1;
+    const Rect left{box.x - kKinematicProbe, box.y + kWallProbeInset,
+                    kKinematicProbe, box.h - 2.0f * kWallProbeInset};
+    if (rect_hits_solid(views, count, left) == TileQueryResult::solid)
+        return -1;
+    return 0;
+}
+
+// 混合内核：静态层 + 单向平台（仅 Y 下落）+ DynBox 的统一轴分离扫掠。
+// hit_dyn_* 返回阻挡该轴的 DynBox 下标（-1 = 无动态阻挡；同为阻挡取小下标；
+// 仅当动态约束确实截断位移时才报告——静态层不占下标）。
+SweepResult sweep_core(const SolidGridView* views, int count,
+                       const Rect* one_way, int one_way_count,
+                       const DynBox* others, int other_count, Rect box,
+                       Vec2 delta, int* hit_dyn_x, int* hit_dyn_y) {
+    SweepResult out;
+    out.box = box;
+    if (hit_dyn_x) *hit_dyn_x = -1;
+    if (hit_dyn_y) *hit_dyn_y = -1;
+    if (count < 0 || (count > 0 && views == nullptr) ||
+        !finite2(box.x, box.y) || !finite2(box.w, box.h) ||
+        !finite2(delta.x, delta.y) || !(box.w > 0.0f) || !(box.h > 0.0f)) {
+        out.result = TileQueryResult::error;
+        return out;
+    }
+    for (int i = 0; i < other_count; ++i) {
+        const DynBox& d = others[i];
+        if (!finite2(d.box.x, d.box.y) || !finite2(d.box.w, d.box.h) ||
+            !finite2(d.delta.x, d.delta.y) || !(d.box.w > 0.0f) ||
+            !(d.box.h > 0.0f)) {
+            out.result = TileQueryResult::error;
+            return out;
+        }
+    }
+    const bool has_dyn = others != nullptr && other_count > 0;
+    const double inf = std::numeric_limits<double>::infinity();
+
+    // ── X 轴：静态 + 动态盒（单向平台不参与横向）──
+    double dyn_allow_x = inf;
+    int dyn_first_x = -1;  // 阻挡者（gap < |delta|）中的最小下标
+    if (has_dyn && delta.x != 0.0f) {
+        const double delta_abs_x = std::fabs(static_cast<double>(delta.x));
+        for (int i = 0; i < other_count; ++i) {
+            const double g = dyn_axis_gap(others[i], true,
+                                          static_cast<double>(box.x),
+                                          static_cast<double>(box.w),
+                                          static_cast<double>(delta.x),
+                                          static_cast<double>(box.y),
+                                          static_cast<double>(box.h));
+            if (g < dyn_allow_x) dyn_allow_x = g;
+            if (dyn_first_x < 0 && g < delta_abs_x) dyn_first_x = i;
+        }
+    }
+    double dx = static_cast<double>(delta.x);
+    bool dyn_blocked_x = std::fabs(dx) > dyn_allow_x;
+    if (dyn_blocked_x) dx = dx > 0.0 ? dyn_allow_x : -dyn_allow_x;
+    const AxisResult rx =
+        solve_axis(views, count, true, static_cast<double>(box.x),
+                   static_cast<double>(box.w), dx,
+                   static_cast<double>(box.y), static_cast<double>(box.h));
+    out.blocked_x = rx.blocked || dyn_blocked_x;
+    box.x = static_cast<float>(rx.min_pos);
+    if (rx.blocked) {
+        box.x = static_cast<float>(nudge_clear(
+            views, count, static_cast<double>(box.x), delta.x > 0.0,
+            static_cast<double>(box.y), box.w, box.h, true));
+    }
+    if (hit_dyn_x) *hit_dyn_x = dyn_blocked_x ? dyn_first_x : -1;
+
+    // ── Y 轴：动态盒 + 单向平台（仅下落）+ 静态层，取最紧 ──
+    double dyn_allow_y = inf;
+    double plat_allow = inf;
+    int dyn_first_y = -1;
+    if (has_dyn && delta.y != 0.0f) {
+        const double delta_abs_y = std::fabs(static_cast<double>(delta.y));
+        for (int i = 0; i < other_count; ++i) {
+            const double g = dyn_axis_gap(others[i], false,
+                                          static_cast<double>(box.y),
+                                          static_cast<double>(box.h),
+                                          static_cast<double>(delta.y),
+                                          static_cast<double>(box.x),
+                                          static_cast<double>(box.w));
+            if (g < dyn_allow_y) dyn_allow_y = g;
+            if (dyn_first_y < 0 && g < delta_abs_y) dyn_first_y = i;
+        }
+    }
+    if (one_way != nullptr && delta.y > 0.0f) {
+        for (int i = 0; i < one_way_count; ++i) {
+            const double g = one_way_axis_gap(one_way[i],
+                                              static_cast<double>(box.y),
+                                              static_cast<double>(box.h),
+                                              static_cast<double>(delta.y),
+                                              static_cast<double>(box.x),
+                                              static_cast<double>(box.w));
+            if (g < plat_allow) plat_allow = g;
+        }
+    }
+    double dy = static_cast<double>(delta.y);
+    const double non_static_allow = std::min(dyn_allow_y, plat_allow);
+    const bool dyn_blocked_y = std::fabs(dy) > dyn_allow_y;
+    // 单向平台「抵达即命中」：gap == |delta| 也判阻挡（== 不隧道化），故用 >=。
+    const bool plat_blocked = std::fabs(dy) >= plat_allow;
+    if (std::fabs(dy) > non_static_allow) {
+        dy = dy > 0.0 ? non_static_allow : -non_static_allow;
+    }
+    const AxisResult ry =
+        solve_axis(views, count, false, static_cast<double>(box.y),
+                   static_cast<double>(box.h), dy,
+                   static_cast<double>(box.x), static_cast<double>(box.w));
+    out.blocked_y = ry.blocked || dyn_blocked_y || plat_blocked;
+    box.y = static_cast<float>(ry.min_pos);
+    if (ry.blocked) {
+        box.y = static_cast<float>(nudge_clear(
+            views, count, static_cast<double>(box.y), delta.y > 0.0,
+            static_cast<double>(box.x), box.w, box.h, false));
+    }
+    if (hit_dyn_y) *hit_dyn_y = dyn_blocked_y ? dyn_first_y : -1;
+
+    out.box = box;
+    out.result = (out.blocked_x || out.blocked_y) ? TileQueryResult::solid
+                                                  : TileQueryResult::clear;
+    return out;
+}
+
+}  // namespace
+
+SweepResult sweep_move(const SolidGridView* views, int count,
+                       const Rect* one_way, int one_way_count, Rect box,
+                       Vec2 delta) {
+    return sweep_core(views, count, one_way, one_way_count, nullptr, 0, box,
+                      delta, nullptr, nullptr);
+}
+
+KinematicResult kinematic_step(const SolidGridView* views, int count,
+                               Rect box, Vec2 delta) {
+    return kinematic_step(views, count, nullptr, 0, box, delta);
+}
+
+KinematicResult kinematic_step(const SolidGridView* views, int count,
+                               const Rect* one_way, int one_way_count,
+                               Rect box, Vec2 delta) {
+    KinematicResult out;
+    out.sweep = sweep_core(views, count, one_way, one_way_count, nullptr, 0,
+                           box, delta, nullptr, nullptr);
+    if (out.sweep.result == TileQueryResult::error) return out;  // 全事件 false
+    out.ev.grounded = kinematic_grounded(views, count, one_way, one_way_count,
+                                         out.sweep.box);
+    const bool was_ground =
+        kinematic_grounded(views, count, one_way, one_way_count, box);
+    out.ev.landed = out.ev.grounded && !was_ground;
+    out.ev.hit_ceiling = out.sweep.blocked_y && delta.y < 0.0f;
+    out.ev.hit_wall = out.sweep.blocked_x;
+    out.ev.wall_dir = kinematic_wall_dir(views, count, out.sweep.box);
+    return out;
+}
+
+// ════════════════════ 最小轴脱出 ════════════════════
+
+namespace {
+
+constexpr int kResolveMaxIter = 65536;  // 跳格扫描的防御上限（每跳至少越过 1 列）
+
+// 沿某轴正/负方向推进，直到 box 不再与 solid 重叠；返回所需推距（像素，
+// 正方向为正、负方向为负）。每跳越过当前相交的最远/最近 occupied 单元
+//（逐层取最紧约束），确定性、必终止；不做全局最小化。
+// 防御分支（迭代上限/无进展）仅理论上可达：有限层内每跳至少越过 1 列。
+double push_axis_clear(const SolidGridView* views, int count, bool is_x,
+                       double min_pos, double size, double cross_min,
+                       double cross_size, bool positive_dir, double other_pos,
+                       double w, double h) {
+    const double inf = std::numeric_limits<double>::infinity();
+    double p = 0.0;
+    for (int iter = 0; iter < kResolveMaxIter; ++iter) {
+        const Rect r = is_x ? Rect{static_cast<float>(min_pos + p),
+                                   static_cast<float>(other_pos),
+                                   static_cast<float>(w),
+                                   static_cast<float>(h)}
+                            : Rect{static_cast<float>(other_pos),
+                                   static_cast<float>(min_pos + p),
+                                   static_cast<float>(w),
+                                   static_cast<float>(h)};
+        if (rect_hits_solid(views, count, r) != TileQueryResult::solid) break;
+        // 下一跳：越过当前相交单元。正方向需满足所有层的 ≥ 约束（取最大），
+        // 负方向需满足全部 ≤ 约束（取最小）。
+        double next = positive_dir ? -inf : inf;
+        for (int li = 0; li < count; ++li) {
+            const SolidGridView& view = views[li];
+            if (!valid_view(view)) continue;
+            const double tile =
+                static_cast<double>(is_x ? view.tile_w : view.tile_h);
+            const double other_tile =
+                static_cast<double>(is_x ? view.tile_h : view.tile_w);
+            const double origin =
+                static_cast<double>(is_x ? view.origin_x : view.origin_y);
+            const double cross_origin =
+                static_cast<double>(is_x ? view.origin_y : view.origin_x);
+            const long long dim = is_x ? view.width : view.height;
+            const long long cross_dim = is_x ? view.height : view.width;
+            if (dim < 1 || cross_dim < 1) continue;
+            long long j0, j1;
+            tile_index_span(cross_min, cross_size, cross_origin, other_tile,
+                            j0, j1);
+            j0 = std::max<long long>(j0, 0);
+            j1 = std::min<long long>(j1, cross_dim);
+            if (j1 <= j0) continue;
+            const double cur_min = is_x ? r.x : r.y;
+            long long c0 = to_ll_sat(std::floor((cur_min - origin) / tile));
+            long long c1 = to_ll_sat(std::ceil((cur_min + size - origin) / tile));
+            c0 = std::max<long long>(c0, 0);
+            c1 = std::min<long long>(c1, dim);
+            long long far = -1;   // 正方向：最远 occupied 列
+            long long near = -1;  // 负方向：最近 occupied 列（最左）
+            for (long long c = c0; c < c1; ++c) {
+                bool occupied = false;
+                for (long long j = j0; j < j1; ++j) {
+                    const int cx = is_x ? static_cast<int>(c) : static_cast<int>(j);
+                    const int cy = is_x ? static_cast<int>(j) : static_cast<int>(c);
+                    if (cell_occupied(view, cx, cy)) {
+                        occupied = true;
+                        break;
+                    }
+                }
+                if (!occupied) continue;
+                if (far < 0 || c > far) far = c;
+                if (near < 0 || c < near) near = c;
+            }
+            if (far < 0) continue;
+            const double cand =
+                positive_dir
+                    ? (origin + static_cast<double>(far + 1) * tile) - min_pos
+                    : (origin + static_cast<double>(near) * tile) - size - min_pos;
+            next = positive_dir ? std::max(next, cand) : std::min(next, cand);
+        }
+        if (next == inf || next == -inf) break;              // 防御：无目标
+        if (positive_dir ? next <= p : next >= p) break;     // 无进展（防御）
+        p = next;
+    }
+    return p;
+}
+
+}  // namespace
+
+OverlapResult resolve_overlap(const SolidGridView* views, int count,
+                              Rect box) {
+    OverlapResult out;
+    out.box = box;
+    if (count < 0 || (count > 0 && views == nullptr) ||
+        !finite2(box.x, box.y) || !finite2(box.w, box.h) ||
+        !(box.w > 0.0f) || !(box.h > 0.0f)) {
+        out.resolved = false;  // 参数非法
+        return out;
+    }
+    if (rect_hits_solid(views, count, box) != TileQueryResult::solid) {
+        out.resolved = true;  // 前置不成立：本就不重叠
+        return out;
+    }
+    // 四个方向各算一次清空推距，取位移小者；相等取 X（确定性）。
+    const double bx = static_cast<double>(box.x);
+    const double by = static_cast<double>(box.y);
+    const double bw = static_cast<double>(box.w);
+    const double bh = static_cast<double>(box.h);
+    const double px_pos = push_axis_clear(views, count, true, bx, bw, by, bh,
+                                          true, by, bw, bh);
+    const double px_neg = push_axis_clear(views, count, true, bx, bw, by, bh,
+                                          false, by, bw, bh);
+    const double py_pos = push_axis_clear(views, count, false, by, bh, bx, bw,
+                                          true, bx, bw, bh);
+    const double py_neg = push_axis_clear(views, count, false, by, bh, bx, bw,
+                                          false, bx, bw, bh);
+    bool is_x = true;
+    bool positive = true;
+    double best = px_pos;
+    if (std::fabs(px_neg) < std::fabs(best)) {
+        best = px_neg;
+        positive = false;
+    }
+    if (std::fabs(py_pos) < std::fabs(best)) {
+        best = py_pos;
+        is_x = false;
+        positive = true;
+    }
+    if (std::fabs(py_neg) < std::fabs(best)) {
+        best = py_neg;
+        is_x = false;
+        positive = false;
+    }
+    double x = bx;
+    double y = by;
+    if (is_x)
+        x = bx + best;
+    else
+        y = by + best;
+    // 浮点贴边修正：nudge_clear 向位移反方向内移，故传 !positive 使其沿推入
+    // 方向再清一点（复用 sweep 的 ulp 修正）。
+    if (is_x)
+        x = nudge_clear(views, count, x, !positive, y, box.w, box.h, true);
+    else
+        y = nudge_clear(views, count, y, !positive, x, box.w, box.h, false);
+    out.box = Rect{static_cast<float>(x), static_cast<float>(y), box.w, box.h};
+    out.resolved =
+        rect_hits_solid(views, count, out.box) != TileQueryResult::solid;
+    return out;
+}
+
+OverlapResult resolve_overlap(const SceneAsset& asset, Rect box) {
+    std::vector<std::vector<std::uint8_t>> masks;
+    const std::vector<SolidGridView> views = materialize_views(asset, masks);
+    return resolve_overlap(views.data(), static_cast<int>(views.size()), box);
+}
+
+KinematicResult kinematic_step(const SceneAsset& asset, const Rect* one_way,
+                               int one_way_count, Rect box, Vec2 delta) {
+    std::vector<std::vector<std::uint8_t>> masks;
+    const std::vector<SolidGridView> views = materialize_views(asset, masks);
+    return kinematic_step(views.data(), static_cast<int>(views.size()),
+                          one_way, one_way_count, box, delta);
+}
+
+MixedSweepResult sweep_move_mixed(const SceneAsset& asset,
+                                  const DynBox* others, int other_count,
+                                  Rect box, Vec2 delta) {
+    std::vector<std::vector<std::uint8_t>> masks;
+    const std::vector<SolidGridView> views = materialize_views(asset, masks);
+    return sweep_move_mixed(views.data(), static_cast<int>(views.size()),
+                            others, other_count, box, delta);
+}
+
+// ════════════════════ 混合扫掠 ════════════════════
+
+MixedSweepResult sweep_move_mixed(const SolidGridView* views, int count,
+                                  const DynBox* others, int other_count,
+                                  Rect box, Vec2 delta) {
+    MixedSweepResult out;
+    out.sweep = sweep_core(views, count, nullptr, 0, others, other_count, box,
+                           delta, &out.hit_dyn_x, &out.hit_dyn_y);
+    return out;
+}
+
+// ════════════════════ SolidGrid ════════════════════
+
+ErrorOr<SolidGrid> SolidGrid::load(const SceneAsset& asset, int layer) {
+    SolidGrid grid;
+    auto r = grid.refresh(asset, layer);
+    if (!r) return tl::make_unexpected(std::move(r).error());
+    return grid;
+}
+
+expected<void, Error> SolidGrid::refresh(const SceneAsset& asset, int layer) {
+    if (layer < 0 || layer >= asset.layer_count())
+        return tl::make_unexpected(Error{
+            ErrorCode::kInvalidArgument,
+            "SolidGrid: 层索引越界: " + std::to_string(layer)});
+    const LayerInfo info = asset.layer(layer);
+    if (!info.solid)
+        return tl::make_unexpected(Error{
+            ErrorCode::kInvalidArgument,
+            "SolidGrid: 层 " + std::to_string(layer) + " 非 solid 层"});
+    mask_.assign(static_cast<std::size_t>(info.width) * info.height, 0);
+    std::vector<int> tiles(mask_.size());
+    tile_grid(asset, layer, 0, 0, info.width, info.height, tiles.data());
+    for (std::size_t i = 0; i < tiles.size(); ++i)
+        mask_[i] = tiles[i] == -1 ? 0 : 1;
+    view_ = SolidGridView{info.width,
+                          info.height,
+                          asset.tile_width(),
+                          asset.tile_height(),
+                          info.origin_x,
+                          info.origin_y,
+                          mask_.data(),
+                          info.width,
+                          layer};
+    return {};
+}
+
+expected<void, Error> SolidGrid::set_tile(SceneAsset& asset, int layer,
+                                          int tx, int ty, int value) {
+    if (layer != view_.layer_id)
+        return tl::make_unexpected(Error{
+            ErrorCode::kInvalidArgument,
+            "SolidGrid: 层 " + std::to_string(layer) +
+                " 与掩码层 " + std::to_string(view_.layer_id) + " 不一致"});
+    auto r = asset.set_tile_at(layer, tx, ty, value);
+    if (!r) return tl::make_unexpected(std::move(r).error());
+    const int stride = view_.stride == 0 ? view_.width : view_.stride;
+    mask_[static_cast<std::size_t>(ty) * stride + tx] = value == -1 ? 0 : 1;
+    return {};
 }
 
 }  // namespace tg

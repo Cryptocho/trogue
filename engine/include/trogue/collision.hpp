@@ -1,22 +1,32 @@
 #pragma once
-// collision.hpp —— 静态 solid tile 层的低层碰撞几何原语。
+// collision.hpp —— solid tile 层的低层碰撞几何原语（静态地形 + 动态盒输入）。
 //
-// 边界（复刻 scene.hpp/render.hpp 句式）：引擎只回答「一个矩形/线段与**静态
-// 地形几何**的关系」，不回答「谁和谁碰、碰后发生什么」。动态实体之间的碰撞
-// 规则、刚体物理/solver、单向平台/斜坡、分层碰撞矩阵、寻路（图搜索）均归 game。
+// 边界（复刻 scene.hpp/render.hpp 句式）：引擎只回答「一个矩形/线段与**几何**的
+// 关系」，不回答「谁和谁碰、碰后发生什么」。刚体物理/solver、动态-动态互推
+// （链式承载的传递解算）、斜坡、分层碰撞矩阵、寻路（图搜索）均归 game。
+// 单向平台是本文件的例外扩展：仅 tile 矩形形状的机制性穿越规则（见
+// kinematic_step/sweep_move 的 one_way 重载），平台布局与下跳摘除归 game。
 //
 // 与 tile 查询同一套语义：只读 solid==true 的层；tiles!= -1 即阻挡；层矩形
 // 外 = 无数据 = 不阻挡；像素→tile = floor((world - layer_origin)/tile_size)（每
 // 层有独立 origin，可负）；矩形与 tile 相交用半开 [x,x+w)×[y,y+h)。
 //
-// 全部为自由函数 / 纯值类型，无 OOP 层级、不暴露 raylib 类型、无随机（确定性）。
+// 全部为自由函数 / 纯值类型（SolidGrid 为单个 RAII 掩码类），无 OOP 层级、
+// 不暴露 raylib 类型、无随机（确定性）。
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "trogue/scene.hpp"  // SceneAsset
-#include "trogue/types.hpp"  // Vec2 / Rect / TileQueryResult
+#include "trogue/types.hpp"  // Vec2 / Rect / TileQueryResult / ErrorOr / expected
 
 namespace tg {
+
+// ── 判据常量（钉死契约，调用方可依赖其数值） ──
+inline constexpr float kEpsilon = 1e-3f;        // 贴边/穿越判据的统一容差
+inline constexpr float kKinematicProbe = 1.0f;  // 探地/探墙探针厚度（px）
+inline constexpr float kWallProbeInset = 2.0f;  // 探墙上下内缩（防相邻地面误判成墙）
 
 // 非拥有的单层 solid 网格视图。mask 按行主序存储，非零元素表示阻挡。
 // mask 的生命周期由调用方保证；视图本身不复制或释放它。
@@ -101,5 +111,168 @@ struct SweepResult {
 SweepResult sweep_move(const SceneAsset& asset, Rect box, Vec2 delta);
 SweepResult sweep_move(const SolidGridView* views, int count, Rect box,
                        Vec2 delta);
+
+// ════════════════════ 运动学步进：位移 + 探针 + 事件派生 ════════════════════
+
+// 一步运动学事件（探针与事件派生的全部输出；手感/状态归 game）。
+struct KinematicEvents {
+    bool grounded = false;      // 步末贴地（探地探针命中）
+    bool landed = false;        // 本步发生落地：grounded ∧ 原位同款探地未命中
+    bool hit_ceiling = false;   // 本步向上被挡（blocked_y 且 delta.y < 0）
+    bool hit_wall = false;      // 本步横向被挡（blocked_x）
+    int wall_dir = 0;           // 步末贴墙方向：-1 左 / +1 右 / 0 无
+};
+
+// 运动学一步的结果：位移解算全量结果 + 事件派生。
+struct KinematicResult {
+    SweepResult sweep;   // 位移解算全量契约（box/blocked/result）同 sweep_move
+    KinematicEvents ev;
+};
+
+// 动态实体的一步位移解算：sweep_move 之上收编「探针约定 + 事件派生」脚手架。
+//
+// 语义：
+// - 位移：内部按 sweep_move 解算（轴分离、先 X 后 Y、不重叠不变式全部沿用）。
+// - 探地（grounded）：对解算后 box 取 [x, y+h, w, kKinematicProbe] 探地矩形，
+//   命中 solid **或 one_way 平台** → grounded。
+// - landed 单条差分定义：landed = grounded(解算后) ∧ 对入参原 box 同款探地
+//   未命中。一步内不产生二义：从空中跨到贴地仅当「原位探空 + 落位探实」。
+// - 探墙：步末 box 左右各 kKinematicProbe 厚、上下内缩 kWallProbeInset
+//   （防把相邻地面误判成墙）；右命中 wall_dir=+1，左命中 -1（右优先，确定性）。
+//   探墙只看静态 solid 层，不含 one_way 平台（侧面永远穿过）。
+// - 事件与速度积分、土狼/缓冲/可变跳高等手感完全无关；delta 由 game 算。
+// - 参数非法（同 sweep_move 判据）→ sweep.result=error、sweep.box=入参原值、
+//   全事件 false、wall_dir=0。
+KinematicResult kinematic_step(const SolidGridView* views, int count,
+                               Rect box, Vec2 delta);
+
+// one_way 平台规则（钉死；平台是 game 自持矩形数组，布局/下跳摘除归 game）：
+// 1. 仅 delta.y > 0（下落）参与阻挡；向上与横向永远穿过。
+// 2. 单一阻挡谓词：入参 box 底边 ≤ plat.top + kEpsilon 且解算新底边（未加本
+//    约束时）≥ plat.top（抵达或越过均命中，含 ==，不隧道化）→ 阻挡；底边
+//    > plat.top + kEpsilon 即视为已在平台内部，无论位移多大都不阻挡
+//    （**不可逆**：平台上移不会重新捕获，效果等同下跳穿越后不可逆）。
+// 3. X 相交按先 X 解算后的 x 跨度与平台半开相交判定（与轴分离次序一致）。
+// 4. 命中：box.y = plat.top - box.h，blocked_y = true（landed 差分照常成立）。
+// 5. 探地把 one_way 一并纳入（站上平台即贴地）；探墙不含 one_way。
+// 6. 与静态 solid 约束在同一 Y 轴解算中取最紧者（谁把停位提得更高谁生效）。
+// one_way 数组为空时与无 one_way 重载逐位一致。
+SweepResult sweep_move(const SolidGridView* views, int count,
+                       const Rect* one_way, int one_way_count, Rect box,
+                       Vec2 delta);
+KinematicResult kinematic_step(const SolidGridView* views, int count,
+                               const Rect* one_way, int one_way_count,
+                               Rect box, Vec2 delta);
+// 便捷重载：逐层物化 asset 的 solid 层后调用视图版（语义一致）。
+KinematicResult kinematic_step(const SceneAsset& asset, const Rect* one_way,
+                               int one_way_count, Rect box, Vec2 delta);
+
+// ════════════════════ 最小轴脱出（depenetration） ════════════════════
+
+struct OverlapResult {
+    Rect box{0, 0, 0, 0};
+    bool resolved = false;  // false = 参数非法；true = 后置条件成立（见下）
+};
+
+// 把与 solid 重叠的 box 沿最小轴一次推出到不重叠（「快速动态盒撞进静态几何」）。
+//
+// 语义：
+// - 前置：box 与 solid 重叠（不重叠时直接返回 {box, true}）。
+// - 对 X、Y 两轴分别计算把重叠清空所需的最小单轴位移（向两侧取更近者：沿该轴
+//   把 box 移出所有相交 solid 单元；多层时对同方向取各层所需的最大推距——逐层
+//   取最紧），取两轴中位移小者执行；相等取 X（确定性）。
+// - 后置条件：resolved==true ⇒ rect_hits_solid(结果 box) 为 clear，且位移方向
+//   唯一、值为上述最小可行推距。
+// - **不保证项**：推距无上限（必要时可能横穿整片实心区才脱离层矩形），不做
+//   迭代搜索最小化、不做旋转、不处理跨层折中；除参数非法外不设失败分支
+//  ——有限 solid 层下单轴推进总能离开层矩形（= 无数据 = 不阻挡）。
+// - 参数非法（同 rect_hits_solid 判据）→ {入参原值, false}。
+OverlapResult resolve_overlap(const SolidGridView* views, int count, Rect box);
+OverlapResult resolve_overlap(const SceneAsset& asset, Rect box);
+
+// ════════════════════ 混合扫掠：动态实心盒 + 承载索引 ════════════════════
+
+// 动态实心盒：位置 + 本步位移（速度积分归 game；各盒在本步内视为瞬时障碍）。
+struct DynBox {
+    Rect box{0, 0, 0, 0};
+    Vec2 delta{0.0f, 0.0f};
+};
+
+struct MixedSweepResult {
+    SweepResult sweep;       // 静态+动态合并的解算结果（契约同 sweep_move）
+    int hit_dyn_x = -1;      // 阻挡 X 轴的 DynBox 下标（-1 = 无；同为阻挡取小下标）
+    int hit_dyn_y = -1;
+};
+
+// 注意：hit_dyn_* 报告的是「该轴上截断位移的动态约束里下标最小者」——
+// 当更紧的静态层/单向平台约束实际决定停位时，仍报告满足截断条件的最小
+// 动态下标（它描述「本步有动态阻挡关系」，不描述「停位由谁决定」）。
+
+// sweep_move 的混合扩展：阻挡集 = 静态 solid 层 ∪ 各 DynBox AABB。
+//
+// 语义：
+// - 解算与 sweep_move 完全同构（轴分离、先 X 后 Y、贴边、不重叠不变式）；
+//   其余 DynBox 在本步内视为瞬时 AABB 障碍（不参与彼此的本步位移——链式承载
+//   由调用方按序多轮调用编排，引擎不做 solver）。
+// - **承载语义收窄为索引报告**：hit_dyn_x/hit_dyn_y 只报告「谁挡的」；骑乘/
+//   携带的位移增量由 game 用该下标自算——引擎不保存上一步关系、不推平台。
+//   静态层与某 DynBox 同时阻挡同轴时，索引仍报告该 DynBox 下标（静态层不占
+//   下标）；无动态阻挡者 → -1。
+// - 起始即与某 DynBox 重叠：该方向解算为 0 位移（同 sweep_move 对静态重叠的
+//   约定，不保证脱出；resolve_overlap 不扩 DynBox 版本）。
+// - `sweep_move` 本体签名与语义不变；混合能力只走本函数。
+// - 参数非法（box/delta 任一非有限或尺寸非正，含任一 DynBox）→ result=error。
+MixedSweepResult sweep_move_mixed(const SolidGridView* views, int count,
+                                  const DynBox* others, int other_count,
+                                  Rect box, Vec2 delta);
+// 便捷重载：逐层物化 asset 的 solid 层后调用视图版（语义一致）。
+MixedSweepResult sweep_move_mixed(const SceneAsset& asset,
+                                  const DynBox* others, int other_count,
+                                  Rect box, Vec2 delta);
+
+// ════════════════════ SolidGrid：与 asset solid 层同步的碰撞掩码 ════════════════════
+
+// RAII 自持掩码，是「渲染 tile（SceneAsset）+ 碰撞真值（掩码）」双真相的同步
+// 载体：set_tile 把两份写入合并为一次调用，任何失败路径下两份真值都不分叉。
+// 掩码语义与既有物化一致：tiles != -1 → 1（掩码只记阻挡与否，不记 tile 值）。
+class SolidGrid {
+public:
+    SolidGrid() = default;
+    SolidGrid(const SolidGrid&) = delete;             // 拷贝会使 view_.mask 悬垂，禁用
+    SolidGrid& operator=(const SolidGrid&) = delete;
+    SolidGrid(SolidGrid&& other) noexcept
+        : mask_(std::move(other.mask_)), view_(other.view_) {
+        view_.mask = mask_.data();
+    }
+    SolidGrid& operator=(SolidGrid&& other) noexcept {
+        if (this != &other) {
+            mask_ = std::move(other.mask_);
+            view_ = other.view_;
+            view_.mask = mask_.data();
+        }
+        return *this;
+    }
+
+    // 从 asset 第 layer 层物化掩码；层越界或非 solid 层 → error（不创建）。
+    static ErrorOr<SolidGrid> load(const SceneAsset& asset, int layer);
+
+    // 整层重物化：O(w·h)（大地图高频改格用 set_tile，勿整层 refresh）。
+    // 层不存在或非 solid 层 → error，旧掩码保留。
+    expected<void, Error> refresh(const SceneAsset& asset, int layer);
+
+    // 单格同步：委托 asset.set_tile_at 写资产内存态，成功后同步本掩码该格。
+    // asset 写失败（值域/坐标错）→ error，掩码零修改。
+    // 注意：asset 为非 const 引用（set_tile_at 是受限可变窗口）。
+    expected<void, Error> set_tile(SceneAsset& asset, int layer, int tx, int ty,
+                                   int value);
+
+    // 掩码视图；layer_id = load/refresh 使用的 layer。移动赋值后源对象的
+    // view() 失效；本对象的 view() 始终指向自身缓冲区。
+    const SolidGridView& view() const { return view_; }
+
+private:
+    std::vector<std::uint8_t> mask_;
+    SolidGridView view_;
+};
 
 }  // namespace tg

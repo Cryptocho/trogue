@@ -163,6 +163,41 @@ def main():
     r = rpc(cmd="probe_collide")
     check("probe_collide 缺参数报错", r.get("ok") is False, r)
 
+    # 运动学/脱出/混合扫掠（probe_kinematic）：纯函数探针，天然确定性
+    r = rpc(cmd="probe_kinematic", op="kinematic", rect=[336, 336, 16, 16],
+            delta=[0, 400])
+    kn = r.get("data", {})
+    check("probe_kinematic kinematic 落地事件",
+          r.get("ok") and kn.get("blocked_y") is True
+          and abs(kn["box"][1] - 352.0) < 0.1
+          and kn.get("grounded") is True and kn.get("landed") is True
+          and kn.get("wall_dir") == 0 and kn.get("result") == "solid", r)
+
+    r = rpc(cmd="probe_kinematic", op="kinematic", rect=[300, 8, 16, 16],
+            delta=[0, 400], one_way=[[288, 200, 48, 8]])
+    ow = r.get("data", {})
+    check("probe_kinematic 单向平台贴台停位",
+          r.get("ok") and abs(ow["box"][1] - 184.0) < 0.1
+          and ow.get("blocked_y") is True and ow.get("grounded") is True, r)
+
+    r = rpc(cmd="probe_kinematic", op="resolve", rect=[336, 8, 16, 16])
+    rs = r.get("data", {})
+    check("probe_kinematic resolve 最小轴脱出",
+          r.get("ok") and rs.get("resolved") is True
+          and abs(rs["box"][1] - 16.0) < 0.1
+          and abs(rs["box"][0] - 336.0) < 0.1, r)
+
+    r = rpc(cmd="probe_kinematic", op="mixed", rect=[336, 336, 16, 16],
+            delta=[400, 0], others=[{"box": [368, 336, 16, 16], "delta": [0, 0]}])
+    mx = r.get("data", {})
+    check("probe_kinematic mixed 动态盒阻挡与索引",
+          r.get("ok") and mx.get("blocked_x") is True
+          and abs(mx["box"][0] - 352.0) < 0.1
+          and mx.get("hit_dyn_x") == 0 and mx.get("hit_dyn_y") == -1, r)
+
+    r = rpc(cmd="probe_kinematic")
+    check("probe_kinematic 缺 op 报错", r.get("ok") is False, r)
+
     r = rpc(cmd="query_entities", x=0, y=0)
     check("query_entities 缺 radius 报错", r.get("ok") is False, r)
 
@@ -252,6 +287,7 @@ def main():
           all(c in cmds for c in
               ("subscribe", "unsubscribe", "connections", "events")), r)
     check("help 登记 probe_collide", "probe_collide" in cmds, r)
+    check("help 登记 probe_kinematic", "probe_kinematic" in cmds, r)
     check("help 登记 reload_texture", "reload_texture" in cmds, r)
 
     # 独立长连接订阅（主 sock 保持短连接 RPC 语义，互不干扰）

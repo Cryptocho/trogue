@@ -630,6 +630,7 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
             "ping", "help", "status", "list_entities", "get_entity",
             "query_entities", "set_entity", "spawn", "despawn",
             "layers", "solid_at", "get_tile", "set_tile", "probe_collide",
+            "probe_kinematic",
             "reload",
             "reload_texture", "screenshot",
             "log", "quit", "turn", "move", "wait", "genmap",
@@ -986,6 +987,110 @@ tg::IpcStatus ipc_handler(Demo& d, const std::string& cmd, const tg::Json& req,
             return tg::IpcStatus::error;
         }
         data = out;
+        return tg::IpcStatus::handled;
+    }
+    if (cmd == "probe_kinematic") {
+        if (!d.asset) {
+            error = "no scene loaded";
+            return tg::IpcStatus::error;
+        }
+        if (!req.contains("op") || !req["op"].is_string()) {
+            error = "probe_kinematic needs op (kinematic|resolve|mixed)";
+            return tg::IpcStatus::error;
+        }
+        const std::string op = req["op"].get<std::string>();
+        if (op == "resolve") {
+            if (!req.contains("rect") || !req["rect"].is_array() ||
+                req["rect"].size() != 4) {
+                error = "probe_kinematic resolve needs rect [x,y,w,h]";
+                return tg::IpcStatus::error;
+            }
+            const tg::Rect box{req["rect"][0].get<float>(),
+                               req["rect"][1].get<float>(),
+                               req["rect"][2].get<float>(),
+                               req["rect"][3].get<float>()};
+            const auto r = tg::resolve_overlap(*d.asset, box);
+            data = tg::Json::object();
+            const tg::Json rbox =
+                tg::Json::array({r.box.x, r.box.y, r.box.w, r.box.h});
+            (*data)["box"] = rbox;
+            (*data)["resolved"] = r.resolved;
+            return tg::IpcStatus::handled;
+        }
+        if (op != "kinematic" && op != "mixed") {
+            error = "probe_kinematic op must be kinematic|resolve|mixed";
+            return tg::IpcStatus::error;
+        }
+        if (!req.contains("rect") || !req["rect"].is_array() ||
+            req["rect"].size() != 4 || !req.contains("delta") ||
+            !req["delta"].is_array() || req["delta"].size() != 2) {
+            error = "probe_kinematic needs rect [x,y,w,h] and delta [dx,dy]";
+            return tg::IpcStatus::error;
+        }
+        const tg::Rect box{req["rect"][0].get<float>(), req["rect"][1].get<float>(),
+                           req["rect"][2].get<float>(), req["rect"][3].get<float>()};
+        const tg::Vec2 delta{req["delta"][0].get<float>(),
+                             req["delta"][1].get<float>()};
+        data = tg::Json::object();
+        if (op == "kinematic") {
+            std::vector<tg::Rect> plats;
+            if (req.contains("one_way") && req["one_way"].is_array()) {
+                for (const auto& p : req["one_way"]) {
+                    if (!p.is_array() || p.size() != 4) {
+                        error = "probe_kinematic one_way entries must be [x,y,w,h]";
+                        return tg::IpcStatus::error;
+                    }
+                    plats.push_back(tg::Rect{p[0].get<float>(), p[1].get<float>(),
+                                             p[2].get<float>(), p[3].get<float>()});
+                }
+            }
+            const auto r = tg::kinematic_step(*d.asset, plats.data(),
+                                              static_cast<int>(plats.size()),
+                                              box, delta);
+            const tg::Json boxarr = tg::Json::array(
+                {r.sweep.box.x, r.sweep.box.y, r.sweep.box.w, r.sweep.box.h});
+            (*data)["box"] = boxarr;
+            (*data)["blocked_x"] = r.sweep.blocked_x;
+            (*data)["blocked_y"] = r.sweep.blocked_y;
+            (*data)["result"] = r.sweep.result == tg::TileQueryResult::solid ? "solid"
+                                : r.sweep.result == tg::TileQueryResult::error ? "error"
+                                                                               : "clear";
+            (*data)["grounded"] = r.ev.grounded;
+            (*data)["landed"] = r.ev.landed;
+            (*data)["hit_ceiling"] = r.ev.hit_ceiling;
+            (*data)["hit_wall"] = r.ev.hit_wall;
+            (*data)["wall_dir"] = r.ev.wall_dir;
+            return tg::IpcStatus::handled;
+        }
+        // mixed：others = [{box, delta}...]
+        std::vector<tg::DynBox> others;
+        if (req.contains("others") && req["others"].is_array()) {
+            for (const auto& o : req["others"]) {
+                if (!o.is_object() || !o.contains("box") || !o["box"].is_array() ||
+                    o["box"].size() != 4 || !o.contains("delta") ||
+                    !o["delta"].is_array() || o["delta"].size() != 2) {
+                    error = "probe_kinematic others entries must be {box:[x,y,w,h], delta:[dx,dy]}";
+                    return tg::IpcStatus::error;
+                }
+                others.push_back(tg::DynBox{
+                    tg::Rect{o["box"][0].get<float>(), o["box"][1].get<float>(),
+                             o["box"][2].get<float>(), o["box"][3].get<float>()},
+                    tg::Vec2{o["delta"][0].get<float>(), o["delta"][1].get<float>()}});
+            }
+        }
+        const auto r = tg::sweep_move_mixed(*d.asset, others.data(),
+                                            static_cast<int>(others.size()),
+                                            box, delta);
+        const tg::Json mbox = tg::Json::array(
+            {r.sweep.box.x, r.sweep.box.y, r.sweep.box.w, r.sweep.box.h});
+        (*data)["box"] = mbox;
+        (*data)["blocked_x"] = r.sweep.blocked_x;
+        (*data)["blocked_y"] = r.sweep.blocked_y;
+        (*data)["result"] = r.sweep.result == tg::TileQueryResult::solid ? "solid"
+                            : r.sweep.result == tg::TileQueryResult::error ? "error"
+                                                                           : "clear";
+        (*data)["hit_dyn_x"] = r.hit_dyn_x;
+        (*data)["hit_dyn_y"] = r.hit_dyn_y;
         return tg::IpcStatus::handled;
     }
     if (cmd == "genmap") return handle_genmap(d, req, data, error);

@@ -5,7 +5,7 @@
 
 #include "trogue/input.hpp"
 
-#include <algorithm>  // std::sort / std::stable_sort / std::find_if / std::remove_if
+#include <algorithm>  // std::sort / std::find_if / std::remove_if
 
 namespace tg {
 
@@ -67,11 +67,12 @@ std::vector<InputEvent> VirtualInput::step_due(double boundary) {
             ++it;
         }
     }
-    std::stable_sort(due.begin(), due.end(),
-                     [](const Entry& a, const Entry& b) {
-                         if (a.ev.t != b.ev.t) return a.ev.t < b.ev.t;
-                         return a.seq < b.seq;
-                     });
+    // (t, seq) 排序：seq 唯一即全序，无需稳定排序
+    std::sort(due.begin(), due.end(),
+              [](const Entry& a, const Entry& b) {
+                  if (a.ev.t != b.ev.t) return a.ev.t < b.ev.t;
+                  return a.seq < b.seq;
+              });
 
     // ③ 逐事件应用（min_hold 只约束 up；down 永不推迟）
     for (const Entry& e : due) {
@@ -82,12 +83,12 @@ std::vector<InputEvent> VirtualInput::step_due(double boundary) {
             } else {
                 down_steps_.emplace_back(e.ev.key, step_index_);
             }
-            // 同键新的 down：丢弃推迟中未生效的 up（最新意图优先）
+            // 同键新的 down：丢弃推迟中未生效的 up（最新意图优先；
+            // deferred_ 只存 up，谓词按 key 匹配即可）
             deferred_.erase(
                 std::remove_if(deferred_.begin(), deferred_.end(),
                                [&e](const DeferredUp& d) {
-                                   return d.ev.key == e.ev.key &&
-                                          d.ev.down == false;
+                                   return d.ev.key == e.ev.key;
                                }),
                 deferred_.end());
         } else {
