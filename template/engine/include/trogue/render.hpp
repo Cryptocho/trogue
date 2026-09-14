@@ -6,6 +6,12 @@
 // BeginMode2D(camera)...EndMode2D() 区间内执行；engine 不调用这两个函数、
 // 不接收 camera（调用方已设置好变换）。资源生命周期：绘制期间 asset 必须
 // 存活；asset swap/销毁只在窗口绘制帧外。
+//
+// 边界：本模块只提供 tilemap 绘制与显式 sprite/色块原语。**2D 矢量图元
+// （圆 / 多边形 / 线段 / 环）与音频不提供引擎封装**——这两类能力直接调用
+// raylib（DrawCircle*/DrawPoly*/DrawLine*/DrawRing*、InitAudioDevice/
+// LoadSound/LoadMusic/PlaySound...）。engine 的职责限于 tilemap 绘制、
+// 确定性推进与 IPC 传输；画什么、何时响等美学与玩法决策归调用方。
 
 #include <cstdint>  // std::uint64_t
 #include <string_view>
@@ -40,6 +46,10 @@ RenderResult draw_rect(Rect world_rect, Color color);
 // 语义：临时创建 RenderTexture(w,h) → 在其上绘制（恒等相机，无窗口）→
 // 取像（校正垂直翻转）→ ExportImage → 释放。不依赖窗口是否可见，仅要求
 // GL 上下文已就绪（IsWindowReady；隐藏窗口满足）。
+// 平台约束：本函数走 RenderTexture → LoadImageFromTexture，不读屏幕前缓冲，
+// 故无头/隐藏窗口可用。对照 raylib 的 LoadImageFromScreen()——它在 Wayland
+// 下对「隐藏窗口 / 只画了一帧」返回黑帧，仅主循环连续 Present 时才正常；
+// 需要无头取帧时走本函数路径，勿用 LoadImageFromScreen。
 // 只画 tile 层（与 render_scene 一致，**不含**实体/sprite/HUD）；恒等相机。
 // 参数非法（w/h<=0 或路径不安全）→ Invalid；窗口未就绪 → WindowUnavailable；
 // FBO/取像/导出失败 → TextureMissing。

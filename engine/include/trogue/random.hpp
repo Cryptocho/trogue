@@ -46,7 +46,8 @@ std::uint64_t hash_combine(std::uint64_t seed, Ts... parts) noexcept {
 }
 
 // 种子化 PRNG（xoshiro256**，算法见文件头契约）。可复制值类型：拷贝 =
-// 复制状态，两实例此后输出相同序列（用复制表达「存档/回放某刻的随机状态」）。
+// 复制状态与计数，两实例此后输出相同序列（用复制表达「存档/回放某刻的随机
+// 状态」）。
 class Random {
 public:
     // splitmix64 连续扩散 seed 为 4 个状态字。状态不可能全零：四个输入
@@ -55,6 +56,13 @@ public:
     explicit Random(std::uint64_t seed) noexcept;
 
     std::uint64_t next_u64() noexcept;  // 原始 64 位流
+    // 原始抽取计数：next_u64 的调用次数（从构造时的 0 起累加）。xoshiro256**
+    // 每调用 next_u64 状态推进一步，故 (seed, draws) 唯一确定流位置——重放
+    // draws 次原始抽取即回到该点（存档/回放的可验证口径）。计数**含高层 API
+    // 的内部消耗**：next_int 每次拒绝重抽计一次，next_bool 的边界短路
+    //（p<=0 / p>=1）零消耗。只读（无 setter）。拷贝 = 复制状态，计数随之一并
+    // 继承（拷贝后两实例计数相同，再各自推进才分叉）。
+    std::uint64_t draws() const noexcept;
     // 闭区间 [lo, hi] 均匀整数，无模偏差（拒绝采样）。前置：lo <= hi。
     int next_int(int lo, int hi) noexcept;
     // [0,1)，53 位精度：(u64 >> 11) × (1/2^53)。1 不可达。
@@ -80,6 +88,7 @@ public:
 
 private:
     std::uint64_t s_[4];
+    std::uint64_t draws_ = 0;  // 原始 next_u64 调用次数（只读可观测）
 };
 
 }  // namespace tg

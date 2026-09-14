@@ -28,6 +28,7 @@ Random::Random(std::uint64_t seed) noexcept {
 }
 
 std::uint64_t Random::next_u64() noexcept {
+    ++draws_;  // 状态推进一次 = 一次原始抽取（draws() 的语义单位）
     const std::uint64_t result = rotl(s_[1] * 5, 7) * 9;
     const std::uint64_t t = s_[1] << 17;
     s_[2] ^= s_[0];
@@ -38,6 +39,8 @@ std::uint64_t Random::next_u64() noexcept {
     s_[3] = rotl(s_[3], 45);
     return result;
 }
+
+std::uint64_t Random::draws() const noexcept { return draws_; }
 
 int Random::next_int(int lo, int hi) noexcept {
     // 拒绝采样（无模偏差）：范围 r ≤ 2^32（int 全域）。取原始流的 32 位

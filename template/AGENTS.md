@@ -25,6 +25,7 @@
 
 - 玩法决策归 `game/`：输入、状态、实体生命周期、规则、AI、动态碰撞、相机、UI、音频、存档等。
 - 引擎是通用执行层：不拥有你的世界，不根据 `type` 猜玩法，不自动管理实体。
+- `engine/` **不封装图形/音频**：2D 矢量图元（圆/多边形/线段/环）与音频直接调 raylib（`DrawCircle*`/`DrawPoly*`/`DrawLine*`/`DrawRing*`、`InitAudioDevice`/`LoadSound`…）；引擎只管 tilemap 绘制、确定性推进与 IPC 传输。
 - 不重复造轮子：实现前先确认代码库（含引擎）有无现成实现，有则直接复用，没有就在 `game/` 自己写。
 
 ## 4. 资产
@@ -47,5 +48,6 @@ python3 tools/ipc_smoke.py
 ## 6. 调试
 
 1. 先读文件再改文件（edit/write 以 read 记录为准）。
-2. IPC 用 `status`/`list_entities`/`get_entity` 和游戏自有命令定位；`screenshot` 拿完整帧；结束发 `quit`，残留进程 `pkill -x trogue`。
-3. 冒烟脚本属项目自有文件，随游戏 IPC 命令增删维护。
+2. **IPC 命令参数是不可信输入**：每个字段显式校验类型与范围，非法输入统一返回错误包络；禁止裸 `.get<T>()`（类型不符会抛异常，被引擎兜底成 `internal error`）。冒烟脚本必须为**每条命令**覆盖至少一条负向路径（类型错/缺字段/越界 → `ok:false`，且错误信息不是 `internal error`——后者意味着校验缺失）。模板自带工具/脚本在发布前过一遍冒烟。
+3. IPC 用 `status`/`list_entities`/`get_entity` 和游戏自有命令定位；`screenshot` 拿完整帧；结束发 `quit`，残留进程 `pkill -x trogue`。
+4. 冒烟脚本属项目自有文件，随游戏 IPC 命令增删维护。

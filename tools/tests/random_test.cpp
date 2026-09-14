@@ -3,12 +3,14 @@
 // 覆盖：黄金值序列（第二来源 = 独立参考实现生成的硬编码值，锁死算法不漂移）、
 // 同/异 seed 确定性、复制语义（状态独立）、next_int 闭区间/无越界/无模偏差
 // sanity/极端范围、next_double 值域、next_bool 边界短路、pick 覆盖、
-// shuffle 多重集保持/确定性/分布 sanity、hash 雪崩与组合敏感性。
+// shuffle 多重集保持/确定性/分布 sanity、draws 原始抽取计数（含拒绝采样与
+// 短路边界）、hash 雪崩与组合敏感性。
 // 纯公共 API，无窗口、无文件。
 #include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <numeric>
 #include <vector>
 
@@ -171,6 +173,76 @@ bool test_next_double_bool() {
     return true;
 }
 
+// ── draws() 原始抽取计数 ──
+
+bool test_draws_counting() {
+    // next_u64 逐次 +1
+    Random r(99);
+    CHECK(r.draws() == 0);
+    for (std::uint64_t i = 1; i <= 10; ++i) {
+        r.next_u64();
+        CHECK(r.draws() == i);
+    }
+
+    // 高层 API 的消耗粒度为原始抽取：next_double 恰好 1；
+    // next_bool 边界短路 0、非短路 1
+    {
+        Random b(5);
+        const std::uint64_t d0 = b.draws();
+        b.next_double();
+        CHECK(b.draws() == d0 + 1);
+        const std::uint64_t d1 = b.draws();
+        CHECK(b.next_bool(0.0) == false);
+        CHECK(b.next_bool(1.0) == true);
+        CHECK(b.next_bool(-0.5) == false);
+        CHECK(b.next_bool(1.5) == true);
+        CHECK(b.draws() == d1);  // 短路零消耗
+        b.next_bool(0.5);
+        CHECK(b.draws() == d1 + 1);
+    }
+
+    // 拒绝采样必须计入原始抽取（distinguishing case）：
+    // next_int(INT_MIN, 0) 的 r = 2^31+1、limit = 2^31+1 → 拒绝率 ≈ 1/2。
+    // 同 seed 孪生实例复刻拒绝循环独立计 raw，断言 draws() == raw——
+    // 若 draws() 误计为「高层 API 调用次数」则其值 = n 而 raw ≈ 2n，断言失败。
+    {
+        const int lo = std::numeric_limits<int>::min();
+        const int hi = 0;
+        const int n = 200;
+        Random a(2024), b(2024);
+        for (int i = 0; i < n; ++i) a.next_int(lo, hi);
+
+        const std::uint64_t r =
+            static_cast<std::uint64_t>(static_cast<std::int64_t>(hi) -
+                                       static_cast<std::int64_t>(lo)) + 1;
+        const std::uint64_t limit = 0x100000000ULL - 0x100000000ULL % r;
+        std::uint64_t raw = 0;
+        for (int i = 0; i < n; ++i) {
+            std::uint32_t x;
+            do {
+                x = static_cast<std::uint32_t>(b.next_u64() >> 32);
+                ++raw;
+            } while (static_cast<std::uint64_t>(x) >= limit);
+        }
+        CHECK(a.draws() == raw);
+        CHECK(raw > static_cast<std::uint64_t>(n));  // 确实发生了拒绝
+    }
+
+    // 拷贝 = 复制状态与计数；原实例推进不影响副本
+    {
+        Random orig(7);
+        for (int i = 0; i < 5; ++i) orig.next_u64();
+        Random copy = orig;
+        CHECK(copy.draws() == orig.draws());
+        orig.next_u64();
+        orig.next_u64();
+        CHECK(copy.draws() == 5);
+        copy.next_u64();
+        CHECK(copy.draws() == 6 && orig.draws() == 7);
+    }
+    return true;
+}
+
 // ── pick / shuffle ──
 
 bool test_pick() {
@@ -249,6 +321,7 @@ int main() {
     test_determinism_and_copy();
     test_next_int();
     test_next_double_bool();
+    test_draws_counting();
     test_pick();
     test_shuffle();
     test_hash_avalanche();

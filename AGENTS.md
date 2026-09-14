@@ -75,7 +75,7 @@
 - **动画（`animation.hpp`）**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer` 消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、暂停/恢复、帧事件与完成回调、`co_await` 完成；它**输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。`tg::AnimationAsset::load/load_json` 消费独立 `tro-animations` v1。
 - **Tween（`tween.hpp`）**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。
 - **Autotile（`terrain.hpp`）**：`tg::TerrainTable`（tro-tileset terrain 数据的只读匹配表）+ `tg::pick_tile`（无状态纯函数：8 方向 pattern → tile id；确定性评分降级 + 同分取最小 id）。它输出 tile id 供 game 拼装场景；**地形指派、程序生成、动态改图的触发归 game**，engine 不保存地形状态、不做扩散式重排。
-- **随机（`random.hpp`）**：`tg::hash_u64`/`hash_combine`（坐标哈希）+ `tg::Random`（xoshiro256** 流式 PRNG）。算法与常量钉死为可复现契约（同 seed 同调用序列逐位一致，替换算法属破坏性变更）。生成策略归 game。
+- **随机（`random.hpp`）**：`tg::hash_u64`/`hash_combine`（坐标哈希）+ `tg::Random`（xoshiro256** 流式 PRNG）。`Random::draws()` 暴露**原始 `next_u64` 抽取计数**（只读；含拒绝采样/短路的内部消耗），`(seed, draws)` 唯一确定流位置——重放即恢复（不做状态序列化/O(1) 恢复）。算法与常量钉死为可复现契约（同 seed 同调用序列逐位一致，替换算法属破坏性变更）。生成策略归 game。
 - **时间/输入（`time.hpp`/`input.hpp`）**：`tg::StepClock` 固定步时钟（授步池/时间池双池、授步永不丢、alpha 余量报告）；`tg::VirtualInput` 确定性按键注入（稳定序、步边界一次性消费、可选防撕裂）。手感参数与玩法策略归 game。
 - **协程推进**：`tg::TaskRunner` 启动/回收 `tg::task<>`；不每帧重 resume（等待由事件同步驱动），析构不隐式 cancel。
 - **IPC（`ipc.hpp`）**：`tg::Ipc` 不持有 scene/world 指针；只负责 JSON-lines 分帧、响应顺序、包络、**事件通道**与 game callback。命令语义由 game 注册和实现；事件是纯传输——engine 不识事件名与 filter 键的任何语义。

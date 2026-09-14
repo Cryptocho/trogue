@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -334,6 +335,20 @@ tg::Json actor_to_json(const Game& g, const Actor& a) {
     return j;
 }
 
+// 不可信输入收窄：整数（含 unsigned）→ int64；非整数或超出 int64 域 → false。
+// 手写而非裸 .get<int64_t>()——后者对超大 unsigned 会抛异常（落引擎兜底）。
+bool json_to_int64(const tg::Json& v, std::int64_t& out) {
+    if (v.is_number_unsigned()) {
+        const std::uint64_t u = v.get<std::uint64_t>();
+        if (u > 0x7fffffffffffffffULL) return false;
+        out = static_cast<std::int64_t>(u);
+        return true;
+    }
+    if (!v.is_number_integer()) return false;
+    out = v.get<std::int64_t>();
+    return true;
+}
+
 tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
                           std::optional<tg::Json>& data, std::string& err) {
     if (cmd == "help") {
@@ -385,10 +400,8 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
         // 固定步语义：动作**排队**，下一个模拟步边界消费（pause 下冻结）。
         std::int64_t dx = 0, dy = 0;
         auto int64_of = [](const tg::Json& v, std::int64_t& out) {
-            if (!v.is_number_integer()) return false;
-            const std::int64_t n = v.get<std::int64_t>();
-            if (n < -1 || n > 1) return false;  // 越界即非法（单格约束）
-            out = n;
+            if (!json_to_int64(v, out)) return false;
+            if (out < -1 || out > 1) return false;  // 越界即非法（单格约束）
             return true;
         };
         const tg::Json zero = 0;
@@ -414,11 +427,11 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
     }
     if (cmd == "step_frames") {
         // 精确推进 n 个固定步（授步通道：pause 下可用、与真实时间互不干扰）。
-        if (!req.contains("n") || !req.at("n").is_number_integer()) {
+        std::int64_t n = 0;
+        if (!req.contains("n") || !json_to_int64(req.at("n"), n)) {
             err = "step_frames needs field: n (integer)";
             return tg::IpcStatus::error;
         }
-        const std::int64_t n = req.at("n").get<std::int64_t>();
         if (n < 1 || n > 3600) {
             err = "step_frames n must be in [1,3600]";
             return tg::IpcStatus::error;
@@ -462,12 +475,24 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
                 return tg::IpcStatus::error;
             }
         } else if (req.at("key").is_number_integer()) {
-            key = req.at("key").get<int>();
+            std::int64_t kv = 0;
+            if (!json_to_int64(req.at("key"), kv) ||
+                kv < std::numeric_limits<int>::min() ||
+                kv > std::numeric_limits<int>::max()) {
+                err = "input key int out of range";
+                return tg::IpcStatus::error;
+            }
+            key = static_cast<int>(kv);
         } else {
             err = "input key must be a name string or int";
             return tg::IpcStatus::error;
         }
-        const double t = req.contains("t") && req.at("t").is_number()
+        // t 可选；给了就必须是 number（否则显式报错，不静默当默认值）
+        if (req.contains("t") && !req.at("t").is_number()) {
+            err = "input t must be a number";
+            return tg::IpcStatus::error;
+        }
+        const double t = req.contains("t")
                              ? req.at("t").get<double>()
                              : (static_cast<double>(g.step_i) - 1.0) * kFixedDt;
         g.input.push(key, req.at("down").get<bool>(), t);
@@ -495,6 +520,11 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
         return tg::IpcStatus::handled;
     }
     if (cmd == "screenshot") {
+        // path 可选；给了就必须是字符串（否则 req.value() 抛异常落引擎兜底）
+        if (req.contains("path") && !req.at("path").is_string()) {
+            err = "screenshot path must be a string";
+            return tg::IpcStatus::error;
+        }
         const std::string def =
             "screenshot_" +
             std::to_string(static_cast<long long>(GetTime())) + ".png";
@@ -504,6 +534,11 @@ tg::IpcStatus ipc_handler(Game& g, const std::string& cmd, const tg::Json& req,
         return tg::IpcStatus::handled;
     }
     if (cmd == "log") {
+        // msg 可选；给了就必须是字符串
+        if (req.contains("msg") && !req.at("msg").is_string()) {
+            err = "log msg must be a string";
+            return tg::IpcStatus::error;
+        }
         TraceLog(LOG_INFO, "[game] %s", req.value("msg", "").c_str());
         data = tg::Json{{"logged", true}};
         return tg::IpcStatus::handled;
@@ -617,7 +652,10 @@ int main(int argc, char** argv) {
         if (g.shot_requested) {
             g.shot_requested = false;
             // 强制 flush 渲染批后读屏导出（raylib TakeScreenshot 会破坏绝对路径；
-            // 不 flush 会拍到未绘制的残缺帧）
+            // 不 flush 会拍到未绘制的残缺帧）。
+            // 平台约束：LoadImageFromScreen 读屏幕前缓冲，Wayland 下隐藏/单帧窗口
+            // 会拍到黑帧（本分支在连续 Present 的主循环内，正常）。无头取帧勿用本
+            // 路径——改用 tg::render_scene_to_png（RenderTexture + LoadImageFromTexture）。
             rlDrawRenderBatchActive();
             Image img = LoadImageFromScreen();
             ExportImage(img, g.shot_path.c_str());

@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### 引擎：Random 抽取计数 + 模板 QA 与边界文档
+
+- 影响的文件: `engine/include/trogue/random.hpp`、`engine/src/random.cpp`、`tools/tests/random_test.cpp`、`engine/include/trogue/render.hpp`、`template/engine/`、`template/AGENTS.md`、`template/game/src/main.cpp`、`template/tools/gen_font.py`、`template/tools/ipc_smoke.py`、`AGENTS.md`、`docs/BACKLOG.md`
+
+#### Added
+- `tg::Random::draws()`：只读原始 `next_u64` 抽取计数（`const noexcept`，无 setter）。语义钉死为**状态推进次数**——含 `next_int` 拒绝采样的每次重抽、`next_bool` 边界短路零消耗；`(seed, draws)` 唯一确定流位置，重放即恢复（不做状态序列化/O(1) 恢复）。拷贝 = 复制状态与计数，与既有「拷贝表达存档某刻」一致。
+- 模板 IPC 冒烟（`template/tools/ipc_smoke.py`）为**每条命令**补负向路径断言：类型错/缺字段/越界/未知命令 → 错误包络，且断言错误信息非引擎兜底 `internal error`（区分「显式校验」与「异常被兜底」）；无参数命令补「多余字段容忍」。基线 22 → 45 项。
+
+#### Bug Fixes
+- 修复 `template/tools/gen_font.py` 开箱即崩：`__import__("PIL.ImageDraw", fromlist=...)` 返回顶层包致 `.Draw` 不存在 → 改为顶层 `from PIL import Image, ImageDraw, ImageFont`。`--font` 帮助更正为可读 `.ttf/.otf/.ttc`；新增 `--index`（`.ttc` 内字体索引，Noto CJK SC=2）。
+- 模板 IPC handler 去裸 `.get<T>()`：补 `screenshot.path`/`log.msg` 字符串类型校验、`input.t` 数值类型校验、`step_frames.n` 与 `input.key` 经 `json_to_int64` 收窄并双向判界（超大 unsigned / 低于 int 下界不再抛异常或实现定义窄化）、`move.dx/dy` 复用同一收窄。
+
+#### Documentation
+- `engine/include/trogue/render.hpp`：顶部加边界声明——2D 矢量图元与音频由 game 直调 raylib，engine 只管 tilemap 绘制/确定性推进/IPC 传输；`render_scene_to_png` 注释写明 `LoadImageFromScreen` 的 Wayland 黑帧前置条件与 RenderTexture 替代路径。
+- 模板 `AGENTS.md`：设计边界加同款图形/音频立场；调试节加硬性检查项「IPC 参数是不可信输入」；模板 `game/src/main.cpp` 截图分支补平台约束注释。
+
+#### Tests
+- `random_test` 新增 `test_draws_counting`（23 checks）：`next_u64` 逐次 +1、`next_double` 恰好 1、`next_bool` 短路 0 / 非短路 1、拷贝计数、以及**高拒绝率区分用例** `next_int(INT_MIN,0)`（拒绝率≈1/2，同 seed 孪生复刻拒绝循环断言 `draws()==raw` 且 `raw>N`）。
+- 根仓库：Debug 构建零告警；CTest 18/18；根冒烟 93/93。模板独立副本（`--source` 安装）：构建零告警，冒烟 45/45（负向全过）。`gen_font.py` 对真实 `NotoSansCJK-Regular.ttc` 跑通（`--index 0/2` 产出不同，SC 字形目视确认），负 `--index` 拒绝。
+
 ### 引擎：动态实体半边碰撞原语（运动/物理主线第二期 M22b）
 
 - 影响的文件: `engine/include/trogue/collision.hpp`、`engine/src/collision.cpp`、`tools/tests/kinematic_test.cpp`、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`
