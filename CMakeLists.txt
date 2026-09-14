@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(trogue CXX)
 
-# ── 语言基线（plan-5.1 §2） ──
+# ── 语言基线 ──
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -9,10 +9,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)            # clangd会自动使用
 
-# 引擎与游戏代码统一零告警基线（plan-5.1 §2：-Wall -Wextra -Wpedantic）
+# 引擎与游戏代码统一零告警基线（-Wall -Wextra -Wpedantic）
 add_compile_options(-Wall -Wextra -Wpedantic)
 
-# ── 测试与选项：顺序固定（plan-5.1 §7.1） ──
+# ── 测试与选项：顺序固定 ──
 include(CTest)                                   # 先于一切（BUILD_TESTING）
 option(TROGUE_BUILD_CONSUMER_SMOKES
        "Build consumer smoke executables and no-window unit tests (requires BUILD_TESTING)" ON)

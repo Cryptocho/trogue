@@ -4,7 +4,7 @@
 
 ### 引擎：动态实体半边碰撞原语（运动/物理主线第二期 M22b）
 
-- 影响的文件: `engine/include/trogue/collision.hpp`、`engine/src/collision.cpp`、`tools/tests/kinematic_test.cpp`、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-23.md`
+- 影响的文件: `engine/include/trogue/collision.hpp`、`engine/src/collision.cpp`、`tools/tests/kinematic_test.cpp`、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`
 
 #### Added
 - 新增 `tg::kinematic_step`（views 版 / one_way 版 / SceneAsset 便捷重载）：sweep 位移 + 探针约定 + 事件派生收进引擎——探地（`kKinematicProbe=1px`）、landed 单条差分定义（`grounded(解算后) ∧ 原位同款探地未命中`）、探墙（`kWallProbeInset=2px` 内缩防相邻地面误判，右优先，只看静态层）、`hit_ceiling`/`hit_wall` 与 blocked 映射；返回内嵌 `SweepResult` + `KinematicEvents`。速度积分与手感参数归 game（收编连续位移角色约 70 行的探针脚手架）。
@@ -23,7 +23,7 @@
 
 ### 引擎：固定步时钟与虚拟输入（运动/物理主线第一期）
 
-- 影响的文件: `engine/include/trogue/time.hpp`、`engine/src/time.cpp`、`engine/include/trogue/input.hpp`、`engine/src/input.cpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/step_clock_test.cpp`、`tools/tests/virtual_input_test.cpp`、`tools/CMakeLists.txt`、`template/game/src/main.cpp`、`template/tools/ipc_smoke.py`、`template/engine/`、`template/AGENTS.md`、`template/API.md`、`AGENTS.md`、`docs/plan-22.md`
+- 影响的文件: `engine/include/trogue/time.hpp`、`engine/src/time.cpp`、`engine/include/trogue/input.hpp`、`engine/src/input.cpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/step_clock_test.cpp`、`tools/tests/virtual_input_test.cpp`、`tools/CMakeLists.txt`、`template/game/src/main.cpp`、`template/tools/ipc_smoke.py`、`template/engine/`、`template/AGENTS.md`、`template/API.md`、`AGENTS.md`
 
 #### Added
 - 新增 `tg::StepClock`（`trogue/time.hpp`）：固定步长模拟时钟——对外单车道、内部授步池/时间池双池（授步池优先扣减，授步永不因溢出丢弃，`step_frames n` 对任意 n 精确）；溢出丢弃仅作用时间通道超额整步、以时间池现有整步数为上限，每 tick 后时间池 < step 不变式；暂停 = 停止时间通道、授步照常排空（alpha 恒 0）；`alpha` 插值余量报告（用不用归 game）；构造参数非法抛 `std::logic_error`。纯算术无回调，黄金序列逐位冻结。
@@ -38,11 +38,11 @@
 
 #### Architecture
 - 运动/物理主线第一期（M22a）落地，需求实证来自模板派生平台跳跃探针完结报告（手写累加器 + 注入队列 + 三处 game 循环手写 dt）；碰撞族（kinematic_step/resolve_overlap/单向平台/DynBox/SolidGrid）拆至 M22b 另行门禁。引擎不感知 IPC 命令、不持有游戏状态、不注册回调（库不翻转为框架）；手感参数与玩法策略归 game。
-- 随车记录：用户 2026-09-13 直接拍板的模板文档精简（`template/AGENTS.md` 重写、`template/API.md` 删除——Agent 直读引擎头文件）一并提交，见 `docs/plan-22.md` §6。
+- 随车记录：用户 2026-09-13 直接拍板的模板文档精简（`template/AGENTS.md` 重写、`template/API.md` 删除——Agent 直读引擎头文件）一并提交，见  §6。
 
 ### 引擎：tro-scene 描述符表达力泛化（v2.2 只增字段）
 
-- 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`template/API.md`、`template/AGENTS.md`、`template/scripts/sync_from_source.sh`、`AGENTS.md`、`docs/plan-21.md`
+- 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`template/API.md`、`template/AGENTS.md`、`template/scripts/sync_from_source.sh`、`AGENTS.md`
 
 #### Added
 - 实体 `props` 从「校验后丢弃」改为存储并经 `SceneEntity::props` 值拷贝暴露；新增场景级 `meta.props`（`SceneAsset::meta_props()` 返回随 asset 存活的 const 引用）。引擎只校验为 object、不解释任何键，语义归 game。
@@ -65,7 +65,7 @@
 
 ### 引擎：单格 tile 写入（SceneAsset::set_tile_at）
 
-- 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`tools/tests/scene_query_test.cpp`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-20.md`
+- 影响的文件: `engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`tools/tests/scene_query_test.cpp`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`
 
 #### Added
 - 新增 `SceneAsset::set_tile_at(layer, tx, ty, value)`：受限可变窗口（`update_layer_tiles`）的窄化补充——层局部 tile 坐标（不含层 origin；写入与查询的层外语义刻意不对称：查询层外 = 不阻挡，写入层外 = 参数错误）、值域规则与整层更新共享同一推导（图集 → 所引 tileset count、palette → palette 大小、bare 不可写）、nonempty O(1) 原地维护（保持 `layer()` 引用语义）、失败零修改、写后查询/渲染立即可见（同缓冲区）。批量/区域写入不进引擎（game 侧循环每格 O(1)）；autotile 联动重排与地形指派仍归 game。
@@ -82,7 +82,7 @@
 
 ### 引擎：独立贴图缓存失效（reload_texture）
 
-- 影响的文件: `engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`、`docs/plan-19.md`
+- 影响的文件: `engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`tools/tests/render_test.cpp`、`tools/tests/oop_client_smoke.cpp`、`tools/tests/ecs_client_smoke.cpp`、`game/src/main.cpp`、`assets/scenes/demo.json`、`tools/ipc_smoke.py`、`template/engine/`、`AGENTS.md`
 
 #### Added
 - 新增 `tg::reload_texture(path)`：进程级独立贴图缓存的失效原语——卸载已缓存贴图并清除失败哨兵，下次绘制该路径重读盘（失败哨兵清除后恢复「每路径首失败记一次日志」语义）。合法路径恒返回 true（契约 =「确保下次重读盘」，不报告缓存状态）；合法路径不触碰 `RenderStats` 计数，仅非法路径 +1 `param_failures`。图集贴图随 asset RAII 不在范围；失效时机与文件监听策略归 game。
@@ -100,7 +100,7 @@
 
 ### 引擎：确定性随机原语（坐标哈希 + 种子化流式 PRNG）
 
-- 影响的文件: `engine/include/trogue/random.hpp`、`engine/src/random.cpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/random_test.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/ai.hpp`、`game/src/ai.cpp`、`game/src/main.cpp`、`template/engine/`、`AGENTS.md`、`docs/plan-18.md`
+- 影响的文件: `engine/include/trogue/random.hpp`、`engine/src/random.cpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/random_test.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/ai.hpp`、`game/src/ai.cpp`、`game/src/main.cpp`、`template/engine/`、`AGENTS.md`
 
 #### Added
 - 新增 `trogue/random.hpp`：`tg::hash_u64`/`tg::hash_combine`（splitmix64 坐标哈希自由函数）+ `tg::Random`（xoshiro256** 种子化流式 PRNG，可复制值类型：`next_u64`/`next_int` 闭区间无模偏差拒绝采样/`next_double`/`next_bool`/`pick`/`shuffle`）。算法与常量在头文件注释中钉死为可复现契约：同 seed 同调用序列跨平台逐位一致（不依赖 std:: 随机设施——其分布算法为实现定义）；前置条件违反（`next_int` lo>hi、`pick` 空容器）= 程序错误、不设断言（与 `layer(i)` 同策略，避免 NDEBUG 行为分叉）。
@@ -143,7 +143,7 @@
 
 ### 引擎：下游可用性与碰撞输入载体补全
 
-- 影响的文件: `engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/animation.hpp`、`engine/src/animation.cpp`、`engine/src/scene_impl.hpp`、`engine/include/trogue/collision.hpp`、`engine/src/collision.cpp`、`tools/tests/render_test.cpp`、`tools/tests/scene_schema_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/collision_test.cpp`、`tools/tests/animations_load_test.cpp`、`tools/CMakeLists.txt`、`template/`、`AGENTS.md`、`docs/plan-17.md`
+- 影响的文件: `engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/animation.hpp`、`engine/src/animation.cpp`、`engine/src/scene_impl.hpp`、`engine/include/trogue/collision.hpp`、`engine/src/collision.cpp`、`tools/tests/render_test.cpp`、`tools/tests/scene_schema_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/collision_test.cpp`、`tools/tests/animations_load_test.cpp`、`tools/CMakeLists.txt`、`template/`、`AGENTS.md`
 
 #### Added
 - `render_sprite` 支持正数有限的 `Vec2 scale`，保持默认缩放的原绘制路径，并统一图集/独立贴图的缩放语义。
@@ -184,7 +184,7 @@
 
 ### 引擎：碰撞几何原语（静态 tile 层）
 
-- 影响的文件: `engine/include/trogue/collision.hpp`（新增）、`engine/src/collision.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/collision_test.cpp`（新增）、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/**`、`AGENTS.md`、`docs/plan-16.md`（新增）
+- 影响的文件: `engine/include/trogue/collision.hpp`（新增）、`engine/src/collision.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`tools/tests/collision_test.cpp`（新增）、`tools/CMakeLists.txt`、`game/src/main.cpp`、`tools/ipc_smoke.py`、`template/engine/**`、`AGENTS.md`
 
 #### Added
 - `tg::aabb_overlap(Rect, Rect)`：轴对齐矩形相交纯谓词（半开语义，边界相接不算相交；委托 raylib `CheckCollisionRecs`，另加退化尺寸防御，不暴露 raylib 类型）
@@ -200,9 +200,9 @@
 #### Docs
 - `AGENTS.md`：架构分层 `collision` 模块、公共 API 边界（碰撞几何原语 + 明确不进引擎项）、IPC 命令表、Roadmap（补记里程碑 15 与新增里程碑 16）
 
-### 引擎：缺口修复与 Agent-first 原语补全（plan-15，实战反馈驱动）
+### 引擎：缺口修复与 Agent-first 原语补全（实战反馈驱动）
 
-- 影响的文件: `engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/task_runner.hpp`（新增）、`engine/src/task_runner.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/src/scene_test_seams.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`game/src/anim_viewer.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`tools/tests/anim_tween_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/task_runner_test.cpp`（新增）、`tools/CMakeLists.txt`、`AGENTS.md`、`docs/plan-15.md`（新增）
+- 影响的文件: `engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/render.hpp`、`engine/src/render.cpp`、`engine/include/trogue/scene.hpp`、`engine/src/scene_asset.cpp`、`engine/include/trogue/task_runner.hpp`（新增）、`engine/src/task_runner.cpp`（新增）、`engine/include/trogue/trogue.hpp`、`engine/src/scene_test_seams.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`game/src/anim_viewer.cpp`、`game/src/anim_util.hpp`、`game/src/anim_util.cpp`、`tools/tests/anim_tween_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/task_runner_test.cpp`（新增）、`tools/CMakeLists.txt`、`AGENTS.md`
 
 #### Bug Fixes
 - `AnimationPlayer::play()` 现在复位显式 loop 覆盖（`has_loop_override_`/`loop_override_`）——此前跨 clip 粘连：同一播放器播多种 loop 语义的 clip 时，上一段的 `looping()` 覆盖会粘到下一段，导致循环动画播完即停、非循环动画永不完成（`done()` 永久挂起）。回归用例先复现后修复
@@ -254,7 +254,7 @@
 
 ### 项目模板（template/ → 派生新游戏项目）
 
-- 影响的文件: `template/`（新增：`README.md`、`AGENTS.md`、`.gitignore`、`CMakeLists.txt`、`scripts/new_project.sh`、`scripts/sync_from_source.sh`、`game/CMakeLists.txt`、`game/src/main.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`，及 vendored 快照 `engine/`/`pixellab/*.py`/`editor/`/`tools/scene_gen.cpp`）、`engine/src/render.cpp`、`engine/CMakeLists.txt`、`AGENTS.md`、`docs/plan-14.md`（新增）
+- 影响的文件: `template/`（新增：`README.md`、`AGENTS.md`、`.gitignore`、`CMakeLists.txt`、`scripts/new_project.sh`、`scripts/sync_from_source.sh`、`game/CMakeLists.txt`、`game/src/main.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`，及 vendored 快照 `engine/`/`pixellab/*.py`/`editor/`/`tools/scene_gen.cpp`）、`engine/src/render.cpp`、`engine/CMakeLists.txt`、`AGENTS.md`
 
 #### Added
 - 顶层 `template/`：**最小**自包含项目骨架（vendored `engine`/`pixellab`/`editor`/`scene_gen` 快照 + 起步 `game` 骨架 + 模板自有 `AGENTS.md`/`README.md`/`CMakeLists.txt`/`tools/CMakeLists.txt`/`tools/ipc_smoke.py`），复制即得到能构建、能运行、能被 Agent 迭代的新游戏起点
@@ -274,7 +274,7 @@
 
 ### PixelLab 资产管线（pixellab/ → tro-* 转换层）
 
-- 影响的文件: `pixellab/pxlab.py`（新增）、`pixellab/api.py`（新增）、`pixellab/mapping.py`（新增）、`pixellab/tileset.py`（新增）、`pixellab/character.py`（新增）、`pixellab/scene.py`（新增）、`pixellab/gridcheck.py`（新增）、`pixellab/manifest.py`（新增）、`pixellab/tests/test_mapping.py`（新增）、`pixellab/fixtures/`（新增）、`tools/scene_gen.cpp`（新增）、`tools/CMakeLists.txt`、`tools/tests/terrain_test.cpp`、`assets/tilesets/pixellab/wang_grass_dirt.json`（新增）、`assets/textures/pixellab/wang_grass_dirt.png`（新增）、`assets/textures/pixellab/pxlab_soldier.png`（新增）、`assets/animations/pxlab_soldier.json`（新增）、`assets/pixellab_manifest.json`（新增）、`pixellab/fixtures/wang_pattern.json`（新增）、`pixellab/tests/test_scene_gen.py`（新增）、`.gitignore`、`AGENTS.md`、`docs/plan-13.md`（新增）
+- 影响的文件: `pixellab/pxlab.py`（新增）、`pixellab/api.py`（新增）、`pixellab/mapping.py`（新增）、`pixellab/tileset.py`（新增）、`pixellab/character.py`（新增）、`pixellab/scene.py`（新增）、`pixellab/gridcheck.py`（新增）、`pixellab/manifest.py`（新增）、`pixellab/tests/test_mapping.py`（新增）、`pixellab/fixtures/`（新增）、`tools/scene_gen.cpp`（新增）、`tools/CMakeLists.txt`、`tools/tests/terrain_test.cpp`、`assets/tilesets/pixellab/wang_grass_dirt.json`（新增）、`assets/textures/pixellab/wang_grass_dirt.png`（新增）、`assets/textures/pixellab/pxlab_soldier.png`（新增）、`assets/animations/pxlab_soldier.json`（新增）、`assets/pixellab_manifest.json`（新增）、`pixellab/fixtures/wang_pattern.json`（新增）、`pixellab/tests/test_scene_gen.py`（新增）、`.gitignore`、`AGENTS.md`
 
 #### Added
 - PixelLab MCP → tro-* 上游转换层（与 editor/ Godot 管线平级；引擎与 game 零 PixelLab 概念）：CLI `pixellab/pxlab.py` 三子命令 `import-character` / `import-tileset` / `import-map` + `verify`
@@ -291,7 +291,7 @@
 
 ### autotile 机制与内存加载（TerrainTable / pick_tile / load_json / genmap）
 
-- 影响的文件: `engine/include/trogue/terrain.hpp`（新增）、`engine/src/terrain.cpp`（新增）、`engine/src/tileset_parse.hpp`（新增）、`engine/src/scene_asset.cpp`、`engine/src/scene_impl.hpp`、`engine/include/trogue/scene.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`tools/tests/terrain_test.cpp`（新增）、`tools/tests/scene_schema_test.cpp`、`tools/CMakeLists.txt`、`AGENTS.md`、`docs/plan-12.md`（新增）
+- 影响的文件: `engine/include/trogue/terrain.hpp`（新增）、`engine/src/terrain.cpp`（新增）、`engine/src/tileset_parse.hpp`（新增）、`engine/src/scene_asset.cpp`、`engine/src/scene_impl.hpp`、`engine/include/trogue/scene.hpp`、`engine/include/trogue/config.hpp`、`engine/include/trogue/trogue.hpp`、`engine/CMakeLists.txt`、`game/src/main.cpp`、`tools/tests/terrain_test.cpp`（新增）、`tools/tests/scene_schema_test.cpp`、`tools/CMakeLists.txt`、`AGENTS.md`
 
 #### Added
 - tro-tileset terrain 数据解析 + 校验并消费（此前宽容路过、零解析）：`terrain_sets`/`terrain`/`peering_bits` 按 mode 白名单、bit 种类↔mode 一致性、序号值域校验（键缺省 = -1/空，文档级未知键宽容不变）；解析核心抽出为场景与匹配表两条加载路径共用（杜绝双解析漂移）
@@ -355,7 +355,7 @@
 
 ### 动画查看器：帧动画触发/切换交互验证台
 
-- 影响的文件: `game/src/anim_viewer.cpp`（新增）、`game/CMakeLists.txt`、`engine/include/trogue/animation.hpp`、`tools/tests/anim_tween_test.cpp`、`docs/plan-11.md`（新增）、`AGENTS.md`
+- 影响的文件: `game/src/anim_viewer.cpp`（新增）、`game/CMakeLists.txt`、`engine/include/trogue/animation.hpp`、`tools/tests/anim_tween_test.cpp`、`AGENTS.md`
 
 #### Added
 - 独立可执行 `anim_viewer`（game 层动画触发/切换首个消费者，与 demo 平级）：加载 tro-scene 场景（缺省 `soldier_animated_sprite_2d.json`，`--scene/--port/--zoom` 可改），任意键播放/暂停切换（同帧多键只切一次防奇偶抵消、ESC 为 raylib 默认退出键不参与切换）、鼠标左键按资产枚举序轮转 clip（暂停中点击 = 切换并恢复播放，引擎 play 语义）、相机 zoom 3x 观察、HUD 显示 clip/状态/操作提示；动画采样失败回退静态 sprite/色块，无动画场景交互 no-op 不崩
@@ -371,10 +371,10 @@
 
 ### 帧动画消费：士兵 idle 循环渲染接入
 
-- 影响的文件: `engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/main.cpp`、`tools/tests/scene_schema_test.cpp`、`docs/plan-10.md`（新增）、`AGENTS.md`、`CMakeLists.txt`、`.gitignore`
+- 影响的文件: `engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/animation.cpp`、`engine/include/trogue/animation.hpp`、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/main.cpp`、`tools/tests/scene_schema_test.cpp`、`AGENTS.md`、`CMakeLists.txt`、`.gitignore`
 
 #### Added
-- 动画集名 = 所属 entity id（plan-10）：解析内嵌 animations 时记录 entity id，`AnimationSet::name()` 返回之（plan-5.4 预留路径就地兑现，不新增 API 面、快照结构不动）——entity→动画集映射键；多动画实体按解析序各自配对
+- 动画集名 = 所属 entity id：解析内嵌 animations 时记录 entity id，`AnimationSet::name()` 返回之（沿用既有预留路径就地兑现，不新增 API 面、快照结构不动）——entity→动画集映射键；多动画实体按解析序各自配对
 - game 层帧动画消费闭环：`Actor::anim_set` 导入时按名解析；reload 绑定首个含动画 actor 的动画集（`bound_anim_set` 归属校验，防多动画实体张冠李戴）；绘制循环采样 `current_frame()` 并组合 offset（实体 descriptor 锚点 + 帧自身偏移），采样失败回退静态 sprite；IPC 实体快照注入 `anim:{clip,frame}`（经既有 `extra_entity_fields` 注入点，lambda 改捕获）
 - 端到端验证（脚本驱动）：`anim.frame` 序列 [0,1,3,4,5,0] 出现回绕、clip 恒 idle；3 张连拍中相邻对 412 像素变化 + 与 `Soldier_Idle.png` 源帧逐像素比对 100% 命中 + 读图视觉验收
 
@@ -389,7 +389,7 @@
 
 ### IPC 移动视觉修复与审查修正（AI 调试会话）
 
-- 影响的文件: `game/src/main.cpp`、`game/src/rules.hpp`、`game/src/nav.hpp`、`game/src/nav.cpp`、`AGENTS.md`、`docs/plan-9.md`、`assets/textures/goblin.png`（新增）、`assets/scenes/goblin_test.json`（新增）
+- 影响的文件: `game/src/main.cpp`、`game/src/rules.hpp`、`game/src/nav.hpp`、`game/src/nav.cpp`、`AGENTS.md`、`assets/textures/goblin.png`（新增）、`assets/scenes/goblin_test.json`（新增）
 
 #### Bug Fixes
 - IPC `move` 从直接调 `game::player_move` 改为复用 `handle_move`（改返回 `ActionResult`）——修复 IPC 移动不驱动视觉 tween：逻辑格已动、视觉停在旧格一整格（transform 视图暴露：logical y=64、visual y=48）；键盘/IPC 收敛为同一条「移动→tween→精确落格」管线
@@ -401,11 +401,11 @@
 
 #### Documentation
 - AGENTS.md：截图视觉验收改为 Agent 读图自证（模型已支持图片输入，取代 2026-09-09 分工版）；IPC 命令表 `list_entities`/`solid_at` 与实体快照字段说明对齐现实现（移除不再输出的 `solid?`/`v?`，补 `transform` 视图）
-- plan-9：§2.4/§7 A* 切角措辞修正（地形 + 战斗实体、惰性实体不参与；比 `try_move` 窄、比原版 A* 宽，nav.hpp/cpp 注释同步）；§6 GameOver wire 口径补 2026-09-10 实测记录（status/turn 均为 `game_over`；`turn.player` 按 §2.5 不 despawn 语义留场，快照 hp:[0,100]）
+- A* 切角措辞修正（地形 + 战斗实体、惰性实体不参与；比 `try_move` 窄、比原版 A* 宽，nav.hpp/cpp 注释同步）；GameOver wire 口径补实测记录（status/turn 均为 `game_over`；`turn.player` 按不 despawn 语义留场，快照 hp:[0,100]）
 
 ### 敌人 AI + RuleEngine 最小子集 + 首批游戏事件（EventBus）
 
-- 影响的文件: `game/src/event_bus.hpp`（新增）、`game/src/nav.hpp`/`nav.cpp`（新增）、`game/src/rules.hpp`/`rules.cpp`（新增）、`game/src/ai.hpp`/`ai.cpp`（新增）、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/main.cpp`、`game/CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/tests/game_core_test.cpp`、`tools/ipc_smoke.py`、`docs/plan-9.md`（新增）、`docs/history.md`、`AGENTS.md`
+- 影响的文件: `game/src/event_bus.hpp`（新增）、`game/src/nav.hpp`/`nav.cpp`（新增）、`game/src/rules.hpp`/`rules.cpp`（新增）、`game/src/ai.hpp`/`ai.cpp`（新增）、`game/src/game_core.hpp`、`game/src/game_core.cpp`、`game/src/main.cpp`、`game/CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/tests/game_core_test.cpp`、`tools/ipc_smoke.py`、`docs/history.md`、`AGENTS.md`
 
 #### Added
 - game 层 EventBus（`event_bus.hpp`，header-only、纯逻辑零 IPC 依赖）：on/off/emit + priority 越小越先（同优先级按注册序）、dirty 延迟重建（对齐原版 events.lua）、emit 先快照后调用（handler 内 on/off/嵌套 emit 重入安全）；载荷 `tg::Json` 与 IPC wire 同构、顶层 `entity`/`source`/`target` 字符串 id 与 M7 filter 口径直接兼容
@@ -425,11 +425,11 @@
 - 影响的文件: `engine/src/render.cpp`
 
 #### Bug Fixes
-- 修复独立贴图 sprite 全部隐形（`render_sprite` 返回 Drawn、无任何日志，但画面无像素）：`SharedTexture` 未禁拷贝，`make_shared<const SharedTexture>(SharedTexture{tex})` 的临时副本析构时把刚加载的 GPU 纹理 `UnloadTexture`，缓存留下悬空 `tex.id` 的僵尸条目，此后每帧采样已删除纹理得全透明；补上 plan-5.3 §2 设计要求的非拷贝约束（`=delete` 拷贝/移动）、`tex{}` 全成员零初始化（`id==0 ⇔ 无纹理` 判据可靠）、调用点改为以 `Texture2D` 直接构造堆对象（不经临时副本）；像素级截图比对验证（soldier 预期区域 652 像素精确命中源贴图 region 特征色）+ IPC 冒烟 44/44 回归
+- 修复独立贴图 sprite 全部隐形（`render_sprite` 返回 Drawn、无任何日志，但画面无像素）：`SharedTexture` 未禁拷贝，`make_shared<const SharedTexture>(SharedTexture{tex})` 的临时副本析构时把刚加载的 GPU 纹理 `UnloadTexture`，缓存留下悬空 `tex.id` 的僵尸条目，此后每帧采样已删除纹理得全透明；补上设计要求的非拷贝约束（`=delete` 拷贝/移动）、`tex{}` 全成员零初始化（`id==0 ⇔ 无纹理` 判据可靠）、调用点改为以 `Texture2D` 直接构造堆对象（不经临时副本）；像素级截图比对验证（soldier 预期区域 652 像素精确命中源贴图 region 特征色）+ IPC 冒烟 44/44 回归
 
 ### tro-tileset 多格 tile 与纹理原点（size_in_atlas / texture_origin / y_sort_origin）
 
-- 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`engine/include/trogue/config.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`assets/scenes/test.json`、`assets/tilesets/test.json`（新增）、`assets/tilesets/test_1.json`（新增）、`assets/textures/Soldier.png`（新增）、`editor/assets/test.tscn`（新增）、`editor/assets/Decorations.png`（新增）、`editor/assets/Tile Set.png`（新增）、`editor/assets/Soldier with shadows/soldier.tres`（新增）、`docs/plan-8.md`（新增）、`AGENTS.md`
+- 影响的文件: `editor/addons/scene_exporter/tro_schema.gd`、`engine/include/trogue/config.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`engine/src/render.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`assets/scenes/test.json`、`assets/tilesets/test.json`（新增）、`assets/tilesets/test_1.json`（新增）、`assets/textures/Soldier.png`（新增）、`editor/assets/test.tscn`（新增）、`editor/assets/Decorations.png`（新增）、`editor/assets/Tile Set.png`（新增）、`editor/assets/Soldier with shadows/soldier.tres`（新增）、`AGENTS.md`
 
 #### Added
 - tro-tileset v2 只增可选字段（`version` 仍为 2，旧资产零迁移）：`tiles[]` 新增 `size_in_atlas`（`[w,h]`，tile 覆盖的图集格子数，region = `(col*tw, row*th, sw*tw, sh*th)`）、`texture_origin`（Godot 纹理原点，可负）、`y_sort_origin`（Godot y-sort 排序键偏移；引擎解析存储、暂不消费——无逐 tile y-sort）；校验类型/长度/值域（size 各 ∈ [1,4096]，origin/sort 绝对值 ≤65536；region 越界与 col/row 同不在 load 期校验）
@@ -446,7 +446,7 @@
 
 ### IPC 事件通道（tg::Ipc subscribe/publish/disconnect，inspector 式可观测）
 
-- 影响的文件: `engine/include/trogue/ipc.hpp`、`engine/src/ipc.cpp`、`tools/tests/ipc_test.cpp`（新增）、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/main.cpp`、`docs/plan-7.md`（新增）、`docs/history.md`（新增）、`AGENTS.md`
+- 影响的文件: `engine/include/trogue/ipc.hpp`、`engine/src/ipc.cpp`、`tools/tests/ipc_test.cpp`（新增）、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`game/src/main.cpp`、`docs/history.md`（新增）、`AGENTS.md`
 
 #### Added
 - `tg::Ipc` 事件通道（tro-ipc v1.2，只增不改，协议版本仍 1）：传输层保留命令 `subscribe`/`unsubscribe`/`connections`（ping 档，先于 game handler，无需 game handler 即可用；订阅表为传输层自有状态）；连接 id 自 accept 单调递增、断开不复用；`publish(event, data)` 非阻塞直写广播 `{"ok":true,"event":E,"data":D}` 事件行（判别式：响应永不含顶层 event 键）；`disconnect(conn_id)` game 层主动断开（自动清订阅）+ `connections()` 连接快照
@@ -460,7 +460,7 @@
 
 ### 回合制最小闭环（移植 trogue-origin：移动 + 碰撞 + 回合制 + IPC 回合命令）
 
-- 影响的文件: `game/src/game_core.hpp`（新增）、`game/src/game_core.cpp`（新增）、`game/src/main.cpp`、`game/CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/tests/game_core_test.cpp`（新增）、`tools/ipc_smoke.py`、`assets/scenes/forest.json`（新增）、`docs/plan-6.md`（新增）、`AGENTS.md`
+- 影响的文件: `game/src/game_core.hpp`（新增）、`game/src/game_core.cpp`（新增）、`game/src/main.cpp`、`game/CMakeLists.txt`、`tools/CMakeLists.txt`、`tools/tests/game_core_test.cpp`（新增）、`tools/ipc_smoke.py`、`assets/scenes/forest.json`（新增）、`AGENTS.md`
 
 #### Added
 - `game_core`（game 层纯逻辑，无 UI/无渲染依赖）：回合状态机（玩家回合 → 敌方回合 → 回合计数 +1）、单格 8 向移动裁决（tile solid + 实体互斥）、敌方回合（本里程碑为「静止」策略）、`GameState` 作为 actor 表 + 回合状态唯一所有权（`main.cpp` 只读快照渲染/IPC）
@@ -482,7 +482,7 @@
 
 ### C++ 引擎里程碑（C++20 引擎 + 模型无关边界 + 通用表现原语）
 
-- 影响的文件: `engine/include/trogue/*.hpp`（config/types/scene/render/animation/tween/hotreload/ipc/coro/trogue 伞，新增；删除旧 `.h`）、`engine/src/**`（`*.cpp` 替换 `*.c`）、`game/src/main.cpp`（替换 `main.c`）、`tools/CMakeLists.txt`、`tools/tests/*.cpp`（5 个单测 + 2 个 consumer smoke）、`tools/ipc_smoke.py`、顶层/`engine`/`game` 的 `CMakeLists.txt`、`AGENTS.md`、`docs/plan-5*.md`（`docs/plan-5.old-c11.md` 归档）、`.gitignore`、`CHANGELOG.md`
+- 影响的文件: `engine/include/trogue/*.hpp`（config/types/scene/render/animation/tween/hotreload/ipc/coro/trogue 伞，新增；删除旧 `.h`）、`engine/src/**`（`*.cpp` 替换 `*.c`）、`game/src/main.cpp`（替换 `main.c`）、`tools/CMakeLists.txt`、`tools/tests/*.cpp`（5 个单测 + 2 个 consumer smoke）、`tools/ipc_smoke.py`、顶层/`engine`/`game` 的 `CMakeLists.txt`、`AGENTS.md`、`.gitignore`、`CHANGELOG.md`
 
 #### Added
 - 引擎整体迁到 C++20，公共 API 纯 C++：`namespace tg`、自由函数优先、值类型（public 字段纯数据）+ RAII 资源类、无继承/虚函数；对外只暴露 `trogue/*.hpp`，不泄漏 raylib/nlohmann 类型
@@ -517,7 +517,7 @@
 
 ### 动画资产与插件统一（tro-scene v2.1 / tro-animations v1 / 插件 v4）
 
-- 影响的文件: `AGENTS.md`, `docs/plan-4.md`, `engine/src/scene.c`, `editor/addons/scene_exporter/tro_schema.gd`, `editor/addons/scene_exporter/headless_export.gd`, `editor/addons/scene_exporter/scene_exporter.gd`, `editor/project.godot`, `editor/README.md`, `editor/assets/soldier_animated_sprite_2d.tscn`, `editor/assets/Soldier with shadows/*.png`, `assets/animations/soldier_animated_sprite_2d.json`, `assets/textures/Soldier_*.png`（删除 `editor/addons/tileset_exporter/` 与旧素材）
+- 影响的文件: `AGENTS.md`, , `engine/src/scene.c`, `editor/addons/scene_exporter/tro_schema.gd`, `editor/addons/scene_exporter/headless_export.gd`, `editor/addons/scene_exporter/scene_exporter.gd`, `editor/project.godot`, `editor/README.md`, `editor/assets/soldier_animated_sprite_2d.tscn`, `editor/assets/Soldier with shadows/*.png`, `assets/animations/soldier_animated_sprite_2d.json`, `assets/textures/Soldier_*.png`（删除 `editor/addons/tileset_exporter/` 与旧素材）
 
 #### Added
 - 实体 `animations` 字段（v2.1）：完整动画帧表 `{textures 索引表, animations:[{name, fps, loop, frames:[{texture, region?, offset?}]}]}`，贴图路径去重入索引；引擎暂不消费（透传保留），静态画面靠默认动画首帧 `sprite` 渲染
