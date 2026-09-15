@@ -1298,7 +1298,9 @@ int main(int argc, char** argv) {
 
     d.watcher = tg::Watcher::create("assets/scenes");
     if (!d.watcher.valid())
-        TraceLog(LOG_INFO, "[demo] watcher 不可用（非 Debug/非 Linux）");
+        TraceLog(LOG_INFO,
+                 "[demo] watcher 不可用（目录无效 / 无 inotify 平台 / Release）："
+                 "热重载请用 F5 或 IPC reload");
 
     while (!WindowShouldClose() && !d.quit) {
         const float dt = GetFrameTime();

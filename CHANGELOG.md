@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### 引擎：hotreload 平台守卫（无 inotify 平台可用）
+
+- 影响的文件: `engine/src/hotreload.cpp`、`engine/include/trogue/hotreload.hpp`、`engine/include/trogue/types.hpp`、`engine/include/trogue/config.hpp`、`tools/tests/watcher_ipc_test.cpp`、`game/src/main.cpp`、`template/engine/`（快照同步）、`template/game/src/main.cpp`、`template/README.md`、`AGENTS.md`、`docs/BACKLOG.md`
+
+#### Bug Fixes
+- `engine/src/hotreload.cpp` 的平台守卫由仅 `TROGUE_DEBUG` 收窄为 `defined(TROGUE_DEBUG) && __has_include(<sys/inotify.h>)`。此前无 inotify 的目标（macOS 等）在默认 Debug 配置下会因无条件 `#include <sys/inotify.h>` **直接编译失败**——而头注释与文档承诺的"非 Linux → 安全 no-op"这条降级路径并不存在。现在这类平台自动落到既有桩分支（`create` 返回 invalid、`poll()` 恒 nullopt），可编译、可运行。
+- 同类阻断点一并修：平台无关的纯函数 `detail::classify_event_name` 移出平台守卫。此前它只随 inotify 分支编译，而 `tools/tests/watcher_ipc_test.cpp`（默认配置下会被构建）引用它——只修守卫会把失败从编译期挪到测试链接期（`undefined reference`）。移出后该函数在任何平台都编译，判定逻辑在无 inotify 平台也能无头测试。
+- `tools/tests/watcher_ipc_test.cpp` 改为三分支：Release 桩语义 / 平台无关纯函数 + Ipc socket 集成（POSIX）/ 有 inotify 时额外跑真实 Watcher 集成，无 inotify 平台则断言桩语义。
+- 文档口径由"非 Linux"纠正为"无 inotify 的平台"（引擎头与注释 `hotreload.hpp`/`types.hpp`/`config.hpp`；`AGENTS.md` 的热重载规范、DEBUG no-op、Release 构建命令、依赖表；`template/README.md`），game 与模板 game 的不可用日志改为同时点出"目录无效"这一真实原因并给出 F5 / IPC `reload` 兜底。
+- `docs/BACKLOG.md`：登记「无 inotify 平台的目录快照轮询后端」与「Windows 原生支持（`ipc.cpp` 需 winsock）」两项待评估，并限定 libuv 的论据（限制在**目录级** `uv_fs_event`；逐文件 kqueue vnode 监听其实能定位到文件），同时修正文件内过时的计划书路径写法。
+
+#### Tests
+- 有 inotify 的平台（Linux）：Debug 构建零告警；CTest 19/19（`watcher_ipc_test` 报告 `watcher=inotify`、35 checks）；`TROGUE_DEBUG=OFF` 的 Release 构建 + CTest 19/19（桩语义）；`tools/ipc_smoke.py` 99/99。起游戏实测：改 `assets/scenes/*.json` 后日志出现 `[demo] watcher: demo.json → 重载`，`status.reloads` 自增且新内容生效。
+- 无 inotify 目标（mingw-w64 交叉编译 + wine 运行）：修复前 `-DTROGUE_DEBUG` 编译 `engine/src/hotreload.cpp` 报 `fatal error: sys/inotify.h`；修复后 `-Wall -Wextra -Wpedantic` 零告警通过。全引擎 13 个编译单元扫描后仅剩 `ipc.cpp`（POSIX socket，已登记 BACKLOG）失败。桩驱动与调用 `classify_event_name` 的驱动交叉编译后在 wine 下运行通过（输出 `json=demo.json txt=(none) watcher_valid=0`）。
+- 覆盖边界：本机无 Apple SDK，macOS 构建未在本机执行；依据是"交叉编译证明不再依赖 Linux 专有头 + 平台判定收敛为单条能力谓词 + 其依赖的头在 Darwin 均为 POSIX 标准头"三条合成，而非实测。
+
 ### 资产管线：移除 PixelLab 瓦片集导入，改为占位资产工具
 
 - 影响的文件: `pixellab/pxlab.py`、`pixellab/tileset.py`（删除）、`pixellab/scene.py`（删除）、`pixellab/mapping.py`（删除）、`pixellab/fixtures/`（删除 wang 三个文件）、`pixellab/tests/test_mapping.py`（删除）、`pixellab/tests/test_scene_gen.py`（删除）、`tools/placeholder_tileset.py`（新增）、`tools/scene_gen.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`tools/tests/test_placeholder_tileset.py`（新增）、`tools/tests/test_scene_gen.py`（新增）、`tools/tests/terrain_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`engine/src/render.cpp`、`assets/scenes/test.json`（删除）、`assets/scenes/tile_map_layer.json`（删除）、`assets/pixellab_manifest.json`、`assets/tilesets/`（删除失效 tileset）、`assets/textures/`（删除对应贴图）、`scripts/sync_from_source.sh`（删除）、`template/pixellab/`、`template/tools/`、`template/engine/src/render.cpp`、`template/CMakeLists.txt`、`template/README.md`、`template/scripts/sync_from_source.sh`、`.gitignore`、`AGENTS.md`

@@ -2,8 +2,8 @@
 
 > 本文件收纳**已分诊但尚未排入里程碑**的改进项。与 Roadmap 的分工：
 > Roadmap 是「已立里程碑 / 已交付」的主线清单；BACKLOG 是「已确认要做，或需先
-> 评估设计」的缓冲区。条目升级为主线时走正常里程碑门禁（`plans/plan-<M>.md` +
-> 审查），从本文件移除并在 Roadmap 登记。
+> 评估」的缓冲区。条目升级为主线时走正常里程碑门禁（`docs/plan-*.md` + 审查），
+> 从本文件移除并在 Roadmap 登记。
 >
 > 来源：Agent实际使用engine完整完成游戏开发（2026-09-14）。
 > 分诊日期：2026-09-14。该探针的总体结论是「引擎运行时 0 bug，缺口在内容管线与
@@ -30,3 +30,36 @@
   需引入出站队列，与既有设计冲突；返回瞬时写状态信息量极低。除非出现第二个消费
   方提出具体可观测需求，否则维持现状（丢弃不可观测属已知语义）。
 - 触发条件：出现第二个消费方、且提出具体可观测需求时重议。
+
+---
+
+## C. 平台队列（2026-09-16 分诊）
+
+### C1. 无 inotify 平台的自动热重载（目录快照轮询后端）
+
+- 现状：`tg::Watcher` 在无 inotify 的平台为安全 no-op（`create` invalid），
+  热重载靠 F5 / IPC `reload` 手动触发。功能闭环成立，但少了"改完资产自动生效"。
+- 触发条件：有人在 macOS 上实际抱怨需要被动监听时再评估。
+- **先不做的取舍**（不只是依赖成本问题）：
+  - 轮询需每帧或定时遍历目录取 `last_write_time`/大小做 diff，与事件驱动的语义有差
+    （延迟下限 = 轮询间隔；大目录需设规模上限），并且要在引擎里引入一份目录状态；
+  - 若要复原"变的是哪个文件"，事件路径（inotify）天然提供 basename，轮询路径靠 diff
+    推断——两条路径的语义需要显式对齐（同样 150ms 防抖 + 纯函数分类可复用）。
+- 第三方方案的成本核对（若将来仍考虑引入）：
+  - libuv 的限制是**目录级** `uv_fs_event` 在 macOS 拿不到文件名（kqueue 后端不报；
+    其 ChangeLog 有 `filename arg to uv_fs_event_cb can be NULL` 与
+    `document specific macOS fs_event behavior` 条目），且 `UV_FS_EVENT_STAT`/
+    `UV_FS_EVENT_WATCH_ENTRY` 在头文件里写明 "currently not implemented yet on any
+    backend"；kqueue **逐文件** vnode 监听（`<sys/event.h>` + kevent，零新依赖）其实
+    能定位到触发文件，代价是目录枚举与 rename/moved_to 维护；
+  - 任何"事件循环/额外线程"型方案与本项目「单线程、无锁、主循环每帧推进」的纪律冲突。
+
+### C2. Windows 原生支持
+
+- 现状：非目标（Agent-first 的运行环境为 Linux/WSL/macOS，均为 unix）。
+- 已知阻断点（交叉编译扫描发现，与 hotreload 不同源）：`engine/src/ipc.cpp` 在
+  `TROGUE_DEBUG` 下使用 `arpa/inet.h`/`netinet/*`/`sys/socket.h` 等 POSIX socket 头，
+  Windows 目标下不存在；需要 winsock（`winsock2.h`/`ws2tcpip.h`）后端与 CMake 平台分支。
+- 热重载侧已不是阻断点：`engine/src/hotreload.cpp` 的判定按"该目标是否有 inotify 头"，
+  Windows 目标自动落到桩（可编译、可运行）。
+- 触发条件：真的需要在 Windows 原生上跑引擎时再评估（WSL 已覆盖该需求）。

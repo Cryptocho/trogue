@@ -69,7 +69,8 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
   `screenshot`/`log`/`quit`）。
 - 内置起步场景：`game/src/main.cpp` 用 `tg::SceneAsset::load_json` **在内存里构造**一个
   20×15 palette 场景（四面墙 + 玩家 + 木箱），因此模板**零资产文件**即可运行；要换成
-  磁盘场景，加 `assets/scenes/*.json` 并 `--scene` 指定（热重载随之启用）。
+  磁盘场景，加 `assets/scenes/*.json` 并 `--scene` 指定（**Linux 上**热重载随之启用；
+  无 inotify 的平台用 F5 或 IPC `reload` 手动重载）。
 
 ## 开发命令
 

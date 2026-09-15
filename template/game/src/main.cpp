@@ -582,7 +582,9 @@ int main(int argc, char** argv) {
     if (hot_reload) {
         g.watcher = tg::Watcher::create("assets/scenes");
         if (!g.watcher.valid())
-            TraceLog(LOG_INFO, "[game] watcher 不可用（非 Debug/非 Linux）");
+            TraceLog(LOG_INFO,
+                     "[game] watcher 不可用（无 inotify 平台 / Release）："
+                     "F5、IPC reload 仍可手动重载");
     }
 
     while (!WindowShouldClose() && !g.quit) {

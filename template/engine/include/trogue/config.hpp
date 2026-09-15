@@ -2,8 +2,8 @@
 // config.hpp —— 版本、目录约定与全局常量（C++20 头文件常量）。
 //
 // 常量用 inline constexpr 表达（C++17 起 inline 变量，跨翻译单元单一定义）；
-// TROGUE_DEBUG 宏由 CMake 注入（见 engine/CMakeLists.txt），IPC/Watcher 的桩化
-// 开关不在本头判断，由 hotreload.hpp / ipc.hpp 按宏自行处理。
+// TROGUE_DEBUG 宏由 CMake 注入（见 engine/CMakeLists.txt）；IPC/Watcher 的桩化判定
+// 不在本头做——由各自 .cpp 按宏（并叠加平台能力，如是否有 inotify）自行选择实现。
 
 #include <cstddef>  // std::size_t
 

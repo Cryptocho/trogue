@@ -61,7 +61,7 @@
 - **绘制采用显式输入**：引擎绘制 tile 层和调用方传入的 sprite/变换，不隐式遍历或修改 game 对象；descriptor 的 `type`、`solid` 不触发引擎玩法分支。
 - **碰撞是低层查询，不是规则系统**：引擎提供 tile 层查询与静态地形几何原语；是否把 descriptor 或 OOP/ECS 对象纳入碰撞、如何处理动态碰撞，由 game 决定。
 - **单线程**：ipc/watcher/tween/animation 的推进在主循环每帧调用，无锁，状态确定性好（AI 调试可预期）。
-- **DEBUG no-op**：`TROGUE_DEBUG=OFF` 时 ipc/hotreload 编译为桩，API 形状不变，release 零开销。
+- **DEBUG no-op**：`TROGUE_DEBUG=OFF` 时 ipc/hotreload 编译为桩，API 形状不变，release 零开销。平台维度同理：无 inotify 的平台（如 macOS）下 `tg::Watcher` 也是同一套桩语义，`tg::Ipc` 不受影响。
 
 ### 引擎公共 API 边界
 
@@ -178,7 +178,7 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 # 动画查看器（帧动画触发/切换验证台；独立 IPC 端点 48765）
 ./build/bin/anim_viewer [--scene assets/scenes/soldier_animated_sprite_2d.json] [--port 48765] [--zoom 3]
 
-# Release 构建（IPC/热重载为 no-op 桩）
+# Release 构建（IPC/热重载为 no-op 桩；无 inotify 平台下 hotreload 同样为桩）
 cmake -B build-release -S . -DCMAKE_BUILD_TYPE=Release -DTROGUE_DEBUG=OFF
 
 # IPC 冒烟测试（先起服再跑）
@@ -198,7 +198,7 @@ python3 tools/ipc_smoke.py
 | nlohmann/json | 3.11+ | JSON 解析（资产 + IPC） |
 | tl::expected | 1.x | 错误载体（`tl/expected.hpp` + CMake 包 `tl-expected` → target `tl::expected`）；`tg::expected`/`ErrorOr` 别名依赖它，随 `trogue_engine` PUBLIC 传播 |
 | 协程原语 | 自研 `trogue/coro.hpp` | header-only，零第三方协程依赖 |
-| inotify | 内核 | 热重载文件监听，无额外依赖 |
+| inotify | Linux 内核 | 热重载文件监听，无额外依赖（无 inotify 的平台降级为 no-op 桩） |
 
 > **Godot 行为查证约定**：需要确认 Godot 引擎行为语义时**以本地源码为准**：Godot 4.7.2-stable 完整源码在 `reference/godot-4.7.2-stable/`（gitignore，不入仓库），直接 grep/阅读实现；官方文档用 browser-mcp 查看 `https://docs.godotengine.org/en/stable/`。不得凭记忆或旧版本资料推断。
 >
@@ -344,7 +344,7 @@ python3 tools/ipc_smoke.py
 
 ## 热重载规范
 
-- **监听**：`assets/scenes/*.json` 的 CLOSE_WRITE/MOVED_TO/CREATE/MODIFY（inotify），150ms 防抖抑制编辑器原子保存连发。非 Linux 为 no-op。
+- **监听**：`assets/scenes/*.json` 的 CLOSE_WRITE/MOVED_TO/CREATE/MODIFY（inotify），150ms 防抖抑制编辑器原子保存连发。**有 inotify 的平台**（Linux）在 Debug 构建下生效；无 inotify 的平台或 `TROGUE_DEBUG=OFF` 时 `tg::Watcher` 恒 invalid（`poll()` 恒空，安全 no-op），热重载改由 F5 / IPC `reload` 承担。
 - **语义**：watcher 只报告文件名，engine 只提供一次性资产加载（`tg::SceneAsset::load`）；game 负责 candidate load/import/swap、按自己的 OOP/ECS policy 保留或删除对象状态。engine 不按 `type` 判断 player，也不决定 ECS 状态。
 - **投影约束**：若 game 把对象的 sprite/动画帧显式绘制到 engine，game 对象仍是唯一可变权威；engine asset 只提供 tile 层、视觉资源与表现原语采样。
 - **失败安全**：资产加载失败不修改旧 asset（返回 `expected`/空 optional + 日志）；game candidate import/swap 失败也保留旧 asset 与旧 game state。

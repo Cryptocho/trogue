@@ -5,7 +5,8 @@
 // 150ms 防抖尾沿补触发。engine 不拼路径：path 拼接归 game
 // （game 用自身固定前缀如 assets/scenes + '/' + basename 组 load 路径）。
 //
-// Release / 非 Linux：create 返回 invalid，poll() 恒 nullopt（安全 no-op）。
+// Release / 无 inotify 的平台：create 返回 invalid，poll() 恒 nullopt（安全 no-op）；
+// 此时本平台没有自动目录监听，何时/如何重载由调用方决定。
 
 #include <memory>  // std::unique_ptr
 #include <optional>
@@ -16,7 +17,7 @@ namespace tg {
 
 class Watcher {
 public:
-    // 监听目录；无效目录 / 非 Linux → invalid。
+    // 监听目录；无效目录 / 无 inotify 的平台 → invalid。
     static Watcher create(std::string_view dir);
 
     Watcher();  // 默认构造（空实例，invalid）；定义于 cpp（Impl 完整处）

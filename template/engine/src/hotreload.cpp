@@ -1,34 +1,24 @@
 // hotreload.cpp —— Watcher 实现。
 //
-// Linux（TROGUE_DEBUG）：inotify 监听目录，150ms 防抖尾沿补触发；poll() 经
-// detail::classify_event_name 过滤合法 .json basename（裸名）。非 Linux /
-// Release：create 返回 invalid，poll() 恒 nullopt（安全 no-op）。
+// 有 inotify 的平台 + TROGUE_DEBUG：inotify 监听目录，150ms 防抖尾沿补触发；poll()
+// 经 detail::classify_event_name 过滤合法 .json basename（裸名）。
+// 其余（无 inotify 的平台 / Release）：create 返回 invalid、poll() 恒 nullopt
+// —— 安全 no-op，本平台没有自动目录监听，何时/如何重载由调用方决定。
 #include "trogue/hotreload.hpp"
 
 #include <cstddef>
-#include <cstring>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "trogue/config.hpp"
-
-#ifdef TROGUE_DEBUG
-
-#include <sys/inotify.h>
-#include <unistd.h>
-
-#include <cerrno>
-#include <chrono>
-#include <ctime>
-#include <utility>  // std::move
-
-#include "raylib.h"  // TraceLog
 
 namespace tg {
 
 namespace detail {
 
 // basename 分类纯函数（不依赖 inotify 类型，便于单测）。
+// 刻意放在平台守卫之外：判定逻辑是平台无关的纯函数，任何平台都能无头测试它。
 // 输入 inotify 名称区字节（含尾部 NUL/padding）；输出合法 .json basename 或空。
 std::optional<std::string> classify_event_name(const char* zone, std::size_t len) {
     if (len == 0) return std::nullopt;
@@ -53,6 +43,25 @@ std::optional<std::string> classify_event_name(const char* zone, std::size_t len
 }
 
 }  // namespace detail
+
+}  // namespace tg
+
+// 平台判定按「该目标是否具备 inotify 头」而非 OS 名：无 inotify 的平台自动落到桩。
+// 头文件的可用性用 __has_include 在预处理期询问（C++17 起 GCC/Clang/MSVC 均支持）。
+#if defined(TROGUE_DEBUG) && __has_include(<sys/inotify.h>)
+
+#include <sys/inotify.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <chrono>
+#include <cstring>
+#include <ctime>
+#include <utility>  // std::move
+
+#include "raylib.h"  // TraceLog
+
+namespace tg {
 
 struct Watcher::Impl {
     int inotify_fd = -1;
@@ -163,7 +172,7 @@ void Watcher::shutdown() {
 
 }  // namespace tg
 
-#else  // ── TROGUE_DEBUG=OFF / 非 Linux：桩 ──
+#else  // ─ TROGUE_DEBUG=OFF 或无 inotify 的平台：桩 ──
 
 namespace tg {
 
@@ -182,4 +191,4 @@ bool Watcher::valid() const { return false; }
 
 }  // namespace tg
 
-#endif  // TROGUE_DEBUG
+#endif  // TROGUE_DEBUG && __has_include(<sys/inotify.h>)

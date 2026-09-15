@@ -23,7 +23,7 @@ enum class ErrorCode {
     kSchemaViolation,    // 资产格式/限额/组合规则拒绝
     kIoError,            // 文件/套接字/inotify 等系统 I/O 失败
     kResourceExhausted,  // 资源耗尽（id 回绕、缓存上限等）
-    kNotSupported,       // 平台/配置不支持（如非 Linux 的 watcher、Release 桩）
+    kNotSupported,       // 平台/配置不支持（如无 inotify 平台的 watcher、Release 桩）
     kInternal,           // 兜底：不应发生的内部错误
 };
 

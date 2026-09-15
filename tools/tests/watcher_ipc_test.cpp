@@ -1,7 +1,15 @@
 // watcher_ipc_test.cpp —— Watcher::classify_event_name 全分支单测 + Release 桩行为
-// + Debug Ipc 真实 socket 集成测试。
+// + Debug Ipc 真实 socket 集成测试（+ 真实 inotify 的 Watcher 集成，仅在有 inotify 的平台）。
+//
+// 分支结构（与 engine/src/hotreload.cpp 的平台判定同源）：
+//   !TROGUE_DEBUG                        → Release：Ipc/Watcher 桩语义
+//   TROGUE_DEBUG                         → 纯函数用例（平台无关，任何平台都跑）
+//                                          + Ipc socket 集成（POSIX：Linux/macOS 均有）
+//   TROGUE_DEBUG && 有 <sys/inotify.h>   → 额外跑真实 Watcher 集成
+//   TROGUE_DEBUG && 无该头               → 断言 Watcher 桩语义（create invalid / poll 空）
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -38,16 +46,18 @@ int main() {
     return ::tg_test::g_failures == 0 ? 0 : 1;
 }
 
-#else  // ── Debug：classify_event_name + Ipc 集成 ──
+#else  // ── Debug：classify_event_name + Ipc / Watcher 集成 ─
 
-// 系统头（必须在 namespace 外）
+// 系统头（必须在 namespace 外）。Ipc 集成走 POSIX socket（Linux/macOS 均有）；
+// fstream/sys/stat 供 Watcher 集成用例使用（也在 namespace 外）。
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
 #include <fstream>
 #include <sys/stat.h>
 
-// tgz 前向声明（分类纯函数；定义于 engine/src/hotreload.cpp，无公共头）
+// 前向声明（分类纯函数；定义于 engine/src/hotreload.cpp，无公共头；该函数平台无关）
 namespace tg::detail {
 std::optional<std::string> classify_event_name(const char* zone, std::size_t len);
 }
@@ -231,7 +241,10 @@ bool test_ipc_basic() {
     return ok;
 }
 
+#if __has_include(<sys/inotify.h>)
+
 // ── Watcher 集成（真实 inotify）：建临时目录 → 写 demo.json → 防抖后报告 ──
+
 bool test_watcher_integration() {
     bool ok = true;
     const std::string dir = "build/watcher_tmp";
@@ -277,14 +290,31 @@ bool test_watcher_integration() {
     return ok;
 }
 
+constexpr const char* kWatcherMode = "inotify";
+
+#else  // ── 无 inotify 的平台：Watcher 为安全 no-op，断言桩语义 ──
+
+bool test_watcher_integration() {
+    bool ok = true;
+    auto watcher = tg::Watcher::create("assets/scenes");
+    CHECK(!watcher.valid());                    // create → invalid
+    CHECK(!watcher.poll().has_value());         // poll 恒空
+    watcher.shutdown();                         // no-op 且不崩
+    return ok;
+}
+
+constexpr const char* kWatcherMode = "stub(no inotify)";
+
+#endif  // __has_include(<sys/inotify.h>)
+
 }  // namespace
 
 int main() {
     test_classify();
     const bool r1 = test_ipc_basic();
     const bool r2 = test_watcher_integration();
-    std::printf("[watcher/ipc test] checks=%d failures=%d\n", ::tg_test::g_checks,
-                ::tg_test::g_failures);
+    std::printf("[watcher/ipc test] checks=%d failures=%d watcher=%s\n",
+                ::tg_test::g_checks, ::tg_test::g_failures, kWatcherMode);
     return (::tg_test::g_failures == 0 && r1 && r2) ? 0 : 1;
 }
 
