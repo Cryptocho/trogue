@@ -36,29 +36,31 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 ./scripts/sync_from_source.sh
 ```
 
-它只刷新 vendored 快照（`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp`
-与更新器自身），**不动**你的 `game/`、`assets/`、`CMakeLists.txt`、`README.md`、
-`.gitignore`、`AGENTS.md`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`。
+它只刷新 vendored 快照（`engine/`、`tools/` 工具与更新器自身；`pixellab/`、
+`editor/` 是可选快照，已装的项目加 `--with-pixellab` / `--with-editor` 才刷新），
+**不动**你的 `game/`、`assets/`、`CMakeLists.txt`、`README.md`、`.gitignore`、
+`AGENTS.md`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`。
 
 ## 目录
 
 | 目录 | 内容 | 归属 |
 |------|------|------|
 | `engine/` | trogue 引擎静态库（C++20，依赖 raylib + nlohmann/json + tl::expected） | **快照**（勿手改） |
-| `editor/` | Godot 4.7 可选视觉标注/导出工程（scene_exporter v4） | **快照**（勿手改） |
-| `pixellab/` | PixelLab MCP → tro-* 资产转换层（Python） | **快照**（勿手改） |
-| `tools/` | 离线场景生成 CLI `scene_gen` + `ipc_smoke.py` | 见下 |
+| `editor/` | Godot 4.7 可选视觉标注/导出工程（scene_exporter v4） | **可选快照**（勿手改） |
+| `pixellab/` | PixelLab MCP → tro-* 资产转换层（Python） | **可选快照**（勿手改） |
+| `tools/` | 离线占位资产工具（`placeholder_tileset.py` + `scene_gen`，快照）+ `gen_font.py` / `ipc_smoke.py`（自有） | 见下 |
 | `game/` | **你的游戏**（起步骨架，随意改写） | 项目自有 |
 | `assets/` | 你的资产（模板不含资产文件，按需自建） | 项目自有 |
 
 ## 快照与同步
 
-`engine/`、`pixellab/`、`editor/`、`tools/scene_gen.cpp` 是**从 trogue 仓库复制来的
-快照**，权威源是 trogue 仓库——**不要在本项目里手改**；上游更新后，在项目根重跑
-`./scripts/sync_from_source.sh` 刷新（见上「更新到最新引擎」）。
+`engine/` 与 `tools/placeholder_tileset.py`、`tools/scene_gen.cpp` 是**从 trogue
+仓库复制来的快照**，权威源是 trogue 仓库——**不要在本项目里手改**；上游更新后，
+在项目根重跑 `./scripts/sync_from_source.sh` 刷新（见上「更新到最新引擎」）。
+可选安装的 `pixellab/`（PixelLab 转换器）与 `editor/`（Godot 标注工程）同样是快照。
 
 模板自有（可自由修改）：`CMakeLists.txt`、`.gitignore`、`tools/CMakeLists.txt`、
-`tools/ipc_smoke.py`、`game/**`、`assets/**`。
+`tools/gen_font.py`、`tools/ipc_smoke.py`、`game/**`、`assets/**`。
 
 ## 起步内容
 

@@ -5,6 +5,10 @@ build-release/
 # 运行期生成的截图
 screenshot_*.png
 
+# 测试临时 fixture（写 assets/ 后由用例自行删除；进程被中断时会残留于此）
+assets/__tmp_*
+assets/tilesets/__tmp_*
+
 # 原始项目只读参考副本（自带 .git，勿并入本仓库）
 trogue-orign/
 

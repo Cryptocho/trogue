@@ -4,7 +4,7 @@
 # 一份脚本覆盖两种场景：
 #   1) 新建项目：在空目录里运行 → 把上游模板铺到当前目录（含起步 game/）。
 #   2) 更新引擎：在已有项目里运行 → 只刷新 vendored 快照
-#      （engine/、tools/scene_gen.cpp 及已安装的可选快照），**不动**你的游戏
+#      （engine/、tools/ 工具及已安装的可选快照），**不动**你的游戏
 #      代码、资产与项目自有文件（game/、assets/、CMakeLists.txt、README.md、
 #      .gitignore、AGENTS.md、tools/CMakeLists.txt、tools/ipc_smoke.py）。
 #
@@ -24,7 +24,8 @@
 # 不依赖第三方工具：仅需 git 与基本 POSIX 工具（cp/rm/mktemp/find）。
 #
 # 维护者模式：若当前目录**就是**源仓库里的 template/，则把源仓库根的 vendored
-# 文件（engine/、pixellab/… ）刷进 template/（供上游维护者更新快照）。
+# 文件（engine/、pixellab/、editor/、tools/ 工具）刷进 template/
+# （供上游维护者更新快照）。
 set -eu
 
 # ── 内置默认（可用 --url/--ref 或环境变量覆盖）──
@@ -47,7 +48,9 @@ while [ $# -gt 0 ]; do
         --with-editor)   WITH_EDITOR=1; shift ;;
         --full)   FULL=1; shift ;;
         -h|--help)
-            sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'
+            # 打印文件头注释块（到首个非注释行为止）：范围动态推导，
+            # 不写死行号，避免注释增删后泄漏下方 shell 源码
+            awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
             exit 0 ;;
         *)
             echo "[sync] 未知参数: $1（用 --help 查看用法）" >&2
@@ -165,8 +168,16 @@ if [ "$WITH_EDITOR" = "1" ]; then
     [ -d "$VROOT/editor/addons" ] && cp -r "$VROOT/editor/addons/." "$DEST/editor/addons/" || true
 fi
 
-# tools：仅离线场景生成 CLI
-copy_file "$VROOT/tools/scene_gen.cpp" "tools/scene_gen.cpp"
+# tools：离线占位资产工具（瓦片集生成器 + 场景生成 CLI）
+# 逐文件守卫：--ref 指向缺少这些文件的上游时给 warning 跳过，而不是 cp 失败
+# 在 set -eu 下中断（此时 engine/ 已被替换，会留下半完成快照）
+for f in placeholder_tileset.py scene_gen.cpp; do
+    if [ -e "$VROOT/tools/$f" ]; then
+        copy_file "$VROOT/tools/$f" "tools/$f"
+    else
+        echo "[sync] 警告：上游缺少 tools/$f，跳过（引擎快照已刷新，工具未更新）" >&2
+    fi
+done
 
 # 下游模式：刷新更新器自身（脚本是工具，非项目自有；保证下次仍能自更新）
 if [ "$VENDORED_FROM_ROOT" = "0" ] && [ -e "$TPL/scripts/sync_from_source.sh" ]; then
@@ -214,7 +225,7 @@ echo "[sync] 完成。"
 if [ "$VENDORED_FROM_ROOT" = "1" ]; then
     echo "       下一步（上游维护者）：git add template/ && 提交"
 else
-    if [ "$WITH_PIXELLAB" = "0" ] || [ "$WITH_EDITOR" = "0" ]; then
+    if [ "$WITH_PIXELLAB" = "0" ] && [ "$WITH_EDITOR" = "0" ]; then
         echo "       可选快照：pixellab/（--with-pixellab）、editor/（--with-editor）未安装/未刷新。"
     fi
     echo "       下一步：cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build"

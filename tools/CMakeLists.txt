@@ -124,19 +124,24 @@ add_test(NAME virtual_input_test COMMAND trogue_virtual_input_test)
 set_tests_properties(virtual_input_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# ── pixellab 映射单测（无网络 Python 单测包一层 ctest） ──
-add_test(NAME pixellab_mapping_test
+# ── pixellab 转换器单测（无网络 Python 单测包一层 ctest） ──
+add_test(NAME pixellab_converter_test
     COMMAND python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/pixellab/tests
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/pixellab)
-# scene_gen 确定性回归依赖已构建的 trogue_scene_gen 二进制
-set_tests_properties(pixellab_mapping_test PROPERTIES
+
+# ── 占位资产工具链单测（生成器纯函数 + scene_gen 端到端） ──
+# scene_gen 端到端用例需要已构建的二进制（TROGUE_SCENE_GEN 传入）。
+add_test(NAME placeholder_tools_test
+    COMMAND python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/tools/tests -p "test_*.py"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(placeholder_tools_test PROPERTIES
     ENVIRONMENT "TROGUE_SCENE_GEN=$<TARGET_FILE:trogue_scene_gen>")
 
-# ── scene_gen 离线场景生成 CLI（数据流 C 机制半，复用 pick_tile） ──
+# ── scene_gen 离线占位地图生成 CLI（网格 → pick_tile 采样 → tro-scene） ──
 add_executable(trogue_scene_gen scene_gen.cpp)
 target_link_libraries(trogue_scene_gen PRIVATE trogue_engine
                                               ${TROGUE_TOOLS_NLOHMANN})
-# 无窗口纯离线工具；不注册 ctest（E2E 由 pixellab/ 侧驱动）
+# 无窗口纯离线工具；功能由 placeholder_tools_test 端到端驱动
 
 # ── Watcher 分类纯函数 + Release 桩 + Ipc 集成 ──
 add_executable(trogue_watcher_ipc_test tests/watcher_ipc_test.cpp tests/test_util.hpp)

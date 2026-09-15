@@ -23,25 +23,6 @@
    "source_type": "character",
    "source_id": "f268b557-7a4a-4cd7-9acb-c030d56c66fa",
    "imported_at": "2026-09-11T14:30:01"
-  },
-  {
-   "name": "wang_grass_dirt",
-   "download_urls": [
-    "https://api.pixellab.ai/mcp/tilesets/3bf63d26-eaca-4b62-bd9f-bed96da8fbac/image"
-   ],
-   "outputs": [
-    "textures/pixellab/wang_grass_dirt.png",
-    "tilesets/pixellab/wang_grass_dirt.json"
-   ],
-   "sha256": {
-    "textures/pixellab/wang_grass_dirt.png": "dab877a3cfa6c203eb3fe365a3362732ca35aeda7ca0deca634fc9e2ba78e7a2",
-    "tilesets/pixellab/wang_grass_dirt.json": "11c2aca10c3fde1bbfed8d36e51cc761abecfa307ff8b0ff95d7228512ff7ebf"
-   },
-   "lower": "dark dirt soil",
-   "upper": "green grass",
-   "source_type": "tileset",
-   "source_id": "3bf63d26-eaca-4b62-bd9f-bed96da8fbac",
-   "imported_at": "2026-09-11T14:24:35"
   }
  ]
 }

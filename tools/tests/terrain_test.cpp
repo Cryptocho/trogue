@@ -1,9 +1,9 @@
 // terrain_test.cpp —— TerrainTable 加载与 pick_tile 选择器单测。
 //
 // 覆盖：共享解析核心的 terrain 字段校验全集（经 load_terrain_table 公共入口；
-// 场景加载共用同一核心，正向回归由 scene_schema_test 的真实资产用例承担）、
+// 场景加载共用同一核心，正向回归由 scene_schema_test 承担）、
 // 16-blob 精确命中 / 残缺降级（手算期望表）/ 同分 tie / 均匀 +1（未标注位不改
-// 排序）/ kNotFound 与 kInvalidArgument 分层 / 真实资产回归。
+// 排序）/ kNotFound 与 kInvalidArgument 分层 / 选择性标注回归。
 // 临时 tileset 写 assets/ 根（CWD=项目根），用后即删。
 #include <array>
 #include <cstdio>
@@ -343,11 +343,36 @@ bool test_load_rejections() {
     return ok;
 }
 
-// ── 7. 真实资产回归（test_tileset_1.json：corners_and_sides 1 terrain 16 tile） ──
-bool test_real_asset() {
+// ── 7. 选择性标注回归（corners_and_sides：只在部分 tile 上标 4 边位） ──
+// 导出侧常只标注需要区分的方向（未标注位 = -1 参与比较）；fixture 由测试自写
+// 自删（不依赖随仓库提交的资产）。未标注位对全体候选贡献均匀，排序只由已标注位。
+bool test_partial_annotation() {
     bool ok = true;
-    auto t = tg::load_terrain_table("tilesets/test_tileset_1.json");
-    CHECK(t.has_value());
+    // id 3 只标 right_side；id 5 标四边；其余（含 id 15）无标注。
+    std::string tiles;
+    for (int id = 0; id < 16; ++id) {
+        std::string bits;
+        const auto add = [&](const char* name) {
+            if (!bits.empty()) bits += ",";
+            bits += std::string("\"") + name + "\":0";
+        };
+        if (id == 3) add("right_side");
+        if (id == 5) {
+            add("top_side");
+            add("right_side");
+            add("bottom_side");
+            add("left_side");
+        }
+        tiles += "{\"id\":" + std::to_string(id) + ",\"col\":" + std::to_string(id) +
+                 ",\"row\":0,\"terrain_set\":0,\"terrain\":0";
+        if (!bits.empty()) tiles += ",\"peering_bits\":{" + bits + "}";
+        tiles += "}";
+        if (id + 1 < 16) tiles += ",";
+    }
+    const std::string rel = write_tileset(tileset_json(kOneTerrain, tiles));
+    auto t = tg::load_terrain_table(rel);
+    remove_tileset(rel);
+    REQUIRE(t.has_value());
     if (!t) return false;
     CHECK(t->set.mode == TerrainMode::corners_and_sides);
     CHECK(t->set.terrain_count == 1);
@@ -355,13 +380,29 @@ bool test_real_asset() {
     const auto b = [&](int id, TerrainBit bit) {
         return t->tiles[static_cast<std::size_t>(id)].bits[static_cast<std::size_t>(bit)];
     };
-    // 导出标注抽查：id3=仅 right_side；id5=四边；id15=全未标注；四角恒 -1
+    // 标注抽查：id3 = 仅 right_side；id5 = 四边；id15 = 全未标注；四角恒 -1
     CHECK(b(3, TerrainBit::right_side) == 0);
     CHECK(b(3, TerrainBit::top_side) == -1);
     CHECK(b(5, TerrainBit::top_side) == 0 && b(5, TerrainBit::bottom_side) == 0 &&
           b(5, TerrainBit::left_side) == 0 && b(5, TerrainBit::right_side) == 0);
     CHECK(b(15, TerrainBit::top_side) == -1 &&
           b(15, TerrainBit::bottom_right_corner) == -1);
+    // 匹配：仅 right_side 有约束。id3（恰只标注 right_side）与全未标注的 id15
+    // 都只相差这 1 位 → 同分，按「同分取最小 id」命中 id3
+    {
+        std::array<int, 8> p{};
+        p.fill(-1);
+        p[static_cast<std::size_t>(TerrainBit::right_side)] = 0;
+        auto id = tg::pick_tile(*t, 0, 0, p);
+        CHECK(id.has_value() && *id == 3);
+    }
+    // 全 -1 pattern：未标注位对候选贡献均匀 → 同分取最小 id
+    {
+        std::array<int, 8> p{};
+        p.fill(-1);
+        auto id = tg::pick_tile(*t, 0, 0, p);
+        CHECK(id.has_value() && *id == 0);
+    }
     return ok;
 }
 
@@ -434,7 +475,7 @@ int main() {
     test_tie_lowest_id();
     test_error_contract();
     test_load_rejections();
-    test_real_asset();
+    test_partial_annotation();
     test_corners_mode();
     std::printf("[terrain test] checks=%d failures=%d\n", ::tg_test::g_checks,
                 ::tg_test::g_failures);

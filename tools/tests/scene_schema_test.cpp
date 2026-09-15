@@ -75,6 +75,29 @@ std::string bare_scene() {
     return R"({"format":"tro-scene","version":2,"tilemap":{"layers":[]},"entities":[]})";
 }
 
+// 图集测试用的合法 tileset fixture：16 tile、16×16、col/row 齐备。
+// 由测试自写自删（不依赖随仓库提交的资产）；场景侧路径相对 assets/ 解析，
+// 故写 assets/ 根、scene 仍可写在 build/。
+constexpr const char* kAtlasTs = "__tmp_schema_atlas.json";
+
+void write_atlas_fixture() {
+    std::string tiles;
+    for (int i = 0; i < 16; ++i) {
+        if (i) tiles += ",";
+        tiles += "{\"id\":" + std::to_string(i) +
+                 ",\"col\":" + std::to_string(i % 16) +
+                 ",\"row\":" + std::to_string(i / 16) + "}";
+    }
+    std::ofstream f(std::string("assets/") + kAtlasTs, std::ios::binary);
+    f << R"({"format":"tro-tileset","version":2,"texture":"textures/floor.png",)"
+         R"("tile_width":16,"tile_height":16,"columns":16,"rows":16,"tiles":[)" +
+             tiles + "]}";
+}
+
+void remove_atlas_fixture() {
+    std::remove((std::string("assets/") + kAtlasTs).c_str());
+}
+
 // ════════════ 拒绝规则 ════════════
 
 bool test_root_and_keys() {
@@ -109,7 +132,7 @@ bool test_modes() {
     ok &= expect_reject("tilesets+palette 同现",
                         R"({"format":"tro-scene","version":2,"tilemap":{
                             "tile_width":16,"tile_height":16,
-                            "tilesets":[{"name":"a","path":"tilesets/tile_set.json"}],
+                            "tilesets":[{"name":"a","path":"__tmp_schema_atlas.json"}],
                             "palette":["#000000"]}})",
                         tg::ErrorCode::kSchemaViolation);
     // 无 tilesets/palette 但有非空层
@@ -159,7 +182,7 @@ bool test_tilesets() {
     std::string many;
     for (int i = 0; i < 9; ++i) {
         many += (i ? "," : "") + std::string(R"({"name":"t)") + std::to_string(i) +
-                R"(","path":"tilesets/tile_set.json"})";
+                R"(","path":"__tmp_schema_atlas.json"})";
     }
     ok &= expect_reject("tilesets > 8",
                         R"({"format":"tro-scene","version":2,"tilemap":{
@@ -170,7 +193,7 @@ bool test_tilesets() {
     ok &= expect_reject("tileset 未知键",
                         R"({"format":"tro-scene","version":2,"tilemap":{
                             "tile_width":16,"tile_height":16,
-                            "tilesets":[{"name":"a","path":"tilesets/tile_set.json","extra":1}]}})",
+                            "tilesets":[{"name":"a","path":"__tmp_schema_atlas.json","extra":1}]}})",
                         tg::ErrorCode::kSchemaViolation);
     // tileset name 缺失 / path 缺失
     ok &= expect_reject("tileset 缺 path",
@@ -184,11 +207,11 @@ bool test_tilesets() {
                             "tile_width":16,"tile_height":16,
                             "tilesets":[{"name":"a","path":"tilesets/nope.json"}]}})",
                         tg::ErrorCode::kIoError);
-    // 合法图集引用（真实 tile_set.json）
-    ok &= expect_ok("图集 tileset 引用真实文件",
+    // 合法图集引用（自写 fixture tileset）
+    ok &= expect_ok("图集 tileset 引用磁盘文件",
                     R"({"format":"tro-scene","version":2,"tilemap":{
                         "tile_width":16,"tile_height":16,
-                        "tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],
+                        "tilesets":[{"name":"ts","path":"__tmp_schema_atlas.json"}],
                         "layers":[{"name":"g","width":2,"height":1,"tileset":"ts",
                                    "tiles":[0,1]}]},"entities":[]})");
     return ok;
@@ -292,7 +315,7 @@ bool test_tiles_array() {
         "图集层缺 tileset",
         R"({"format":"tro-scene","version":2,"tilemap":{
             "tile_width":16,"tile_height":16,
-            "tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],
+            "tilesets":[{"name":"ts","path":"__tmp_schema_atlas.json"}],
             "layers":[{"name":"g","width":1,"height":1,"tiles":[0]}]}})",
         tg::ErrorCode::kSchemaViolation);
     // 图集模式层引用不存在的 tileset name
@@ -300,15 +323,15 @@ bool test_tiles_array() {
         "图集层引用未知 tileset",
         R"({"format":"tro-scene","version":2,"tilemap":{
             "tile_width":16,"tile_height":16,
-            "tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],
+            "tilesets":[{"name":"ts","path":"__tmp_schema_atlas.json"}],
             "layers":[{"name":"g","width":1,"height":1,"tileset":"nope","tiles":[0]}]}})",
         tg::ErrorCode::kSchemaViolation);
-    // 图集 tiles 值越界（tile_set.json count=16 → 值 16 越界）
+    // 图集 tiles 值越界（fixture tileset count=16 → 值 16 越界）
     ok &= expect_reject(
         "图集 tiles 值越界 16",
         R"({"format":"tro-scene","version":2,"tilemap":{
             "tile_width":16,"tile_height":16,
-            "tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],
+            "tilesets":[{"name":"ts","path":"__tmp_schema_atlas.json"}],
             "layers":[{"name":"g","width":1,"height":1,"tileset":"ts","tiles":[16]}]}})",
         tg::ErrorCode::kSchemaViolation);
     return ok;
@@ -463,7 +486,7 @@ bool test_descriptor_extras() {
     {
         auto r = SceneAsset::load_json(
             R"({"format":"tro-scene","version":2,"tilemap":{"tile_width":16,"tile_height":16,)"
-            R"("tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],)"
+            R"("tilesets":[{"name":"ts","path":"__tmp_schema_atlas.json"}],)"
             R"("layers":[]},)"
             R"("entities":[{"id":"b","sprite":{"tileset":"ts","tile":0,)"
             R"("offset":[1,2],"flip_x":true,"flip_y":true}}]})",
@@ -656,12 +679,16 @@ bool test_positive_regressions() {
                         return std::string((std::istreambuf_iterator<char>(in)),
                                            std::istreambuf_iterator<char>());
                     }());
-    ok &= expect_ok("test.json（图集模式，引真实 tilesets/test_tileset{,_1}.json）",
-                    [] {
-                        std::ifstream in("assets/scenes/test.json", std::ios::binary);
-                        return std::string((std::istreambuf_iterator<char>(in)),
-                                           std::istreambuf_iterator<char>());
-                    }());
+    // 图集模式整场景正例（引用自写 fixture 的两层场景）
+    ok &= expect_ok(
+        "图集模式合成场景（两层，fixture tileset）",
+        std::string(R"({"format":"tro-scene","version":2,"tilemap":{)") +
+            R"("tile_width":16,"tile_height":16,)" +
+            R"("tilesets":[{"name":"ts","path":")" + kAtlasTs + R"("}],)" +
+            R"("layers":[{"name":"g","width":2,"height":2,"solid":false,)" +
+            R"("tileset":"ts","tiles":[0,1,2,3]},)" +
+            R"({"name":"w","width":2,"height":2,"solid":true,)" +
+            R"("tileset":"ts","tiles":[-1,-1,-1,15]}]},"entities":[]})");
     return ok;
 }
 
@@ -859,7 +886,7 @@ bool test_load_json() {
     const std::string atlas_scene =
         R"({"format":"tro-scene","version":2,"meta":{"name":"mem"},"tilemap":{)"
         R"("tile_width":16,"tile_height":16,)"
-        R"("tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],)"
+        R"("tilesets":[{"name":"ts","path":"__tmp_schema_atlas.json"}],)"
         R"("layers":[{"name":"g","width":1,"height":1,"tileset":"ts","tiles":[0]}]}})";
     const std::string palette_scene =
         R"({"format":"tro-scene","version":2,"tilemap":{"tile_width":8,"tile_height":8,)"
@@ -911,6 +938,8 @@ bool test_load_json() {
 
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
+    std::filesystem::create_directories("assets");  // fixture tileset 写 assets/ 根
+    write_atlas_fixture();
 
     test_root_and_keys();
     test_modes();
@@ -927,6 +956,7 @@ int main() {
     test_atlas_col_row_meta();
     test_tileset_visual_fields();
     test_load_json();
+    remove_atlas_fixture();
 
     std::printf("[schema test] checks=%d failures=%d\n", ::tg_test::g_checks,
                 ::tg_test::g_failures);

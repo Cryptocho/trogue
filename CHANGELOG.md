@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### 资产管线：移除 PixelLab 瓦片集导入，改为占位资产工具
+
+- 影响的文件: `pixellab/pxlab.py`、`pixellab/tileset.py`（删除）、`pixellab/scene.py`（删除）、`pixellab/mapping.py`（删除）、`pixellab/fixtures/`（删除 wang 三个文件）、`pixellab/tests/test_mapping.py`（删除）、`pixellab/tests/test_scene_gen.py`（删除）、`tools/placeholder_tileset.py`（新增）、`tools/scene_gen.cpp`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`、`tools/tests/test_placeholder_tileset.py`（新增）、`tools/tests/test_scene_gen.py`（新增）、`tools/tests/terrain_test.cpp`、`tools/tests/scene_query_test.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`engine/src/render.cpp`、`assets/scenes/test.json`（删除）、`assets/scenes/tile_map_layer.json`（删除）、`assets/pixellab_manifest.json`、`assets/tilesets/`（删除失效 tileset）、`assets/textures/`（删除对应贴图）、`scripts/sync_from_source.sh`（删除）、`template/pixellab/`、`template/tools/`、`template/engine/src/render.cpp`、`template/CMakeLists.txt`、`template/README.md`、`template/scripts/sync_from_source.sh`、`.gitignore`、`AGENTS.md`
+
+#### Breaking Changes
+- PixelLab 转换层不再导入瓦片集：删除 `import-tileset` / `import-map` 子命令与 `tileset.py` / `scene.py` / `mapping.py`（及 wang fixtures 与两个对应单测）。理由：PixelLab 只产出有限标注的 Wang 集，角标注不足以支撑引擎 `peering_bits` autotile。`pixellab/` 现在只有角色/动画导入（`import-character` / `import-character-sheet`）+ `check-grid` / `verify`。
+- 删除图集模式的失效回归资产：`assets/scenes/test.json`、`assets/scenes/tile_map_layer.json`（引用已删除的 Godot 导出 tileset）。副作用：`assets/` 不再有图集模式资产，game 骨架回归里的图集加载用例随之消失（图集加载改由引擎单测的自写 fixture 覆盖）。
+- 删除仓库根的 `scripts/sync_from_source.sh`：它与 `template/scripts/sync_from_source.sh` 重复且已分叉（缺 `--with-pixellab`/`--with-editor`、不装占位工具），没有任何文档指向它。安装/更新脚本此后**只有**模板内那一份为权威。
+
+#### Added
+- 新增 `tools/placeholder_tileset.py`：本地生成**已标注**的占位 tro-tileset v2 + 贴图（32 tile = 2 地形 × 16 角组合，corners mode）。`peering_bits`/`terrain` 由构造保证自洽——两个地形池各覆盖全部 4 角组合，故 `pick_tile` 恒精确命中（零降级）；贴图为纯色块（底色 = 本地形色、异地形角画 1/4 边长角块），视觉与标注同源。纯 stdlib 写 PNG（zlib），同环境同参重跑逐字节一致；`--name` 拒绝路径成分（防越出 `assets/`），`--tile-size` 限制为 4 的整数倍且 ≤ 256。
+- `tools/scene_gen.cpp` 重写为**离线占位地图生成 CLI**：输入紧凑 spec（`tileset` + 等宽字符网格，`'.'`=terrain 0 / `'#'`=terrain 1，可选 `name`/`background`/`entities` 透传），输出 tro-scene v2 两层（`ground` 非 solid + `walls` solid），落盘前 `SceneAsset::load_json` 回读自检。顶点采样（4 邻格多数投票）与 terrain 指派归工具，tile id 归引擎 `tg::pick_tile`。
+- 新增工具链单测：`tools/tests/test_placeholder_tileset.py`（硬编码标注期望表 + 角块像素逐点核对 + name/tile-size 非法拒绝）、`tools/tests/test_scene_gen.py`（端到端：分池、具体格子取值、确定性、`--name`/缺省 meta、输出父目录自动创建，以及 spec 类型 / 网格 / tileset 模式 / 地形数 / 地形池缺角组合 / 缺 tileset 各错误路径），并入 CTest。
+
+#### Refactored
+- `tools/scene_gen.cpp` **不产半成品**：spec / 网格 / 字段类型不合法 → 退出码 2；tileset 校验失败、场景自检失败或任一格 `pick_tile` 取不到 tile → 退出码 1 且不落盘（原先静默写 `-1` 空洞并返回 0，可能产出 solid 层全空、无碰撞的地图）；输出父目录不存在时自动创建（模板项目 `assets/` 无 `scenes/` 时不再失败）；spec 字段存在即严格校验类型（原先 `name`/`background` 类型不符被静默丢弃）。
+- `game` 的 `genmap` 改为 **palette 色块程序生成**（噪声 → 双层 palette 场景：`ground` 非 solid + `walls` solid），不再依赖任何瓦片集/贴图，无美术资产也能跑通程序生成地图与碰撞；`nonempty` 语义明确为「`walls`（solid）层非空 tile 数」，与 `layers` 的 `tiles` 计数相互印证。
+- 三个引擎测试改为**自写临时 fixture**（不依赖随仓库提交的资产）：`terrain_test` 的 `test_real_asset` → `test_partial_annotation`（选择性边位标注 + 匹配语义）、`scene_query_test` 的图集/多格 tile 用例、`scene_schema_test` 的全部图集用例（fixture 写 `assets/` 用后即删）；断言未减，`terrain_test` 另加 2 条 `pick_tile` 断言。`.gitignore` 忽略残留 fixture（`assets/__tmp_*`、`assets/tilesets/__tmp_*`）。
+- `assets/pixellab_manifest.json` 只移除已删瓦片集条目、**保留**仍存活角色资产（`pxlab_soldier`）的来源 URL 与 sha256：整份删除会让 `pxlab.py verify` 变成恒真空转（`0 ok, 0 failed`），溯源与验收一起失效。
+- `tools/ipc_smoke.py` 补齐改版 `genmap` 的契约断言：palette 双层（层名 / `solid` / `tileset` 为 null）、`nonempty` 与 `layers` 计数一致、抽查 8×8 格「solid ⟺ walls 层有 tile 且与 ground 互补」、尺寸边界（1×1 接受、`w=65` 与非整数 `w` 拒绝）。
+- 模板刷新：vendored 集合随上游变为 `tools/placeholder_tileset.py` + `tools/scene_gen.cpp`（`template/scripts/sync_from_source.sh` 的 tools 逐文件拷贝同步更新，并对缺失文件给 warning 而非中断），`template/pixellab/` 快照降为 6 个转换脚本；`template/scripts/sync_from_source.sh` 另修 `--help` 行号硬编码导致泄漏 shell 源码、可选快照提示条件、可选快照标志语义；模板 `README.md`（快照/自有归属、可选快照标注）/ `CMakeLists.txt` 注释同步。
+- 仓库根文档：PixelLab 章节改写为「单一角色/动画数据流 + 瓦片集不经该层导入」，新增「占位资产工具（tools/）」章节（两命令用法、产物语义、失败语义与父目录行为），目录结构、模板说明、`genmap` 行与 manifest 描述同步。
+
+#### Tests
+- 根仓库：Debug 构建零告警；CTest 19/19（新增 `placeholder_tools_test`，`pixellab_converter_test` 取代原 `pixellab_mapping_test`）；`tools/tests` Python 单测 22/22（scene_gen 的二进制缺失由 **fail** 取代原先的 skip——skip 会让 ctest 在目标未构建时假绿）；`tools/ipc_smoke.py` 99/99。
+- 端到端视觉验收：`placeholder_tileset.py` → `scene_gen` → `./build/bin/trogue --scene <生成的场景>` → IPC 截图目视确认 autotile 渲染（外墙/内墙结构、过渡角块），并以 `solid_at` 逐格核对生成碰撞与网格一致；模板快照另在临时目录单独 configure + build 通过；验证用产物已清理，不入库。
+
 ### 引擎：Random 抽取计数 + 模板 QA 与边界文档
 
 - 影响的文件: `engine/include/trogue/random.hpp`、`engine/src/random.cpp`、`tools/tests/random_test.cpp`、`engine/include/trogue/render.hpp`、`template/engine/`、`template/AGENTS.md`、`template/game/src/main.cpp`、`template/tools/gen_font.py`、`template/tools/ipc_smoke.py`、`AGENTS.md`、`docs/BACKLOG.md`

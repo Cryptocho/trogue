@@ -18,7 +18,7 @@ option(TROGUE_DEBUG "Enable debug IPC & hot-reload tooling" ON)
 
 add_subdirectory(engine)
 
-# tools/：离线场景生成 CLI（pixellab 管线的 C 机制半，复用引擎 pick_tile）
+# tools/：离线占位资产工具（占位瓦片集生成器 + 场景生成 CLI，复用引擎 pick_tile）
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tools/CMakeLists.txt)
   add_subdirectory(tools)
 endif()

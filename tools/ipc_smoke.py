@@ -514,6 +514,32 @@ def main():
     check("genmap 同 seed 确定性复现",
           g2 is not None and g2.get("nonempty") == g1.get("nonempty")
           and g2.get("w") == g1.get("w") and g2.get("h") == g1.get("h"), (g1, g2))
+    # 产物契约：palette 模式双层（不依赖 tileset/贴图），ground 非 solid、walls solid
+    r = rpc(cmd="layers")
+    lay = r.get("data", {}).get("layers", []) if r.get("ok") else []
+    check("genmap 生成 palette 双层（ground 非 solid + walls solid，无 tileset）",
+          [l["name"] for l in lay] == ["ground", "walls"]
+          and lay[0]["solid"] is False and lay[1]["solid"] is True
+          and all(l["tileset"] is None for l in lay)
+          and all(l["width"] == 40 and l["height"] == 40 for l in lay), r)
+    # nonempty 的语义：solid 层（walls）非空 tile 数；ground 非空数 = 全部格 - 该值
+    check("genmap nonempty = walls 层非空格数",
+          g1 is not None and len(lay) == 2
+          and lay[1]["tiles"] == g1["nonempty"]
+          and lay[0]["tiles"] == 40 * 40 - g1["nonempty"], (g1, lay))
+    # 逐格抽查（8×8）：get_tile 的 solid 必须等价于「walls 层有 tile」，
+    # 且墙格不再落 ground 层（两层互补、无重叠）
+    bad = []
+    for gy in range(8):
+        for gx in range(8):
+            r = rpc(cmd="get_tile", x=gx * 16 + 8, y=gy * 16 + 8)
+            d = r.get("data", {}) if r.get("ok") else {}
+            wall_tile = any(t["layer"] == 1 for t in d.get("tiles", []))
+            ground_tile = any(t["layer"] == 0 for t in d.get("tiles", []))
+            if d.get("solid") != wall_tile or (wall_tile and ground_tile) or \
+                    (not wall_tile and not ground_tile):
+                bad.append((gx, gy, d))
+    check("genmap 墙格 solid 且与 ground 互补（抽查 8×8）", not bad, bad[:2])
     # 异 seed：nonempty 计数有极小概率恰好相等（~1% 量级），按序多试几个
     # seed 取首个不同者，消除常跑冒烟的偶发假失败
     g3 = None
@@ -526,6 +552,16 @@ def main():
           g3 is not None and g3.get("nonempty") != g1.get("nonempty"), (g1, g3))
     r = rpc(cmd="genmap", seed="bad")
     check("genmap 非整数 seed 报错",
+          r.get("ok") is False and "integer" in r.get("error", ""), r)
+    # 尺寸边界：1×1 合法（噪声退化时可能全墙或全空，属预期）、越界与非整型拒绝
+    r = rpc(cmd="genmap", seed=42, w=1, h=1)
+    check("genmap 最小尺寸 1x1 接受",
+          r.get("ok") is True and r["data"]["w"] == 1 and r["data"]["h"] == 1
+          and r["data"]["nonempty"] in (0, 1), r)
+    r = rpc(cmd="genmap", seed=42, w=65)
+    check("genmap w 越界报错", r.get("ok") is False, r)
+    r = rpc(cmd="genmap", seed=42, w="big")
+    check("genmap 非整数 w 报错",
           r.get("ok") is False and "integer" in r.get("error", ""), r)
 
     print("== 贴图缓存失效（reload_texture）==")

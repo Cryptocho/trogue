@@ -4,12 +4,15 @@
 子命令：
   import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle] [--jobs 8]
   import-character-sheet --character-id <id> --sheet-url <zip> --name <n>
-  import-tileset   --meta <json> --name <n> --image <png> --lower <l> --upper <u>
   check-grid --image <png>
   verify
 
-约定：CWD = 项目根；产物落 assets/（textures/pixellab/、animations/、
-tilesets/pixellab/）；manifest 落 assets/pixellab_manifest.json（upsert）。
+约定：CWD = 项目根；产物落 assets/（textures/pixellab/、animations/）；
+manifest 落 assets/pixellab_manifest.json（upsert）。
+
+瓦片集不在此导入：PixelLab 只产出有限标注的 Wang 集，其角标注不足以支撑引擎
+peering_bits autotile。占位瓦片集由 tools/placeholder_tileset.py 本地生成，
+正式瓦片集由使用者在 Godot 中逐格标注后经 scene_exporter 导出。
 """
 
 from __future__ import annotations
@@ -26,7 +29,6 @@ from character import build as build_character
 from gridcheck import detect_and_downscale
 from sheet import build as build_sheet
 from manifest import sha256_bytes, upsert
-from tileset import build as build_tileset
 
 
 def _write(rel: str, data: bytes) -> str:
@@ -81,34 +83,6 @@ def cmd_import_character_sheet(a: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_import_tileset(a: argparse.Namespace) -> int:
-    meta = json.load(open(a.meta, encoding="utf-8"))
-    doc = build_tileset(meta, a.name, a.lower, a.upper)
-    raw = fetch_bytes(a.image_url)
-    png, _factor = detect_and_downscale(raw, a.name)
-    png_rel = _write(f"textures/pixellab/{a.name}.png", png)
-    ts_rel = _write_json(f"tilesets/pixellab/{a.name}.json", doc)
-    upsert("tileset", meta.get("id", a.name), {
-        "name": a.name,
-        "download_urls": [a.image_url],
-        "outputs": [png_rel, ts_rel],
-        "sha256": {png_rel: sha256_bytes(png), ts_rel: sha256_bytes(
-            (json.dumps(doc, indent=1, ensure_ascii=False) + "\n").encode())},
-        "lower": a.lower, "upper": a.upper,
-    })
-    print(f"OK {a.name}: {png_rel} + {ts_rel} "
-          f"({len(doc['tiles'])} tiles, corners mode)")
-    return 0
-
-
-def cmd_import_map(a: argparse.Namespace) -> int:
-    import scene
-    grid_text = open(a.grid, encoding="utf-8").read() if a.grid != "-" else sys.stdin.read()
-    msg = scene.generate(grid_text, a.tileset, a.scene_name, a.out)
-    print(msg)
-    return 0
-
-
 def cmd_verify(_a: argparse.Namespace) -> int:
     import manifest
     ok, bad = manifest.verify()
@@ -151,24 +125,6 @@ def main() -> int:
     s.add_argument("--fps", type=int, default=8)
     s.add_argument("--loop", default="")
     s.set_defaults(fn=cmd_import_character_sheet)
-
-    t = sub.add_parser("import-tileset")
-    t.add_argument("--meta", required=True)
-    t.add_argument("--name", required=True)
-    t.add_argument("--image-url", required=True,
-                   help="tileset PNG 下载 URL（metadata 不内嵌图像）")
-    t.add_argument("--lower", required=True, help="lower terrain 名（=terrain 0）")
-    t.add_argument("--upper", required=True, help="upper terrain 名（=terrain 1）")
-    t.set_defaults(fn=cmd_import_tileset)
-
-    m = sub.add_parser("import-map")
-    m.add_argument("--grid", required=True,
-                   help="ASCII 网格文件路径，或 '-' 读 stdin（1/#/G=upper, 0/./D=lower）")
-    m.add_argument("--tileset", required=True,
-                   help="已导入的 tro-tileset（assets 相对路径）")
-    m.add_argument("--scene", required=True, dest="scene_name")
-    m.add_argument("--out", required=True, help="产物场景 assets 相对路径")
-    m.set_defaults(fn=cmd_import_map)
 
     v = sub.add_parser("verify")
     v.set_defaults(fn=cmd_verify)

@@ -37,6 +37,38 @@ std::string write_scene(const std::string& content) {
     return path;
 }
 
+// 图集用例的 fixture tileset：测试自写自删（不依赖随仓库提交的资产）。
+// 场景内 tileset 路径相对 assets/ 解析，故写 assets/ 根。
+constexpr const char* kQueryAtlasTs = "__tmp_query_atlas.json";  // 16 tile、col/row 齐备
+constexpr const char* kQueryMultiTs = "__tmp_query_multi.json";  // 单 tile、size_in_atlas [3,5]
+
+void write_query_fixtures() {
+    {
+        std::string tiles;
+        for (int i = 0; i < 16; ++i) {
+            if (i) tiles += ",";
+            tiles += "{\"id\":" + std::to_string(i) +
+                     ",\"col\":" + std::to_string(i % 16) +
+                     ",\"row\":" + std::to_string(i / 16) + "}";
+        }
+        std::ofstream f(std::string("assets/") + kQueryAtlasTs, std::ios::binary);
+        f << R"({"format":"tro-tileset","version":2,"texture":"textures/floor.png",)"
+             R"("tile_width":16,"tile_height":16,"columns":16,"rows":16,"tiles":[)" +
+                 tiles + "]}";
+    }
+    {
+        std::ofstream f(std::string("assets/") + kQueryMultiTs, std::ios::binary);
+        f << R"({"format":"tro-tileset","version":2,"texture":"textures/floor.png",)"
+             R"("tile_width":16,"tile_height":16,"columns":1,"rows":1,)"
+             R"("tiles":[{"id":0,"col":0,"row":0,"size_in_atlas":[3,5]}]})";
+    }
+}
+
+void remove_query_fixtures() {
+    std::remove((std::string("assets/") + kQueryAtlasTs).c_str());
+    std::remove((std::string("assets/") + kQueryMultiTs).c_str());
+}
+
 // 构造单 solid 层 4×4 场景：tile(0,0)=1 实心，其余 -1
 std::string single_solid_scene() {
     return R"({"format":"tro-scene","version":2,"tilemap":{
@@ -363,11 +395,11 @@ bool test_update_layer_tiles() {
     return ok;
 }
 
-// 图集模式场景（引用真实磁盘 tileset，16 tiles；值域上界 = count）
+// 图集模式场景（引用自写 fixture tileset，16 tiles；值域上界 = count）
 std::string atlas_scene() {
-    return R"({"format":"tro-scene","version":2,"tilemap":{
+    return std::string(R"({"format":"tro-scene","version":2,"tilemap":{
         "tile_width":16,"tile_height":16,
-        "tilesets":[{"name":"ts","path":"tilesets/tile_set.json"}],
+        "tilesets":[{"name":"ts","path":")") + kQueryAtlasTs + R"("}],
         "layers":[
           {"name":"g","width":4,"height":4,"solid":true,"tileset":"ts",
            "tiles":[0,-1,-1,-1,
@@ -446,12 +478,12 @@ bool test_set_tile_at() {
     }
     // ── 多格 tile（size_in_atlas）：一格一 cell，写其 cell 不影响其他 cell ──
     {
-        // test_tileset.json：单 tile、size_in_atlas [3,5]（渲染 region 扩展，
+        // fixture tileset：单 tile、size_in_atlas [3,5]（渲染 region 扩展，
         // 逻辑仍占一个 cell）
-        constexpr const char* kMulti =
-            R"({"format":"tro-scene","version":2,"tilemap":{
+        const std::string kMulti =
+            std::string(R"({"format":"tro-scene","version":2,"tilemap":{
                 "tile_width":16,"tile_height":16,
-                "tilesets":[{"name":"ts","path":"tilesets/test_tileset.json"}],
+                "tilesets":[{"name":"ts","path":")") + kQueryMultiTs + R"("}],
                 "layers":[
                   {"name":"g","width":4,"height":4,"solid":true,"tileset":"ts",
                    "tiles":[0,-1,-1,-1,
@@ -504,6 +536,8 @@ bool test_props_snapshot_semantics() {
 
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
+    std::filesystem::create_directories("assets");  // fixture tileset 写 assets/ 根
+    write_query_fixtures();
     test_is_solid_at();
     test_rect_hits_solid();
     test_tile_at();
@@ -513,6 +547,7 @@ int main() {
     test_props_snapshot_semantics();
     test_asset_id_and_safety();
     test_asset_id_exhaustion_seam();
+    remove_query_fixtures();
     std::printf("[query test] checks=%d failures=%d\n", ::tg_test::g_checks,
                 ::tg_test::g_failures);
     return ::tg_test::g_failures == 0 ? 0 : 1;

@@ -143,10 +143,10 @@ trogue/
 │   ├── CMakeLists.txt     # 可执行 trogue + anim_viewer（输出到 build/bin/）
 │   └── src/               # main.cpp + anim_viewer.cpp + 游戏自有模块（引擎能力验证台，非交付物）
 ├── assets/                # 游戏资产（引擎按 CWD assets/ 约定读取）
-│   ├── scenes/            # demo.json（手写示例）+ Godot 导出场景
+│   ├── scenes/            # 手写示例 + 占位生成场景（tools/scene_gen 产物）
 │   ├── animations/        # tro-animations v1 独立动画资产（导出产物）
-│   ├── tilesets/          # tro-tileset 导出产物
-│   └── textures/          # 导出时自动拷贝的贴图
+│   ├── tilesets/          # tro-tileset 产物（Godot 导出 / 占位生成）
+│   └── textures/          # 贴图（导出时自动拷贝 / 占位生成）
 ├── editor/                # Godot 4.7 可选视觉标注/预览项目（可由人或 Agent headless 使用）
 │   └── addons/scene_exporter/  # 导出插件 v4（菜单 + headless）
 ├── docs/                  # 文档与历史归档（history.md 等）；计划书为临时产物，实现后即删
@@ -158,7 +158,8 @@ trogue/
 │   └── AGENTS.md README.md CMakeLists.txt # 模板自有
 ├── tools/
 │   ├── ipc_smoke.py       # IPC 冒烟测试
-│   ├── scene_gen.cpp      # 离线场景生成 CLI（pixellab 管线数据流 C 机制半，复用 pick_tile）
+│   ├── placeholder_tileset.py  # 占位瓦片集生成器（已标注 tro-tileset + 贴图）
+│   ├── scene_gen.cpp      # 离线占位地图生成 CLI（网格 → pick_tile 采样 → tro-scene）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── build/  build-release/ # 构建产物（gitignore）
 ├── reference/             # 引擎源码参考副本（gitignore；Godot 4.7.2 + raylib 6.0，查证行为用）
@@ -311,22 +312,30 @@ python3 tools/ipc_smoke.py
 
 ## PixelLab 资产管线（pixellab/）
 
-> **定位**：PixelLab MCP（外部像素美术生成服务）→ tro-* 运行时资产的**上游转换层**，与 `editor/`（Godot 导出管线）平级——都是「上游创作输入 → assets/ 中的 tro-*」。引擎与 game 运行时零 PixelLab 概念；本层是纯离线工具（Python，依赖仅 Pillow + stdlib）+ `tools/scene_gen.cpp`（复用引擎 `pick_tile`）。
+> **定位**：PixelLab MCP（外部像素美术生成服务）→ tro-* 运行时资产的**上游转换层**，与 `editor/`（Godot 导出管线）平级——都是「上游创作输入 → assets/ 中的 tro-*」。引擎与 game 运行时零 PixelLab 概念；本层是纯离线工具（Python，依赖仅 Pillow + stdlib）。
 
 - **MCP 调用纪律**：调用任何 PixelLab 工具前先查官方文档 `https://api.pixellab.ai/mcp/docs`；批量生成前 `get_balance`；pro 模式必须走 confirm_cost 报价流程（先报价 → 用户确认 → 再调）。全局 skill `pixellab-mcp`（`~/.agents/skills/`）承载操作指南。
-- **三条数据流**（产物全部落 `assets/`）：**A 角色/动画**（`import-character` / `import-character-sheet` → `assets/textures/pixellab/<n>.png` + `assets/animations/<n>.json`，fps/loop 为显式参数）；**B Wang 瓦片集**（`import-tileset` → `assets/tilesets/pixellab/<n>.json`，corners mode + peering_bits + 归池 terrain）；**C 地图**（`import-map` → 顶点采样 → `tools/scene_gen` 按池烤 tile id + `load_json` 自检 → `assets/scenes/<n>.json`）。
-- **瓦片集标注分工**：地形/Wang 瓦片集的 terrain/peering_bits 标注归用户 + Godot（用户在 Godot 建 TileSet 逐格标注后经 scene_exporter 导出）。MCP 生成的 tileset 降级为**占位资产**（只保证格级特征；顶点级特征需在 Godot 手工逐格摆瓦片）。
-- **确定性**：同输入重跑产物 byte-identical；`assets/pixellab_manifest.json` 按 (源类型, 源 id) upsert 记录来源 URL + 产物 sha256。下载 URL 可能过期——**产物 + sha256 为权威**。
-- **明确损失**：25-tile 4×8 Wang 集、tile_size 非 16/32、spritesheet 边 > 4096px、图像尺寸 <8px → 拒绝导入并报错，不静默伪造兼容。
+- **唯一数据流：角色/动画**（产物落 `assets/`）：`import-character` / `import-character-sheet` → `assets/textures/pixellab/<n>.png` + `assets/animations/<n>.json`，fps/loop 为显式参数。
+- **瓦片集不经 PixelLab 导入**：PixelLab 只产出**有限标注**的 Wang 集（角标注不足以支撑引擎 `peering_bits` autotile 语义），故转换层不提供 `import-tileset`。正式瓦片集由使用者提供：在 Godot 中逐格标注 terrain/peering_bits 后经 scene_exporter 导出，或直接手写 tro-tileset v2。
+- **确定性**：同输入重跑产物 byte-identical；`assets/pixellab_manifest.json` 按 (源类型, 源 id) upsert 记录来源 URL + 产物 sha256（已入库，含仍存活角色资产的条目）。下载 URL 可能过期——**产物 + sha256 为权威**。
+- **明确损失**：spritesheet 边 > 4096px、图像尺寸 <8px → 拒绝导入并报错，不静默伪造兼容。
 - **导入验收**：`python3 pixellab/pxlab.py check-grid --image <png>`（只在检测到整数倍块放大时降采样）、`python3 pixellab/pxlab.py verify`（校验 manifest 中每个产物的 sha256）。
 - **独立 tro-animations 有运行时加载器**：`tg::AnimationAsset::load/load_json` 消费 `tro-animations` v1；实体内嵌 `animations` 仍由 `SceneAsset::animation_set` 提供。
 - **双路径不变**：规则明确的资产仍直接手写 tro-*；PixelLab 路径只在需要美术生成力时使用。
+
+## 占位资产工具（tools/）
+
+> **定位**：正式美术/瓦片集尚未就位时，让 Agent 立刻拿到**能跑、能 autotile、零外部依赖**的资产。两个工具都是确定性、无头、可校验的离线 CLI，产物落 `assets/`；生成完即可直接起游戏看画面。
+
+- `python3 tools/placeholder_tileset.py [--name placeholder] [--tile-size 16] [--lower-name ground] [--upper-name wall] [--lower-color C] [--upper-color C]` → `assets/tilesets/<n>.json` + `assets/textures/<n>.png`。产出 **32 tile** 的占位 Wang 集（2 地形 × 16 角组合，corners mode）：`peering_bits` 与 `terrain` **由构造保证自洽**，每个地形池都覆盖全部 4 角组合，故 `pick_tile` 恒精确命中（零降级）；贴图是纯色块（底色 = 本地形色，异地形角画 1/4 边长的角块），视觉与标注同源。
+- `./build/tools/trogue_scene_gen <spec.json> <out_scene.json> [--name <场景名>]` → tro-scene v2。spec = `{"tileset": <assets 相对路径>, "grid": ["...#", ...]}`（等宽网格：`'.'` = terrain 0、`'#'` = terrain 1），可选 `"name"`/`"background"`/`"entities"`（entities 原样透传；存在即须为声明类型，否则拒绝）。流程：顶点采样（4 邻格多数投票）→ 引擎 `tg::pick_tile` → 两层 `ground`（非 solid）+ `walls`（solid）→ 落盘前 `SceneAsset::load_json` 回读自检。输出父目录按需自动创建。**失败不产半成品**：spec/网格/类型不合法 → 退出码 2；tileset 校验失败、自检失败或**任一格 `pick_tile` 取不到 tile**（该地形池缺角组合）→ 退出码 1 且不落盘。
+- **产物是占位**：色块视觉 + 临时碰撞，正式瓦片集到位后重新生成/替换即可；工具不引入运行时概念，game/engine 不感知。
 
 ## 项目模板（template/）
 
 > **目的**：让「用 trogue 从零自主开发一个游戏」可复制——`template/` 是一个**最小**自包含项目骨架，复制它即得到能构建、能运行、能被 Agent 迭代的新游戏起点。
 
-- **内容（最小起点，不含框架自用测试）**：`engine/`、`tools/scene_gen.cpp` 的 **vendored 快照** + **可选 vendored 快照** `pixellab/`（仅转换脚本）/`editor/`（安装与更新时用 `--with-pixellab`/`--with-editor` 显式选择，缺省不装——派生游戏不预设美术生成管线与 Godot 工具链）+ **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`tools/`。
+- **内容（最小起点，不含框架自用测试）**：`engine/`、`tools/placeholder_tileset.py` 与 `tools/scene_gen.cpp` 的 **vendored 快照** + **可选 vendored 快照** `pixellab/`（仅转换脚本）/`editor/`（安装与更新时用 `--with-pixellab`/`--with-editor` 显式选择，缺省不装——派生游戏不预设美术生成管线与 Godot 工具链）+ **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`scripts/`/`tools/CMakeLists.txt`/`tools/gen_font.py`/`tools/ipc_smoke.py`（即 `tools/` 下只有那两个工具文件是快照，其余模板自有）。
 - **不含本仓库的测试套件与 fixture**：`tools/tests/`（引擎单测）与 `pixellab/tests/`、`pixellab/fixtures/` 是本仓库验证 trogue 引擎自用，**不进模板**。
 - **权威源**：vendored 文件的权威源是**本仓库**；模板内 vendored 文件禁止手改，上游更新后在仓库内重跑 `template/scripts/sync_from_source.sh` 刷新（维护者模式：engine/pixellab/editor 整目录替换 + tools 逐文件；永不触碰模板自有文件）。
 - **派生与更新（一份脚本）**：在**空目录**运行 = 新建项目（铺入模板并剥离 `README.md`/引导脚本）；在**已有项目根**运行 = 更新引擎（从上游临时克隆取快照，只刷新 vendored 集合，保留 `game/`/`assets/`/项目自有文件）。可选快照用 `--with-pixellab`/`--with-editor` 显式安装或刷新，缺省跳过（已装的项目更新时不加标志也不删除）。上游 URL/分支可用 `--url`/`--ref` 覆盖（日志内凭证自动遮盖）；`--source <dir>` 用本地源仓库代替克隆。
@@ -379,7 +388,7 @@ python3 tools/ipc_smoke.py
 | `probe_kinematic` | `op`（`kinematic`｜`resolve`｜`mixed`）；`kinematic`：`rect`+`delta`，可选 `one_way`；`resolve`：`rect`；`mixed`：`rect`+`delta`+可选 `others` | `kinematic`：`{box, blocked_x, blocked_y, result, grounded, landed, hit_ceiling, hit_wall, wall_dir}`；`resolve`：`{box, resolved}`；`mixed`：`{box, blocked_x, blocked_y, result, hit_dyn_x, hit_dyn_y}` |
 | `reload` | — | `{reloaded:true, reloads:N}` |
 | `reload_texture` | `path`（assets 相对路径） | `{reloaded:true, path}`（独立贴图缓存失效，下次绘制重读盘；路径不安全 → 错误包络） |
-| `genmap` | `seed` 必填 int；`w`/`h` 可选（缺省 40，∈[1,64]） | `{generated:true, seed, w, h, nonempty, reloads}`（程序生成地图；同 seed 同尺寸逐位一致。生成后 watcher/F5/reload 会以 scene_path 覆盖之——预期行为） |
+| `genmap` | `seed` 必填 int；`w`/`h` 可选（缺省 40，∈[1,64]） | `{generated:true, seed, w, h, nonempty, reloads}`（程序生成 palette 双层色块地图：`ground` 非 solid + `walls` solid，不依赖瓦片集/贴图；**`nonempty` = `walls`（solid）层非空 tile 数**，`ground` 非空数 = `w*h − nonempty`；同 seed 同尺寸逐位一致；尺寸极小时噪声可能退化为全墙或全空，均合法。生成后 watcher/F5/reload 会以 scene_path 覆盖之——预期行为） |
 | `screenshot` | `path?`（缺省 `screenshot_<时间戳>.png`） | `{path, ok, w, h, bytes}`；**同步**——响应返回时文件已落盘（game 层离屏 FBO 渲染完整帧，不依赖屏幕缓冲；`--headless` 下同样可用） |
 | `log` | `msg` | `{logged:true}` |
 | `quit` | — | `{bye:true}` |

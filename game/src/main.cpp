@@ -73,13 +73,12 @@ int skeleton_regression() {
     const tg::ErrorOr<int> bad = tl::unexpected(
         tg::Error{tg::ErrorCode::kParseError, "骨架自检失败路径"});
     if (bad) return 1;
-    // 资产回归：demo（palette）+ test（atlas）+ soldier（bare+动画）+ forest（回合）
+    // 资产回归：demo（palette 双层）+ soldier（bare+动画）+ forest（回合）
     auto r1 = tg::SceneAsset::load("assets/scenes/demo.json");
     if (!r1) return 1;
     if (tg::is_solid_at(*r1, tg::Vec2{8.0f, 8.0f}) != tg::TileQueryResult::solid)
         return 1;
-    auto r2 = tg::SceneAsset::load("assets/scenes/test.json");
-    if (!r2 || r2->layer_count() == 0) return 1;
+    if (r1->layer_count() < 2 || r1->palette_count() < 2) return 1;
     auto r3 = tg::SceneAsset::load("assets/scenes/soldier_animated_sprite_2d.json");
     if (!r3 || r3->animation_set_count() != 1) return 1;
     const tg::AnimationSet& set = r3->animation_set(0);
@@ -497,9 +496,10 @@ tg::Json turn_json(const Demo& d) {
     return j;
 }
 
-// ── 程序生成地图：地形指派是玩法决策（本节全部逻辑归 game），
-// 引擎只提供 pick_tile 采样、确定性哈希与 load_json 内存加载。生成流程：
-//   噪声指派 → pick_tile 填 id → 拼 tro-scene JSON → load_json → swap_scene。
+// ── 程序生成地图：地形指派是玩法决策（本节全部逻辑归 game），引擎只提供
+// 确定性哈希与 load_json 内存加载。生成流程：
+//   噪声指派 → palette 模式双层 tro-scene → load_json → swap_scene。
+// 不依赖任何瓦片集/贴图（色块即可），因此无美术资产也能跑通；
 // 噪声为最小确定性 value-noise（粗网格双线性插值）：坐标散列用引擎
 // hash_combine（splitmix64 组合，跨平台逐位一致），同 seed 同 w/h 逐位一致。
 
@@ -544,58 +544,44 @@ tg::IpcStatus handle_genmap(Demo& d, const tg::Json& req,
         error = "genmap w/h out of range (1..64)";
         return tg::IpcStatus::error;
     }
-    // 匹配表现读（文件小、保持无状态；失败如实报错，旧场景不受影响）
-    auto table = tg::load_terrain_table("tilesets/test_tileset_1.json");
-    if (!table) {
-        error = "terrain table load failed: " + table.error().message;
-        return tg::IpcStatus::error;
-    }
-    // ① 地形指派（game 决策：噪声阈值 → ground/空）
-    std::vector<std::vector<bool>> ground(h, std::vector<bool>(w, false));
+    // ① 地形指派（game 决策：噪声阈值 → 墙/地）。极小尺寸（如 1×1）下噪声可能
+    // 退化为全墙或全空——都是合法场景（palette 模式允许整层 -1），由调用方自判。
+    std::vector<std::vector<bool>> wall(h, std::vector<bool>(w, false));
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x)
-            ground[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)] =
+            wall[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)] =
                 gen_value_noise(x, y, seed, 6) >= 0.55f;
-    // ② 引擎选择器填 id（8 邻位：同指派才连；corners_and_sides 模式 8 位全参与）
-    static constexpr int kDx[8] = {0, 1, 1, 1, 0, -1, -1, -1};  // t,tr,r,br,b,bl,l,tl
-    static constexpr int kDy[8] = {-1, -1, 0, 1, 1, 1, 0, -1};
-    tg::Json tiles = tg::Json::array();
+    // ② 拼 tro-scene JSON（palette 模式双层：ground 非 solid + walls solid。
+    // ground 与 walls 互补——非墙格落 ground、墙格落 walls，无重叠）。
+    // nonempty = **solid 层（walls）非空 tile 数** = 墙格数；ground 非空数 =
+    // w*h - nonempty。同 seed 逐位一致，异 seed 期望不同。
+    tg::Json ground = tg::Json::array();
+    tg::Json walls = tg::Json::array();
     int nonempty = 0;
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
-            if (!ground[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)]) {
-                tiles.push_back(-1);
-                continue;
-            }
-            std::array<int, 8> pat{};
-            pat.fill(-1);
-            for (int k = 0; k < 8; ++k) {
-                const int nx = x + kDx[k], ny = y + kDy[k];
-                if (nx >= 0 && nx < w && ny >= 0 && ny < h &&
-                    ground[static_cast<std::size_t>(ny)][static_cast<std::size_t>(nx)])
-                    pat[static_cast<std::size_t>(k)] = 0;
-            }
-            auto id = tg::pick_tile(*table, 0, 0, pat);
-            tiles.push_back(id.value_or(-1));  // 采样失败兜底空格（不该发生）
-            if (id) ++nonempty;
+            const bool is_wall =
+                wall[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)];
+            ground.push_back(is_wall ? -1 : 0);
+            walls.push_back(is_wall ? 1 : -1);
+            if (is_wall) ++nonempty;
         }
     }
-    // ③ 拼 tro-scene JSON → ④ load_json → swap（复用 keep_player/reloads 语义）
-    tg::Json tileset_ref = tg::Json::object();
-    tileset_ref["name"] = "terrain";
-    tileset_ref["path"] = "tilesets/test_tileset_1.json";
-    tg::Json layer = tg::Json::object();
-    layer["name"] = "gen";
-    layer["width"] = w;
-    layer["height"] = h;
-    layer["solid"] = false;  // 生成层纯视觉；solid 语义留玩法接管时再定
-    layer["tileset"] = "terrain";
-    layer["tiles"] = tiles;
+    // ③ load_json → swap（复用 keep_player/reloads 语义）
+    const auto make_layer = [&](const char* lname, bool solid, const tg::Json& tiles) {
+        return tg::Json{{"name", lname},
+                        {"width", w},
+                        {"height", h},
+                        {"solid", solid},
+                        {"tiles", tiles}};
+    };
     tg::Json tilemap = tg::Json::object();
     tilemap["tile_width"] = 16;
     tilemap["tile_height"] = 16;
-    tilemap["tilesets"] = tg::Json::array({tileset_ref});
-    tilemap["layers"] = tg::Json::array({layer});
+    tilemap["palette"] = tg::Json::array({"#2a2d3a", "#7f8ca3"});
+    tilemap["layers"] =
+        tg::Json::array({make_layer("ground", false, ground),
+                         make_layer("walls", true, walls)});
     tg::Json scene = tg::Json::object();
     scene["format"] = "tro-scene";
     scene["version"] = 2;

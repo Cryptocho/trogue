@@ -42,7 +42,7 @@ std::string assets_path(std::string_view rel) {
 
 // ── 独立贴图共享懒缓存（path → shared_ptr<Texture2D> 包装） ──
 // RAII 语义：析构 = UnloadTexture（GPU 卸载职责独占）→ **禁止拷贝/移动**。
-// 教训（2026-09-09，test.json soldier 不可见 bug）：曾允许隐式拷贝，配合
+// 教训（2026-09-09，独立贴图实体「绘制成功却整块不可见」bug）：曾允许隐式拷贝，配合
 // make_shared<SharedTexture>(SharedTexture{tex}) 的临时副本模式，临时对象
 // 析构时把刚加载的 GPU 纹理立刻卸载，缓存里留下悬空 tex.id 的僵尸条目——
 // 绘制"成功"返回 Drawn、无任何日志，但采样已删除纹理全透明（「非拷贝」
