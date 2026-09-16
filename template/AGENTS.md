@@ -34,7 +34,7 @@
 
 ## 5. 实现与验证
 
-纯逻辑放不依赖 raylib 的模块；对象模型自选 OOP/ECS。
+纯逻辑放不依赖 raylib 的模块；对象模型自选 OOP/ECS。`game/examples/` 里有两个可选范例（若目录还在）：`swarm/` 用并置组件数组 + 系统函数（ECS 风格），`platformer/` 用类层次 + 多态敌人（OOP 风格）——同一份引擎公共 API，两种模型都开箱可用；它们是起手式参考，不是模板推荐的架构，不需要就整个删掉。
 
 ```bash
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build

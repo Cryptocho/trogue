@@ -38,8 +38,9 @@ enum class Easing {
 
 struct TweenSpec {
     double duration = 1.0;   // 时长（秒；必须 >0）
-    double delay = 0.0;      // 延迟（秒；>=0）
-    int repeats = 0;         // 0 = 一次；<0 = 无限（配合 cancellation）
+    double delay = 0.0;      // 延迟（秒；>=0；只在首段前等待一次）
+    int repeats = 0;         // 0 = 一次；>0 = 首段后再重播 N 次（共 1+N 段）；
+                             // <0 = 无限（on_complete 永不触发，须显式 cancel）
     Easing easing = Easing::linear;
 };
 
@@ -77,13 +78,19 @@ public:
 
     // 推进全部活动补间（单线程调用方每帧）。dt 可为固定步长；
     // 完成在越过 duration 的当次 tick 触发（不补中间帧）。
+    //
+    // 段与循环（repeats）：每段结束各发一次 t=1.0 采样；repeats>0 时该段末把
+    // 时间轴复位到 delay 位置继续下一段——delay 只在首段前等待一次，故重播段
+    // 首拍即采样（t = dt/duration），段数用尽才触发 on_complete。单次 tick 至多
+    // 完成一段，越过段末的余量丢弃（不累积进位）——故 dt 远大于 duration 时
+    // 定时器不会一次跳过多轮。
     void tick(double dt);
 
     // id 对应的补间是否仍在活动（未完成/未取消）。
     bool alive(Id id) const;
 
     // 等待某补间完成（演出脚本）；cancel/不存在/已完成 → 立即完成。
-    // single_consumer 纪律：同一 wait(id) 至多一个等待协程。
+    // single_consumer 纪律：同一 id 至多一个等待协程（后登记会覆盖先登记的等待位）。
     tg::task<> wait(Id id) const;
 
 private:
@@ -131,6 +138,44 @@ private:
     template <typename Value, typename Slot>
     void tick_map(std::unordered_map<Id, Slot>& slots, double dt);
 };
+
+// ════════════════════ 定时器 / 串行演出（idiom） ════════════════════
+//
+// 值恒定的补间就是定时器：from/to 取同一个值（采样可忽略），"到点"挂在
+// on_complete 上；串行演出则用 wait(id) 把若干段依次 await。二者都不需要额外的
+// 调度器 API——tick() 就是时间的唯一来源。
+//
+//   tg::TweenSpec gap; gap.duration = 0.2;  // 逐字段赋值：避开聚合初始化的字段顺序
+//   const auto id = tw.add_float(0.f, 0.f, gap, {}, [&] { /* 到点 */ });
+//
+//   tg::task<> intro(tg::TweenManager& tw) {
+//       tg::TweenSpec fade; fade.duration = 0.4; fade.easing = tg::Easing::sine_out;
+//       const auto a = tw.add_float(0.f, 0.f, fade, {}, {});
+//       co_await tw.wait(a);                       // 先 add 拿 id，再 wait
+//       tg::TweenSpec beat; beat.duration = 0.1; beat.repeats = 3;  // 共 4 段
+//       const auto b = tw.add_float(0.f, 0.f, beat, {}, {});
+//       co_await tw.wait(b);                       // 等最终完成（含全部重播）
+//   }
+//   tg::TaskRunner runner;
+//   runner.push(intro(tw));                        // 每帧：tw.tick(dt); runner.pump_all();
+//
+// 纪律（每条都对应一个静默失效路径）：
+// - **先 add 后 wait**：wait 对不存在/已取消/已完成的 id 立即完成，顺序反了不报错，
+//   只会静默穿过整段等待。
+// - **add → push → pump_all 必须早于「完成该补间」的那次 tick**：task 是惰性的，
+//   pump_all 只启动未启动的与回收已完成的，不推进挂起中的协程；而补间完成或取消时
+//   槽位即被移除、完成事件不具粘性——之后才启动的协程找不到该 id，wait 立即完成，
+//   段长丢失。
+// - 同一 id 至多一个等待协程（single_consumer）：完成事件的等待位只存一个，后登记
+//   者覆盖先登记且不唤醒旧者，故**先登记的等待者会永久挂起**——不要对同一 id 起两个
+//   等待者。
+// - wait 等的是最终完成：repeats>0 的重播段不逐轮唤醒等待者。
+// - 精度 = tick 粒度（game 传固定步长即固定步长）；单次 tick 至多完成一段，故
+//   dt 远大于 duration 时定时器不会「一次跳过多轮」。
+// - 生命周期：宿主先于协程销毁，或先让等待即时完成。顺序是 TweenManager::cancel /
+//   cancel_all（set 事件、等待者同步收尾）→ tg::TaskRunner::pump_all()（回收已完成）
+//   → 最后销毁 TaskRunner。TaskRunner::cancel_all 是硬销毁协程帧：调用后不得再由
+//   本 manager set() 那些事件；TaskRunner 析构也不隐式取消。
 
 // ── 缓动/插值（detail；纯函数） ──
 namespace detail {

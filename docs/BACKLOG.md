@@ -63,3 +63,42 @@
 - 热重载侧已不是阻断点：`engine/src/hotreload.cpp` 的判定按"该目标是否有 inotify 头"，
   Windows 目标自动落到桩（可编译、可运行）。
 - 触发条件：真的需要在 Windows 原生上跑引擎时再评估（WSL 已覆盖该需求）。
+
+---
+
+## D. 消费者探针观察（2026-09-16，两个范式范例用公共 API 实现时发现）
+
+> 来源：`template/game/examples/` 的 `swarm`（ECS 风格）与 `platformer`（OOP 风格）在
+> **只用公共头**的前提下实现完整可玩游戏。均为「可用但不够顺手」级别的摩擦，不阻断开发；
+> 是否动手需按「引擎能力线」标准评估（机制性、确定性、可无头测试）。
+
+### D1. `tg::Json` 别名落在 `ipc.hpp`
+
+- 现状：`using Json = nlohmann::json;` 定义在 `engine/include/trogue/ipc.hpp`。纯逻辑
+  模块（不依赖 raylib、不涉及 IPC）想拼一份 tro-scene JSON 时，只能 include 整个 IPC 头。
+- 候选：把别名下移到 `types.hpp`（或 `scene.hpp`）。属公共 API 增补（非破坏），但需先
+  确认与 `TROGUE_DEBUG=OFF` 的桩语义无牵连（别名本身与 DEBUG 无关）。
+
+### D2. `SceneAsset` 只有 JSON 文本入口
+
+- 现状：`load(path)` / `load_json(text)` 之外没有「按层/tile 缓冲直接构造」的公共入口。
+  程序生成场景必须自己拼 JSON 字符串（`scene_gen`、内存建场景都如此）；无窗口纯逻辑
+  路径要么同样拼 JSON，要么像 `swarm` 那样自建 `SolidGridView` 掩码绕开资产。
+- 候选：评估结构化建场景入口的必要性；不得与「资产是只读快照」的定位冲突。
+
+### D3. 碰撞视图/层约定的易错面
+
+- `SolidGridView` 是 9 字段聚合体 + 裸 `const uint8_t* mask`：聚合初始化按声明序，将来
+  加字段会静默错位；视图按值搬容器会悬垂（RAII 的 `SolidGrid` 只能从 asset 层物化）。
+- **solid 层索引是隐式契约**：game 与建场景工具靠「层 1 是 solid」的约定对齐，错位只能
+  在 `SolidGrid::load` 返回 error 时才发现；可考虑场景侧暴露 solid 层索引查询。
+- `rect_hits_solid` 对非正尺寸/非有限参数返回 `error`（不是 `clear`）：只判 `== solid`
+  无碍，但「把 error 当可通行」是踩得到的坑，文档可显式点明。
+
+### D4. 刚生成的实体没有「立即探地」
+
+- 现状：`grounded` 只在 `kinematic_step` 内派生，`reset`/spawn 后未跑一步时恒为 false；
+  公共头没有等价的「对当前 box 做一次探地」（`is_solid_at` 是点查询，而探地是底边下方
+  1px 的**矩形**查询，语义不同）。
+- 影响：手感代码与测试容易假设「落地即 grounded」而写错（范例测试已踩到）。
+- 候选：评估是否导出一次性的探地谓词；若不做，至少可在 `collision.hpp` 写明该差异。

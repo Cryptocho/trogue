@@ -8,6 +8,7 @@
 #include <cstring>
 #include <memory>  // std::unique_ptr
 #include <string>
+#include <vector>
 
 #include "trogue/trogue.hpp"
 #include "test_util.hpp"
@@ -403,6 +404,210 @@ bool test_player_loop_override_switch() {
     return ok;
 }
 
+// ── Tween repeats：段数语义（正值 = 首段之后再重播 N 次 → 共 1+N 段） ──
+// 段末各发一次 t=1.0 采样；on_complete 仅在最后一段结束后一次。
+bool test_tween_repeats_count() {
+    bool ok = true;
+    int ends = 0, completes = 0;
+    TweenManager m;
+    TweenSpec spec; spec.duration = 1.0; spec.repeats = 2;
+    const auto id = m.add_float(
+        0, 1, spec,
+        [&](const TweenManager::Sample<float>& s) {
+            if (s.t > 0.999999) ++ends;   // 段末采样（t 恒为 1.0 原始进度）
+        },
+        [&] { ++completes; });
+    for (int i = 0; i < 64 && m.alive(id); ++i) m.tick(0.25);
+    CHECK(!m.alive(id));
+    CHECK(ends == 3);          // repeats=2 → 共 3 段
+    CHECK(completes == 1);     // 只在最后一段后触发
+
+    // 对照：repeats=0 → 1 段（若「N = 总共 N 次」，此处应为 2 段）
+    ends = 0; completes = 0;
+    TweenManager m0;
+    TweenSpec spec0; spec0.duration = 1.0;
+    const auto id0 = m0.add_float(
+        0, 1, spec0,
+        [&](const TweenManager::Sample<float>& s) {
+            if (s.t > 0.999999) ++ends;
+        },
+        [&] { ++completes; });
+    for (int i = 0; i < 64 && m0.alive(id0); ++i) m0.tick(0.25);
+    CHECK(ends == 1);
+    CHECK(completes == 1);
+    return ok;
+}
+
+// ── Tween repeats：段时序（delay 只等首段一次；重播段首拍即采样；余量丢弃） ──
+bool test_tween_repeats_round_timing() {
+    bool ok = true;
+    // duration=1.0, delay=0.5, repeats=1 → 标称时长 = delay + 2×duration = 2.5
+    TweenManager m;
+    TweenSpec spec; spec.duration = 1.0; spec.delay = 0.5; spec.repeats = 1;
+    std::vector<double> ts;
+    int completes = 0;
+    const auto id = m.add_float(0, 1, spec,
+                                [&](const TweenManager::Sample<float>& s) {
+                                    ts.push_back(s.t);
+                                },
+                                [&] { ++completes; });
+    // 采样序列的每个断言都先查长度再取下标：断言失败时不能顺手越界（否则报告退化为崩溃）
+    auto at = [&](std::size_t i) { return i < ts.size() ? ts[i] : -1.0; };
+
+    m.tick(0.25);                       // 累计 0.25 < delay → 不采样
+    CHECK(ts.empty());
+    m.tick(0.25);                       // 累计 0.50 == delay → 首段起点采样 t=0
+    CHECK(ts.size() == 1);
+    CHECK(at(0) < 1e-9);
+    for (int i = 0; i < 3; ++i) m.tick(0.25);   // t=0.25 / 0.5 / 0.75
+    CHECK(ts.size() == 4);
+    m.tick(0.25);                       // 累计 1.50 → 首段末：t=1.0 采样 + 重播
+    CHECK(ts.size() == 5);
+    CHECK(at(4) > 0.999999);
+
+    // 重播段：**不重走 delay**——复位到 delay 位置后首拍就采样 t = dt/duration
+    m.tick(0.25);
+    CHECK(ts.size() == 6);
+    CHECK(at(5) > 0.249 && at(5) < 0.251);
+
+    for (int i = 0; i < 2; ++i) m.tick(0.25);   // t=0.5 / 0.75
+    CHECK(ts.size() == 8);
+    CHECK(m.alive(id));
+    CHECK(completes == 0);
+    m.tick(0.25);                       // 总累计 2.50 → 次段末 = 最后一段
+    CHECK(!m.alive(id));
+    CHECK(completes == 1);
+    CHECK(ts.size() == 9);              // 首段 5 次 + 重播段 4 次
+
+    // 余量丢弃 + 单 tick 至多完成一段
+    TweenManager m2;
+    TweenSpec s2; s2.duration = 1.0; s2.delay = 0.5; s2.repeats = 2;
+    int ends = 0, completes2 = 0;
+    const auto id2 = m2.add_float(
+        0, 1, s2,
+        [&](const TweenManager::Sample<float>& s) {
+            if (s.t > 0.999999) ++ends;
+        },
+        [&] { ++completes2; });
+    m2.tick(1.7);                  // 越过首段末（1.5）：只完成一段，余量丢弃
+    CHECK(ends == 1);
+    CHECK(completes2 == 0);
+    CHECK(m2.alive(id2));
+    m2.tick(0.9);                  // time = delay + 0.9 → t=0.9（若余量累积会立刻完成）
+    CHECK(ends == 1);
+    CHECK(m2.alive(id2));
+    m2.tick(0.9);                  // 次段末
+    CHECK(ends == 2);
+    CHECK(m2.alive(id2));
+    return ok;
+}
+
+// ── Tween repeats：无限重播（on_complete 永不触发，须显式 cancel） ──
+bool test_tween_repeats_infinite() {
+    bool ok = true;
+    TweenManager m;
+    TweenSpec spec; spec.duration = 0.25; spec.repeats = -1;
+    int ends = 0, completes = 0;
+    const auto id = m.add_float(
+        0, 1, spec,
+        [&](const TweenManager::Sample<float>& s) {
+            if (s.t > 0.999999) ++ends;
+        },
+        [&] { ++completes; });
+
+    for (int i = 0; i < 40; ++i) m.tick(0.25);
+    CHECK(ends == 40);             // 每 tick 完成一段，全部无回调收尾
+    CHECK(completes == 0);
+    CHECK(m.alive(id));
+
+    // 等待者不被逐轮唤醒；cancel 后即时完成
+    auto w = m.wait(id);
+    w.start();
+    CHECK(!w.done());
+    for (int i = 0; i < 10; ++i) m.tick(0.25);
+    CHECK(ends == 50);
+    CHECK(completes == 0);
+    CHECK(!w.done());
+    CHECK(m.cancel(id));
+    CHECK(!m.alive(id));
+    CHECK(w.done());
+
+    // 对照：repeats=1 同参数下多 tick 后完结（有限重播确实会收尾）
+    TweenManager m2;
+    TweenSpec s2; s2.duration = 0.25; s2.repeats = 1;
+    int completes2 = 0;
+    const auto id2 = m2.add_float(0, 1, s2,
+                                  [](const TweenManager::Sample<float>&) {},
+                                  [&] { ++completes2; });
+    for (int i = 0; i < 40 && m2.alive(id2); ++i) m2.tick(0.25);
+    CHECK(!m2.alive(id2));
+    CHECK(completes2 == 1);
+    return ok;
+}
+
+// ── Tween repeats：wait 等的是「最终完成」（含全部重播段） ──
+bool test_tween_waits_final_completion() {
+    bool ok = true;
+    TweenManager m;
+    TweenSpec spec; spec.duration = 0.5; spec.repeats = 2;
+    const auto id = m.add_float(0, 1, spec,
+                                [](const TweenManager::Sample<float>&) {});
+    auto w = m.wait(id);
+    w.start();
+    CHECK(!w.done());
+    m.tick(0.5);                   // 段 1 结束（仍有重播）
+    CHECK(!w.done());
+    m.tick(0.5);                   // 段 2 结束
+    CHECK(!w.done());
+    m.tick(0.5);                   // 段 3 = 最后一段 → 完成
+    CHECK(w.done());
+    CHECK(!m.alive(id));
+    return ok;
+}
+
+// ── Tween as timer：定时器 + co_await wait 串行演出 ──
+// 定时器 = 值恒定的补间（采样忽略），「到点」挂在 on_complete/wait 上。
+// 本用例与 task_runner_test 既有「单补间 co_await wait」的分工：这里钉的是
+// 两段串行 + 等待协程内 add 下一个定时器（值恒 0、采样忽略的用法本身）。
+tg::task<> two_beat_timer_sequence(TweenManager& tw, int& adds, bool& finished) {
+    TweenSpec first; first.duration = 0.25;
+    const auto a = tw.add_float(0.0f, 0.0f, first, {}, {});  // 采样忽略
+    ++adds;
+    co_await tw.wait(a);
+    TweenSpec second; second.duration = 0.5;
+    const auto b = tw.add_float(0.0f, 0.0f, second, {}, {});
+    ++adds;
+    co_await tw.wait(b);
+    finished = true;
+}
+
+bool test_tween_as_timer_sequence() {
+    bool ok = true;
+    TweenManager m;
+    tg::TaskRunner runner;
+    int adds = 0;
+    bool finished = false;
+    runner.push(two_beat_timer_sequence(m, adds, finished));
+    runner.pump_all();             // 启动到首个挂起点（add 后 push 再 pump 的顺序纪律）
+    CHECK(adds == 1);
+    CHECK(!finished);
+
+    m.tick(0.25);                  // 第一段到点 → 协程内 add 第二个定时器
+    runner.pump_all();
+    CHECK(adds == 2);
+    CHECK(!finished);
+
+    m.tick(0.25);                  // 第二段（0.5s）未到点
+    runner.pump_all();
+    CHECK(!finished);
+
+    m.tick(0.25);                  // 第二段到点 → 协程收尾
+    runner.pump_all();
+    CHECK(finished);
+    CHECK(runner.active_count() == 0);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -414,6 +619,11 @@ int main() {
     test_player_loop_override_switch();
     test_tween_float();
     test_tween_delay_repeat();
+    test_tween_repeats_count();
+    test_tween_repeats_round_timing();
+    test_tween_repeats_infinite();
+    test_tween_waits_final_completion();
+    test_tween_as_timer_sequence();
     test_tween_cancel_wait();
     test_tween_reentrant_callbacks();
     std::printf("[anim/tween test] checks=%d failures=%d\n", ::tg_test::g_checks,

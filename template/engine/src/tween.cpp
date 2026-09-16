@@ -2,8 +2,10 @@
 //
 // 时间推进确定性：dt 累计；完成在越过 duration 的当次 tick 触发
 // （不补中间帧）。delay 计入 time 但不产出采样。
-// 重复：repeats>0 = 完成后再播 N 次（总播 1+N 次）；repeats=-1 无限；
-// 完成后 repeats>0 语义：下一次重播（从 0 计时）。
+// 重复：repeats>0 = 完成后再播 N 次（总播 1+N 次）；repeats<0 无限（on_complete
+// 不触发，须由调用方 cancel）。每段末各发一次 t=1.0 采样；段末把 time 复位到
+// delay——delay 只在首段前等待一次，重播段首拍即采样（t = dt/duration），
+// 单次 tick 至多完成一段，越过段末的余量丢弃（不累积进位）。
 #include "trogue/tween.hpp"
 
 #include <cmath>   // std::fmod
@@ -182,7 +184,9 @@ void TweenManager::tick_map(std::unordered_map<Id, Slot>& slots, double dt) {
             }
             if (s.repeats_left != 0) {
                 if (s.repeats_left > 0) --s.repeats_left;
-                s.time = delay;  // 重播段从头（保持 delay 语义：重播走 delay）
+                // 重播段：time 复位到 delay 位置——delay 只在首段前等待一次，
+                // 故重播段首拍即采样（不重走 delay）。
+                s.time = delay;
                 ++it;
                 continue;
             }

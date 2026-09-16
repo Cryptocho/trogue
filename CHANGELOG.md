@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### 引擎/模板：Tween 语义文档收尾 + 两个范式范例（「引擎不规定架构」的可见证据）
+
+- 影响的文件: `engine/include/trogue/tween.hpp`、`engine/src/tween.cpp`、`tools/tests/anim_tween_test.cpp`、`template/engine/`（快照同步）、`template/game/examples/`（新增：`common/harness.hpp`、`common/scene_make.hpp`、`CMakeLists.txt`、`swarm/sim.hpp`、`swarm/sim.cpp`、`swarm/main.cpp`、`swarm/sim_test.cpp`、`platformer/sim.hpp`、`platformer/sim.cpp`、`platformer/main.cpp`、`platformer/sim_test.cpp`）、`template/game/CMakeLists.txt`、`template/tools/CMakeLists.txt`、`template/README.md`、`template/AGENTS.md`、`AGENTS.md`、`docs/BACKLOG.md`
+
+#### Added
+- `tween.hpp` 新增「定时器 / 串行演出（idiom）」注释节：值恒定的补间即定时器（`add_float(0,0,spec,忽略采样,on_complete)`），串行演出为「先 `add` 拿 id → `co_await wait(id)`」配 `tg::TaskRunner`；并把四条静默失效路径写成纪律——先 add 后 wait（`wait` 对不存在/已取消/已完成的 id 立即完成，顺序反了不报错）、`add → push → pump_all` 必须早于完成该补间的那次 `tick`（补间完成即移除槽位、完成事件不具粘性，晚启动的协程找不到 id → 立即完成、段长丢失）、同一 id 至多一个等待协程（后登记者覆盖先登记者，先登记者永久挂起）、宿主与 `TaskRunner` 的销毁顺序（区分 `TweenManager::cancel_all` 与 `TaskRunner::cancel_all` 的语义）。
+- `TweenSpec.repeats` 语义补齐（公共头字段处速查 + `tick()` 机制段）：`>0` = 首段之后再重播 N 次（共 1+N 段），每段末各发一次 `t=1.0` 采样，`on_complete` **仅**在最后一段后触发一次；`<0` = 无限重播且 `on_complete` **永不触发**（须显式 `cancel`）；`delay` 只在首段前等待一次（段末把时间轴复位到 delay 位置，故重播段首拍即采样，不重走 delay）；单次 `tick` 至多完成一段，越过段末的余量丢弃（不累积进位，故标称时长 = `delay + (1+N) × duration`）。
+- `tools/tests/anim_tween_test.cpp` 新增 5 个语义钉子用例：`repeats` 段数（`repeats=2` → 恰 3 段末采样 + 1 次 `on_complete`；`repeats=0` → 1/1）、段时序（delay 只等首段、重播段首拍 `t = dt/duration`、余量不累积、单 tick 至多一段）、无限重播（不触发 `on_complete`、`cancel` 后等待者即时完成）、`wait` 等最终完成（重播段不逐轮唤醒）、timer 串行演出（两段串行 + 在等待协程内 add 下一个定时器）。
+- 模板新增两个**范式范例** `template/game/examples/`，同一份引擎公共 API 的两种消费方式，各为可玩的最小闭环且零资产文件（场景在内存里构造）：
+  - `swarm/`（类幸存者 → **ECS 风格**）：六个等长并置组件数组（`pos`/`vel`/`hp`/`tag`/`bullet`/`oxp`）+ 自由函数系统（steer/move/spawn/combat/pickup/cull）+ swap-remove 回收，无继承无虚函数；刷新怪走引擎 `tg::Random`（固定 seed）、位移走 `tg::sweep_move`、墙体判定走 `rect_hits_solid`。
+  - `platformer/`（单角色平台跳跃 → **OOP 风格**）：`Player` 封装状态机（土狼时间/跳跃缓冲/可变跳高）、`Enemy` 基类 + `Patroller`/`Jumper` 多态派生、`Level` 持有场景与单向平台矩形数组；位移一律经 `tg::kinematic_step`（探地/探墙/landed），单向平台用引擎的矩形数组重载。
+  - `common/harness.hpp`（窗口层骨架：`--headless`/`--seconds`/`--shot` 参数、窗口、**离屏整帧截图**）与 `common/scene_make.hpp`（不依赖 raylib 的 ASCII → tro-scene 内存建场景，纯逻辑层与窗口层共用）。
+  - 每个范例两个目标：可执行与 `*_sim_test`（纯逻辑、无窗口，注册进 ctest）；`--shot` 写出整帧 PNG（隐藏窗口同样可用），失败时以非零退出码收场。
+- `docs/BACKLOG.md` 新增 D 节：登记两个范例用公共 API 实现时暴露的 4 项摩擦点（`tg::Json` 别名落在 `ipc.hpp`、`SceneAsset` 只有 JSON 文本入口、`SolidGridView`/solid 层索引的易错面、刚生成实体没有「立即探地」查询）。
+
+#### Docs
+- `AGENTS.md`：Tween 条目补齐 `repeats` 契约与 timer idiom 摘要；模板内容清单/非目标/目录结构写入 `game/examples/`（明确其为**消费者可选**的范式演示，非玩法移植、非模板推荐架构，可整目录删除）；Roadmap 勾除「API 语义文档收尾」并更新两条线的已交付概览；开发流程门禁补写执行顺序（**先送审查循环至 PASS，再把定稿计划交用户拍板**，不经审查的草案不提前递用户）。
+- 模板侧同步：`README.md`（目录表新增 `examples/` 行、起步内容补两个范例的运行命令与「同一引擎、两种对象模型」结论）、`AGENTS.md` §5（对象模型自选处指向 `examples/`，删除目录后不留悬空指引）、`tools/CMakeLists.txt`（测试指引补范例的 `*_sim_test` 位置）、`game/CMakeLists.txt`（`EXISTS` 守卫的 `add_subdirectory(examples)`，整目录删除后构建照常）。
+
+#### Refactored
+- `engine/src/tween.cpp` 两处与实现不符的注释措辞修正（纯注释，不改行为）：重播段是「时间轴复位到 delay 位置、不重走 delay」，而非「从 0 计时 / 重播走 delay」。
+
+#### Tests
+- 根仓库：Debug 构建零告警；CTest 19/19（`anim_tween_test` 报告 `checks=162 failures=0`，含新增 5 个用例）。
+- 模板独立构建（`cmake -B template/build -S template`）：全树零告警；CTest 2/2（`swarm_sim_test` 21 checks、`platformer_sim_test` 25 checks）。
+- 范例验收：`--headless --seconds 20` 各跑两次摘要逐字一致（swarm `steps=1200 spawned=21 kills=11 pickups=4 level=2 player_hp=100 deaths=1 seed=20260916`；platformer `steps=1200 x=932 y=234 grounded=0 deaths=0 won=1 enemies=2`）；`--shot` 在隐藏窗口与窗口两种口径下都产出整帧 PNG（读图确认地形/实体/单向平台/墙环渲染正常，非黑帧），坏路径以退出码 1 收场。
+- 可删性回归：把 `template/game/examples/` 整目录移走后重新 configure + 全树构建成功、`ctest` 退出码 0。
+- 快照一致性：`diff -r engine template/engine`、`diff tools/placeholder_tileset.py template/tools/`、`diff tools/scene_gen.cpp template/tools/` 均逐字节一致。
+
 ### 引擎：hotreload 平台守卫（无 inotify 平台可用）
 
 - 影响的文件: `engine/src/hotreload.cpp`、`engine/include/trogue/hotreload.hpp`、`engine/include/trogue/types.hpp`、`engine/include/trogue/config.hpp`、`tools/tests/watcher_ipc_test.cpp`、`game/src/main.cpp`、`template/engine/`（快照同步）、`template/game/src/main.cpp`、`template/README.md`、`AGENTS.md`、`docs/BACKLOG.md`

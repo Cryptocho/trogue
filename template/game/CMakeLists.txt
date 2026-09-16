@@ -21,3 +21,8 @@ target_link_libraries(trogue PRIVATE trogue_engine)
 # 可选 CJK 烘焙字体参考实现：只有需要图集字体时才把 ui_font.cpp 加入目标：
 # target_sources(trogue PRIVATE src/ui_font.cpp)
 # target_include_directories(trogue PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+# 范式范例（可选的起手式参考；不需要就把 examples/ 整个删掉——守卫保证构建照常）。
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt)
+  add_subdirectory(examples)
+endif()

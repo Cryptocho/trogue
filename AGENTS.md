@@ -73,7 +73,7 @@
 - **渲染（`render.hpp`）**：`render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语（`render_sprite` 支持 scale/旋转/flip/tint，scale 须为有限正数，翻转只走显式 flip 字段）。`render_scene_to_png` 把 tile 层渲染到离屏 FBO 并导出 PNG（不含实体/HUD）。`RenderStats`/`render_stats()`/`render_reset_stats()` 提供渲染可观测计数。`reload_texture(path)` 使进程级独立贴图缓存的失效、下次绘制重读盘（图集贴图随 asset RAII，不在此列）。对象排序、相机与 UI 属 game。
 - **碰撞（`collision.hpp`）**：`aabb_overlap`（纯谓词）、`segment_hits_solid`（线段 vs solid 层）、`sweep_move`（轴分离 swept 滑移）、`kinematic_step`（sweep + 探地/探墙/landed 事件派生）、`resolve_overlap`（最小轴脱出）、`DynBox` + `sweep_move_mixed`（静态层 ∪ 动态盒）、`SolidGrid`（渲染色 tile 与碰撞掩码的原子同步写）、单向平台（矩形数组重载，机制性穿越规则）。**速度积分、土狼/缓冲/可变跳高、动态-动态互推解算等手感与规则归 game。**
 - **动画（`animation.hpp`）**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer` 消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、暂停/恢复、帧事件与完成回调、`co_await` 完成；它**输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。`tg::AnimationAsset::load/load_json` 消费独立 `tro-animations` v1。
-- **Tween（`tween.hpp`）**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。
+- **Tween（`tween.hpp`）**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。**`repeats` 契约（头文件与测试双钉）**：`>0` = 首段之后再重播 N 次（共 1+N 段），段末各发一次 `t=1.0` 采样，`on_complete` 只在最后一段后触发一次；`<0` = 无限，`on_complete` 永不触发（须显式 `cancel`）；`delay` 只在首段前等待一次（重播段从 delay 位置继续），单次 `tick` 至多完成一段。**timer idiom**：值恒定的补间即定时器（`add_float(0,0,spec,忽略采样,on_complete)`），串行演出为「先 `add` 拿 id → `co_await wait(id)`」配 `tg::TaskRunner`；`wait` 等最终完成，对不存在/已取消/已完成的 id 立即完成（顺序反了会静默穿过）。
 - **Autotile（`terrain.hpp`）**：`tg::TerrainTable`（tro-tileset terrain 数据的只读匹配表）+ `tg::pick_tile`（无状态纯函数：8 方向 pattern → tile id；确定性评分降级 + 同分取最小 id）。它输出 tile id 供 game 拼装场景；**地形指派、程序生成、动态改图的触发归 game**，engine 不保存地形状态、不做扩散式重排。
 - **随机（`random.hpp`）**：`tg::hash_u64`/`hash_combine`（坐标哈希）+ `tg::Random`（xoshiro256** 流式 PRNG）。`Random::draws()` 暴露**原始 `next_u64` 抽取计数**（只读；含拒绝采样/短路的内部消耗），`(seed, draws)` 唯一确定流位置——重放即恢复（不做状态序列化/O(1) 恢复）。算法与常量钉死为可复现契约（同 seed 同调用序列逐位一致，替换算法属破坏性变更）。生成策略归 game。
 - **时间/输入（`time.hpp`/`input.hpp`）**：`tg::StepClock` 固定步时钟（授步池/时间池双池、授步永不丢、alpha 余量报告）；`tg::VirtualInput` 确定性按键注入（稳定序、步边界一次性消费、可选防撕裂）。手感参数与玩法策略归 game。
@@ -155,6 +155,7 @@ trogue/
 │   ├── scripts/          # sync_from_source.sh（安装/更新：临时克隆上游 → 铺到目标项目）
 │   ├── engine/ pixellab/ editor/ tools/   # 快照（权威源=本仓库，勿在模板内手改）
 │   ├── game/             # 起步游戏骨架（内置内存场景；模板自有）
+│   ├── game/examples/    # 两个范式范例（swarm=ECS 风格 / platformer=OOP 风格；可删）
 │   └── AGENTS.md README.md CMakeLists.txt # 模板自有
 ├── tools/
 │   ├── ipc_smoke.py       # IPC 冒烟测试
@@ -335,12 +336,12 @@ python3 tools/ipc_smoke.py
 
 > **目的**：让「用 trogue 从零自主开发一个游戏」可复制——`template/` 是一个**最小**自包含项目骨架，复制它即得到能构建、能运行、能被 Agent 迭代的新游戏起点。
 
-- **内容（最小起点，不含框架自用测试）**：`engine/`、`tools/placeholder_tileset.py` 与 `tools/scene_gen.cpp` 的 **vendored 快照** + **可选 vendored 快照** `pixellab/`（仅转换脚本）/`editor/`（安装与更新时用 `--with-pixellab`/`--with-editor` 显式选择，缺省不装——派生游戏不预设美术生成管线与 Godot 工具链）+ **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`scripts/`/`tools/CMakeLists.txt`/`tools/gen_font.py`/`tools/ipc_smoke.py`（即 `tools/` 下只有那两个工具文件是快照，其余模板自有）。
+- **内容（最小起点，不含框架自用测试）**：`engine/`、`tools/placeholder_tileset.py` 与 `tools/scene_gen.cpp` 的 **vendored 快照** + **可选 vendored 快照** `pixellab/`（仅转换脚本）/`editor/`（安装与更新时用 `--with-pixellab`/`--with-editor` 显式选择，缺省不装——派生游戏不预设美术生成管线与 Godot 工具链）+ **起步游戏** `game/`（窗口/场景渲染/WASD 移动/热重载/IPC 基础命令）+ **两个范式范例** `game/examples/`（`swarm/` 类幸存者→ECS 风格、`platformer/` 平台跳跃→OOP 风格；同一份公共 API 的两种消费方式，可整目录删除）+ 模板自有 `CMakeLists.txt`/`.gitignore`/`README.md`/`AGENTS.md`/`scripts/`/`tools/CMakeLists.txt`/`tools/gen_font.py`/`tools/ipc_smoke.py`（即 `tools/` 下只有那两个工具文件是快照，其余模板自有）。
 - **不含本仓库的测试套件与 fixture**：`tools/tests/`（引擎单测）与 `pixellab/tests/`、`pixellab/fixtures/` 是本仓库验证 trogue 引擎自用，**不进模板**。
 - **权威源**：vendored 文件的权威源是**本仓库**；模板内 vendored 文件禁止手改，上游更新后在仓库内重跑 `template/scripts/sync_from_source.sh` 刷新（维护者模式：engine/pixellab/editor 整目录替换 + tools 逐文件；永不触碰模板自有文件）。
 - **派生与更新（一份脚本）**：在**空目录**运行 = 新建项目（铺入模板并剥离 `README.md`/引导脚本）；在**已有项目根**运行 = 更新引擎（从上游临时克隆取快照，只刷新 vendored 集合，保留 `game/`/`assets/`/项目自有文件）。可选快照用 `--with-pixellab`/`--with-editor` 显式安装或刷新，缺省跳过（已装的项目更新时不加标志也不删除）。上游 URL/分支可用 `--url`/`--ref` 覆盖（日志内凭证自动遮盖）；`--source <dir>` 用本地源仓库代替克隆。
 - **模板自有 `AGENTS.md`** 面向派生项目，保持精简：不写 API 摘要（Agent 直读 `engine/include/trogue/` 头文件），不写安装器用法，不预设题材与工具链。
-- **非目标**：不改 engine 公共 API / tro-* schema；不把 roguelike 玩法或框架测试带入模板；不做参数化脚手架；不自动建 git。
+- **非目标**：不改 engine 公共 API / tro-* schema；不把本仓库的 roguelike 玩法移植与其框架测试带入模板（`game/examples/` 是**消费者可选**的范式演示，不是玩法移植，也不是模板推荐的架构）；不做参数化脚手架；不自动建 git。
 
 ## 热重载规范
 
@@ -453,8 +454,9 @@ python3 tools/ipc_smoke.py
 4. ④ PASS 才开工；不 PASS 则按审查意见修改后重新送审，循环至 PASS
 
 > 门禁看「计划书经 subagent 审查通过」，「给出计划等待批准」指用户对计划书的拍板；两者都通过才进入实现。
+> **顺序**：先送 subagent 审查并循环至 PASS，**然后**才把定稿计划交用户拍板——不经审查的草案不提前递用户（审查若推翻事实，同一份计划的返工处理会变成对用户的两次打扰）。
 
-1. 给出计划等待批准（项目未正式发布，可大胆提议架构级改动）
+1. 给出**已过审**的计划等待批准（项目未正式发布，可大胆提议架构级改动）
 2. 实现计划
 3. **subagent 检查**未提交代码是否合理、优雅、风格统一、无逻辑问题（禁止自检，自检无效）
 4. 检查之后或用户要求时更新 CHANGELOG.md（检查之前禁止修改 CHANGELOG.md）
@@ -488,8 +490,8 @@ python3 tools/ipc_smoke.py
 
 > **两条线**：**引擎能力线**是交付物；**引擎能力验证线**用 `game/` 作探针，其玩法代码非交付物。新里程碑一律先问「它补齐/验证引擎哪项通用能力」——若只能回答「让某款游戏更好玩」，则不进主线。已交付项见 `CHANGELOG.md`，此处只列主线框架与未完项。
 
-- [ ] **API 语义文档收尾**：① tween-as-timer idiom（`add_float(0,0,{duration,delay}, 忽略采样, on_complete)` + `co_await wait(id)` 串演出序列）文档化；② `TweenSpec.repeats` 补写正值语义与无限循环下 `on_complete` 是否逐轮触发；③ 模板/指南并列展示多种消费方式（OOP 与 ECS 各一个最小例），把「引擎不规定架构」从声明变成可见事实
+> 当前无未完成的主线项（新项先入 `docs/BACKLOG.md`，立里程碑时按门禁升入此处）。
 
-**引擎能力线（已交付概览）**：资产解析与校验（tro-scene/tro-tileset/tro-animations）、tile 层查询与受限写入、显式渲染与离屏导出、渲染可观测计数、帧动画播放器、Tween 补间与协程等待、autotile 选择器、碰撞几何与运动学步进（单向平台/最小轴脱出/混合扫掠/SolidGrid）、确定性随机、固定步时钟与虚拟输入、IPC 传输与事件通道、热重载通知、Godot 导出插件。逐项变更记录见 `CHANGELOG.md`。
+**引擎能力线（已交付概览）**：资产解析与校验（tro-scene/tro-tileset/tro-animations）、tile 层查询与受限写入、显式渲染与离屏导出、渲染可观测计数、帧动画播放器、Tween 补间与协程等待（含 `repeats` 契约与 timer/串行演出 idiom 的文档与测试）、autotile 选择器、碰撞几何与运动学步进（单向平台/最小轴脱出/混合扫掠/SolidGrid）、确定性随机、固定步时钟与虚拟输入、IPC 传输与事件通道、热重载通知、Godot 导出插件。逐项变更记录见 `CHANGELOG.md`。
 
-**引擎能力验证线（探针：`game/`）**：回合制最小闭环、敌人 AI 与 RuleEngine 最小子集、动画查看器。这些玩法系统是验证副产品，可被替换或丢弃。
+**引擎能力验证线（探针：`game/`）**：回合制最小闭环、敌人 AI 与 RuleEngine 最小子集、动画查看器；模板侧两个范式范例（`template/game/examples/` 的 ECS 风格 `swarm` 与 OOP 风格 `platformer`）作为「引擎不规定对象模型」的可见、可运行证据。这些玩法系统是验证副产品，可被替换或丢弃。

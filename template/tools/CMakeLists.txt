@@ -5,7 +5,8 @@
 #   ./build/tools/trogue_scene_gen <spec.json> <out_scene.json> # 网格 → autotile 采样 → tro-scene
 # 不想用就整个删掉 tools/（game/ 不依赖它）。
 #
-# 游戏自己的测试（把纯逻辑模块编成无窗口用例）请加在 game/CMakeLists.txt。
+# 游戏自己的测试（把纯逻辑模块编成无窗口用例）请加在 game/CMakeLists.txt；
+# game/examples/ 里的范式范例自身就是这么做的（每个范例一个 *_sim_test）。
 
 add_executable(trogue_scene_gen scene_gen.cpp)
 target_link_libraries(trogue_scene_gen PRIVATE trogue_engine)

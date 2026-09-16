@@ -50,6 +50,7 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 | `pixellab/` | PixelLab MCP → tro-* 资产转换层（Python） | **可选快照**（勿手改） |
 | `tools/` | 离线占位资产工具（`placeholder_tileset.py` + `scene_gen`，快照）+ `gen_font.py` / `ipc_smoke.py`（自有） | 见下 |
 | `game/` | **你的游戏**（起步骨架，随意改写） | 项目自有 |
+| `game/examples/` | 两个范式范例（类幸存者=ECS 风格、平台跳跃=OOP 风格；起手式参考，可整目录删除） | 项目自有（模板自带） |
 | `assets/` | 你的资产（模板不含资产文件，按需自建） | 项目自有 |
 
 ## 快照与同步
@@ -71,6 +72,21 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
   20×15 palette 场景（四面墙 + 玩家 + 木箱），因此模板**零资产文件**即可运行；要换成
   磁盘场景，加 `assets/scenes/*.json` 并 `--scene` 指定（**Linux 上**热重载随之启用；
   无 inotify 的平台用 F5 或 IPC `reload` 手动重载）。
+- **两个范式范例**（`game/examples/`，可选；不需要就整个删掉）：同一份引擎公共 API 的
+  两种消费方式——`swarm/`（类幸存者，实体上百个、逐系统遍历 → ECS 风格）与
+  `platformer/`（单角色平台跳跃，富状态机 + 多态敌人 → OOP 风格）。两者都零资产、
+  场景在内存构造，可直接跑：
+
+  ```bash
+  ./build/bin/swarm        # WASD/方向键移动，R 重开
+  ./build/bin/platformer   # A/D 移动，空格跳，R 重开
+  ./build/bin/swarm --headless --seconds 20      # 固定步跑 20 秒并打印状态摘要
+  ./build/bin/platformer --shot /tmp/frame.png   # 离屏整帧截图（Agent/无显示环境可用）
+  ```
+
+  `game/examples/common/harness.hpp` 是两者共用的最小骨架（参数解析、窗口、离屏整帧截图、
+  内存场景构造）。范例是**起手式参考**，不是模板推荐的架构；它们的纯逻辑部分各有
+  ctest 用例（`ctest` 一起跑）。
 
 ## 开发命令
 
