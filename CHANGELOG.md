@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 自动寻路移动与敌人检测中断
+
+- 影响的文件: `src/systems/input.lua`, `src/systems/turn.lua`
+- 点击远处格子时自动寻路并逐步移动到目标位置
+- 每步移动消耗一个回合，敌人回合后继续移动
+- 移动过程中检测视野内敌人（13x13 区域，切比雪夫距离 ≤ 6）
+- 检测到敌人时立即停止自动移动
+- 按键或点击新位置时取消当前自动移动
+- 碰撞时自动停止移动
+
 ### 战争迷雾系统
 
 - 影响的文件: `src/systems/fog_of_war.lua` (新建), `src/systems/map_renderer.lua`, `src/systems/render.lua`, `src/main.lua`

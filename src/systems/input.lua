@@ -38,6 +38,13 @@ local InputSystem = {
     aimMode = false,
     pendingAbilityId = nil,
     showInventoryUI = false,
+
+    -- 自动移动状态
+    autoMoveActive = false,
+    autoMovePath = nil,
+    autoMoveTarget = nil,
+    autoMoveIndex = 1,
+    autoMovePlayerId = nil,
 }
 
 function InputSystem:init(world, config)
@@ -63,6 +70,14 @@ function InputSystem:init(world, config)
                 end
             end
         end)
+
+        -- Listen for TurnEnd to continue auto-move after enemy turn
+        self.events:on("TurnEnd", function(data)
+            if self.autoMoveActive then
+                -- Schedule next move after animation completes
+                self._pendingAutoMove = true
+            end
+        end, 200)  -- High priority to run after TurnSystem resets
     end
 end
 
@@ -71,6 +86,28 @@ function InputSystem:update(world, dt)
         self.keyBufferTimer = self.keyBufferTimer - dt
         if self.keyBufferTimer <= 0 then
             self:processKeyBuffer()
+        end
+    end
+
+    -- Check for pending auto-move after turn end
+    if self._pendingAutoMove and self.autoMoveActive then
+        -- Wait for move animation to complete
+        local tweenSystem = self.world:getSystem("TweenSystem")
+        local isAnimating = false
+        if tweenSystem then
+            local playerEntities = self.world:query({"Player", "PositionTween"})
+            for _, player in ipairs(playerEntities) do
+                local tween = player.components.PositionTween
+                if tween and tween.active then
+                    isAnimating = true
+                    break
+                end
+            end
+        end
+        
+        if not isAnimating then
+            self._pendingAutoMove = false
+            self:autoMoveStep()
         end
     end
 end
@@ -116,6 +153,11 @@ function InputSystem:handleKey(key, scancode, isrepeat)
     if key == "p" then
         self:handlePickup()
         return
+    end
+
+    -- 按键时停止自动移动
+    if self.autoMoveActive then
+        self:stopAutoMove()
     end
 
     if self.turnSystem and not self.turnSystem:isInputAllowed() then
@@ -314,6 +356,16 @@ function InputSystem:handleClick(x, y)
     local dy = worldY - playerPos.y
     local distance = math.max(math.abs(dx), math.abs(dy))
 
+    -- 如果正在自动移动，点击新位置时停止当前自动移动
+    if self.autoMoveActive then
+        self:stopAutoMove()
+    end
+
+    -- 如果视野内有敌人，不允许开始自动移动
+    if distance > 1 and self:hasEnemyInSight() then
+        return
+    end
+
     if self.turnSystem then
         self.turnSystem:startTurn()
     end
@@ -324,9 +376,9 @@ function InputSystem:handleClick(x, y)
     if distance > 1 then
         local path = self:findPath(playerPos.x, playerPos.y, worldX, worldY, playerId, mapRenderer)
         if path and #path > 1 then
-            local firstStep = path[2]
-            moveDx = firstStep.x - playerPos.x
-            moveDy = firstStep.y - playerPos.y
+            -- 使用自动移动
+            self:startAutoMove(path, playerId)
+            return
         else
             return
         end
@@ -564,6 +616,117 @@ function InputSystem:handlePickup()
             targetY = playerPos.y,
         })
     end
+end
+
+-- 开始自动移动
+function InputSystem:startAutoMove(path, playerId)
+    self.autoMoveActive = true
+    self.autoMovePath = path
+    self.autoMoveTarget = {x = path[#path].x, y = path[#path].y}
+    self.autoMoveIndex = 2  -- 从第二个节点开始（第一个是当前位置）
+    self.autoMovePlayerId = playerId
+
+    -- 立即移动第一步
+    self:autoMoveStep()
+end
+
+-- 自动移动一步
+function InputSystem:autoMoveStep()
+    if not self.autoMoveActive or not self.autoMovePath then
+        return
+    end
+
+    -- 检查是否已到达目标
+    local players = self.world:query({"Player", "Position"})
+    if #players > 0 then
+        local playerPos = players[1].components.Position
+        if playerPos.x == self.autoMoveTarget.x and playerPos.y == self.autoMoveTarget.y then
+            self:stopAutoMove()
+            return
+        end
+    end
+
+    if self.autoMoveIndex > #self.autoMovePath then
+        self:stopAutoMove()
+        return
+    end
+
+    -- 检查是否有敌人在视野内
+    if self:hasEnemyInSight() then
+        self:stopAutoMove()
+        return
+    end
+
+    local current = self.autoMovePath[self.autoMoveIndex - 1]
+    local nextNode = self.autoMovePath[self.autoMoveIndex]
+
+    local dx = nextNode.x - current.x
+    local dy = nextNode.y - current.y
+
+    -- 通知回合系统开始回合
+    if self.turnSystem then
+        self.turnSystem:startTurn()
+    end
+
+    -- 发射移动事件
+    if self.events then
+        self.events:emit("MoveAttempt", {
+            entity = self.autoMovePlayerId,
+            dx = dx,
+            dy = dy,
+            isPlayer = true
+        })
+    end
+
+    self.autoMoveIndex = self.autoMoveIndex + 1
+end
+
+-- 检查是否有敌人在视野内
+function InputSystem:hasEnemyInSight()
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return false end
+
+    local playerPos = players[1].components.Position
+    local mapRenderer = self:_getMapRenderer()
+    if not mapRenderer then return false end
+
+    local viewRange = 6  -- 视野范围：13x13 区域，以人物为中心左右上下各 6 格
+
+    local actors = self.world:query({"Actor", "Position"})
+    for _, actor in ipairs(actors) do
+        if not actor.components.Player then
+            local actorPos = actor.components.Position
+            local dist = Coordinates.chebyshevDistance(
+                playerPos.x, playerPos.y,
+                actorPos.x, actorPos.y
+            )
+
+            if dist <= viewRange then
+                -- 检查是否有视线
+                local hasLOS = Coordinates.hasLineOfSight(
+                    playerPos.x, playerPos.y,
+                    actorPos.x, actorPos.y,
+                    function(x, y) return mapRenderer:isSolid(x, y) end
+                )
+
+                if hasLOS then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- 停止自动移动
+function InputSystem:stopAutoMove()
+    self.autoMoveActive = false
+    self.autoMovePath = nil
+    self.autoMoveTarget = nil
+    self.autoMoveIndex = 1
+    self.autoMovePlayerId = nil
+    self._pendingAutoMove = false
 end
 
 return InputSystem
