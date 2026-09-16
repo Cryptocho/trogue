@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 多树变体渲染系统
+
+- 影响的文件: `src/assets/tileset.lua`, `src/systems/map_renderer.lua`, `src/main.lua`
+- `tileset.lua` 新增第二棵 scene_tile (38x74 松树)，与原 70x98 大树共存
+- `MapRenderer` 从单树 sprite 重构为多变体系统：`treeVariants` 数组存储所有变体数据
+- `init()` 遍历所有 `scene_tile` 条目加载 quad，共享同一纹理时用 `imageCache` 避免重复加载
+- `loadMap()` 为每棵树 tile 随机分配变体索引（`treeVariantMap[y][x]`）
+- `getTreePositions()` 返回的树数据新增 `variant` 字段
+- `drawSingleTree()` 根据 `tree.variant` 选择对应 image/quad/offset 绘制
+- `main.lua` 透视效果和鼠标悬停检测从旧的全局 `treeRegionW/H` 改为按变体查找
+
 ### 自动寻路移动与敌人检测中断
 
 - 影响的文件: `src/systems/input.lua`, `src/systems/turn.lua`

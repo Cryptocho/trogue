@@ -227,10 +227,11 @@ function love.draw()
                                     local playerScreenX = playerWx + offsetX
                                     local playerScreenY = playerWy + offsetY
                                     
+                                    local tv = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
                                     if playerScreenX + Config.TILE_SIZE > treeScreenX and
-                                       playerScreenX < treeScreenX + mapRenderer.treeRegionW and
+                                       playerScreenX < treeScreenX + tv.regionW and
                                        playerScreenY + Config.TILE_SIZE > treeScreenY and
-                                       playerScreenY < treeScreenY + mapRenderer.treeRegionH then
+                                       playerScreenY < treeScreenY + tv.regionH then
                                             if entity.logicY < y then
                                                 alpha = 0.3
                                                 break
@@ -240,8 +241,9 @@ function love.draw()
                             end
                             
                             -- Mouse hover transparency (check entire tree draw area)
-                            if mx >= tree.drawX and mx <= tree.drawX + mapRenderer.treeRegionW and
-                               my >= tree.drawY and my <= tree.drawY + mapRenderer.treeRegionH then
+                            local tvh = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
+                            if mx >= tree.drawX and mx <= tree.drawX + tvh.regionW and
+                               my >= tree.drawY and my <= tree.drawY + tvh.regionH then
                                 alpha = 0.3
                             end
 

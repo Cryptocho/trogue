@@ -25,13 +25,9 @@ local MapRenderer = {
     floorBitmasks = {},
     quads = {},
 
-    -- Scene tile (tree) resources
-    treeImage = nil,
-    treeQuad = nil,
-    treeRegionW = 0,
-    treeRegionH = 0,
-    treeOffsetX = 0,
-    treeOffsetY = 0,
+    -- Scene tile (tree) resources — multiple variants
+    treeVariants = {},     -- {{image, quad, regionW, regionH, offsetX, offsetY}, ...}
+    treeVariantMap = {},   -- treeVariantMap[y][x] = variant index
 }
 
 function MapRenderer:init(world)
@@ -55,20 +51,32 @@ function MapRenderer:init(world)
                                               self.tileset:getDimensions())
     end
 
-    -- Load scene tiles (tree) from tileset.lua
-    local tilesetDef = require("assets.tileset")
-    if tilesetDef.scene_tiles and #tilesetDef.scene_tiles > 0 then
-        local treeTile = tilesetDef.scene_tiles[1]
-        local ok, img = pcall(love.graphics.newImage, "assets/" .. treeTile.texture_path)
-        if ok then
-            img:setFilter("nearest", "nearest")
-            self.treeImage = img
-            local r = treeTile.region
-            self.treeRegionW = r.w
-            self.treeRegionH = r.h
-            self.treeQuad = love.graphics.newQuad(r.x, r.y, r.w, r.h, img:getDimensions())
-            self.treeOffsetX = treeTile.offset.x
-            self.treeOffsetY = treeTile.offset.y
+    -- Load scene tiles (tree variants) from tileset.lua
+    self.treeVariants = {}
+    local imageCache = {}
+    if tileset.scene_tiles and #tileset.scene_tiles > 0 then
+        for _, treeTile in ipairs(tileset.scene_tiles) do
+            local path = "assets/" .. treeTile.texture_path
+            if not imageCache[path] then
+                local ok, img = pcall(love.graphics.newImage, path)
+                if ok then
+                    img:setFilter("nearest", "nearest")
+                    imageCache[path] = img
+                end
+            end
+            local img = imageCache[path]
+            if img then
+                local r = treeTile.region
+                local quad = love.graphics.newQuad(r.x, r.y, r.w, r.h, img:getDimensions())
+                table.insert(self.treeVariants, {
+                    image = img,
+                    quad = quad,
+                    regionW = r.w,
+                    regionH = r.h,
+                    offsetX = treeTile.offset.x,
+                    offsetY = treeTile.offset.y,
+                })
+            end
         end
     end
 end
@@ -76,6 +84,7 @@ end
 function MapRenderer:loadMap(mapData)
     self.height = #mapData
     self.width = #mapData[1]
+    self.treeVariantMap = {}
 
     for y, row in ipairs(mapData) do
         self.tiles[y] = {}
@@ -90,6 +99,11 @@ function MapRenderer:loadMap(mapData)
             end
 
             self.tiles[y][x] = tileIndex
+
+            if tileIndex == TILE_TREE and #self.treeVariants > 0 then
+                self.treeVariantMap[y] = self.treeVariantMap[y] or {}
+                self.treeVariantMap[y][x] = math.random(#self.treeVariants)
+            end
         end
     end
 
@@ -173,7 +187,7 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY, fogOfWar)
 end
 
 function MapRenderer:getTreePositions(cameraX, cameraY)
-    if not self.treeImage then return {} end
+    if #self.treeVariants == 0 then return {} end
 
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
@@ -188,13 +202,15 @@ function MapRenderer:getTreePositions(cameraX, cameraY)
     for y = startY, endY do
         for x = startX, endX do
             if self.tiles[y][x] == TILE_TREE then
+                local vi = (self.treeVariantMap[y] and self.treeVariantMap[y][x]) or 1
+                local v = self.treeVariants[vi] or self.treeVariants[1]
                 local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
                     screenWidth, screenHeight, Config.SCALE)
                 screenX = math.floor(screenX)
                 screenY = math.floor(screenY)
-                local drawX = screenX + Config.TILE_SIZE / 2 - self.treeRegionW / 2 + self.treeOffsetX
-                local drawY = screenY + Config.TILE_SIZE / 2 - self.treeRegionH / 2 + self.treeOffsetY
-                table.insert(trees, {x = x, y = y, drawX = drawX, drawY = drawY})
+                local drawX = screenX + Config.TILE_SIZE / 2 - v.regionW / 2 + v.offsetX
+                local drawY = screenY + Config.TILE_SIZE / 2 - v.regionH / 2 + v.offsetY
+                table.insert(trees, {x = x, y = y, drawX = drawX, drawY = drawY, variant = vi})
             end
         end
     end
@@ -202,8 +218,10 @@ function MapRenderer:getTreePositions(cameraX, cameraY)
 end
 
 function MapRenderer:drawSingleTree(tree, alpha)
+    local v = self.treeVariants[tree.variant] or self.treeVariants[1]
+    if not v then return end
     love.graphics.setColor(1, 1, 1, alpha or 1.0)
-    love.graphics.draw(self.treeImage, self.treeQuad, tree.drawX, tree.drawY)
+    love.graphics.draw(v.image, v.quad, tree.drawX, tree.drawY)
     love.graphics.setColor(1, 1, 1, 1)
 end
 

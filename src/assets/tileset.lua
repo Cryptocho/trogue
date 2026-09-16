@@ -291,5 +291,24 @@ return {
             ["centered"] = true,
             ["z_index"] = 1,
         },
+        {
+            ["source_id"] = 4,
+            ["scene_id"] = 2,
+            ["scene_path"] = "res://assets/tree_2.tscn",
+            ["texture_path"] = "Decorations.png",
+            ["texture_res_path"] = "res://assets/Decorations.png",
+            ["region"] = {
+                ["x"] = 163.0,
+                ["y"] = 163.0,
+                ["w"] = 38.0,
+                ["h"] = 74.0,
+            },
+            ["offset"] = {
+                ["x"] = 0.0,
+                ["y"] = -26.0,
+            },
+            ["centered"] = true,
+            ["z_index"] = 1,
+        },
     },
 }
