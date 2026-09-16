@@ -62,10 +62,8 @@ struct World {
 
 // ── 房间几何：渲染用的 '#' 环与碰撞掩码同源，画的墙就是挡的墙 ──
 bool room_solid(int tx, int ty) noexcept;
-std::vector<std::uint8_t> room_mask();
-// 由调用方持有 mask、此处只填视图：SolidGridView::mask 是裸指针，视图若随持有
-// 容器一起按值返回/搬移，容器 buffer 换址即悬垂（故不提供自持视图的工厂）。
-tg::SolidGridView room_view(std::vector<std::uint8_t>& mask) noexcept;
+// 碰撞视图由调用方用 SolidGrid::create(kRoomW, kRoomH, kTile, kTile, room_solid)
+// 构造（本文件不提供掩码工厂：SolidGrid 是 RAII 自持掩码，比裸 buffer + 视图更省心）。
 
 // ── 世界查询小工具（系统与渲染共用同一坐标约定）──
 inline int count(const World& w) noexcept { return static_cast<int>(w.pos.size()); }

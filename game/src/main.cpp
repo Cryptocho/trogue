@@ -551,45 +551,44 @@ tg::IpcStatus handle_genmap(Demo& d, const tg::Json& req,
         for (int x = 0; x < w; ++x)
             wall[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)] =
                 gen_value_noise(x, y, seed, 6) >= 0.55f;
-    // ② 拼 tro-scene JSON（palette 模式双层：ground 非 solid + walls solid。
-    // ground 与 walls 互补——非墙格落 ground、墙格落 walls，无重叠）。
-    // nonempty = **solid 层（walls）非空 tile 数** = 墙格数；ground 非空数 =
-    // w*h - nonempty。同 seed 逐位一致，异 seed 期望不同。
-    tg::Json ground = tg::Json::array();
-    tg::Json walls = tg::Json::array();
+    // ② 构造描述（palette 模式双层：ground 非 solid + walls solid。ground 与 walls
+    // 互补——非墙格落 ground、墙格落 walls，无重叠）。nonempty = **solid 层（walls）
+    // 非空 tile 数** = 墙格数；ground 非空数 = w*h - nonempty。同 seed 逐位一致。
+    std::vector<int> ground_tiles, wall_tiles;
+    ground_tiles.reserve(static_cast<std::size_t>(w) * h);
+    wall_tiles.reserve(static_cast<std::size_t>(w) * h);
     int nonempty = 0;
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             const bool is_wall =
                 wall[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)];
-            ground.push_back(is_wall ? -1 : 0);
-            walls.push_back(is_wall ? 1 : -1);
+            ground_tiles.push_back(is_wall ? -1 : 0);
+            wall_tiles.push_back(is_wall ? 1 : -1);
             if (is_wall) ++nonempty;
         }
     }
-    // ③ load_json → swap（复用 keep_player/reloads 语义）
-    const auto make_layer = [&](const char* lname, bool solid, const tg::Json& tiles) {
-        return tg::Json{{"name", lname},
-                        {"width", w},
-                        {"height", h},
-                        {"solid", solid},
-                        {"tiles", tiles}};
-    };
-    tg::Json tilemap = tg::Json::object();
-    tilemap["tile_width"] = 16;
-    tilemap["tile_height"] = 16;
-    tilemap["palette"] = tg::Json::array({"#2a2d3a", "#7f8ca3"});
-    tilemap["layers"] =
-        tg::Json::array({make_layer("ground", false, ground),
-                         make_layer("walls", true, walls)});
-    tg::Json scene = tg::Json::object();
-    scene["format"] = "tro-scene";
-    scene["version"] = 2;
-    scene["meta"] = tg::Json{{"name", "genmap"}, {"background", "#101018"}};
-    scene["tilemap"] = tilemap;
-    scene["entities"] = tg::Json::array();
+    // ③ create（SceneSpec → 资产，校验与 load_json 同源）→ swap（复用 keep_player/reloads 语义）
+    tg::SceneSpec spec;
+    spec.tile_width = 16;
+    spec.tile_height = 16;
+    spec.palette = {tg::Color{42, 45, 58, 255}, tg::Color{127, 140, 163, 255}};
+    tg::SceneLayerSpec ground;
+    ground.name = "ground";
+    ground.width = w;
+    ground.height = h;
+    ground.tiles = std::move(ground_tiles);
+    tg::SceneLayerSpec walls;
+    walls.name = "walls";
+    walls.solid = true;
+    walls.width = w;
+    walls.height = h;
+    walls.tiles = std::move(wall_tiles);
+    spec.layers = {std::move(ground), std::move(walls)};
+    spec.name = "genmap";
+    spec.has_background = true;
+    spec.background = "#101018";
     const std::string name = "genmap(seed=" + std::to_string(seed) + ")";
-    auto loaded = tg::SceneAsset::load_json(scene.dump(), name);
+    auto loaded = tg::SceneAsset::create(spec, name);
     if (!loaded) {
         TraceLog(LOG_WARNING, "[demo] genmap 场景加载失败: %s",
                  loaded.error().message.c_str());

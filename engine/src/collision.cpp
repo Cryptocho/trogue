@@ -509,16 +509,8 @@ double one_way_axis_gap(const Rect& plat, double min_pos, double size,
     return gap > 0.0 ? gap : 0.0;
 }
 
-// 探地（静态层 + 单向平台）：探地矩形 [x, y+h, w, kKinematicProbe]。
-bool kinematic_grounded(const SolidGridView* views, int count,
-                        const Rect* one_way, int one_way_count, Rect box) {
-    const Rect probe{box.x, box.y + box.h, box.w, kKinematicProbe};
-    if (rect_hits_solid(views, count, probe) == TileQueryResult::solid)
-        return true;
-    for (int i = 0; i < one_way_count; ++i)
-        if (aabb_overlap(probe, one_way[i])) return true;
-    return false;
-}
+// 探地（静态层 + 单向平台）：定义见下方公共函数 probe_grounded——探针语义只有
+// 一份实现（kinematic_step 也走它），避免内部/公共两处各自演化。
 
 // 探墙（仅静态层；上下内缩防相邻地面误判）：+1 右 / -1 左 / 0 无（右优先）。
 int kinematic_wall_dir(const SolidGridView* views, int count, Rect box) {
@@ -651,6 +643,35 @@ SweepResult sweep_core(const SolidGridView* views, int count,
 
 }  // namespace
 
+// ════════════════════ 探针查询（探地） ════════════════════
+// 语义与用途见头文件；实现与 kinematic_step 的探地共用（同一份代码路径）。
+
+TileQueryResult probe_grounded(const SolidGridView* views, int count, Rect box) {
+    return probe_grounded(views, count, nullptr, 0, box);
+}
+
+TileQueryResult probe_grounded(const SolidGridView* views, int count,
+                               const Rect* one_way, int one_way_count, Rect box) {
+    // 参数非法先判（一律 error，即使 one_way 命中）——与 rect_hits_solid 同款校验
+    if (count < 0 || (count > 0 && views == nullptr) || one_way_count < 0 ||
+        (one_way_count > 0 && one_way == nullptr) || !finite2(box.x, box.y) ||
+        !finite2(box.w, box.h) || !(box.w > 0.0f) || !(box.h > 0.0f))
+        return TileQueryResult::error;
+    const Rect probe{box.x, box.y + box.h, box.w, kKinematicProbe};
+    if (rect_hits_solid(views, count, probe) == TileQueryResult::solid)
+        return TileQueryResult::solid;
+    for (int i = 0; i < one_way_count; ++i)
+        if (aabb_overlap(probe, one_way[i])) return TileQueryResult::solid;
+    return TileQueryResult::clear;
+}
+
+// 便捷重载：逐层物化（O(层数×格数)）——逐帧查询请持 SolidGrid 走视图重载。
+TileQueryResult probe_grounded(const SceneAsset& asset, Rect box) {
+    std::vector<std::vector<std::uint8_t>> masks;
+    const std::vector<SolidGridView> views = materialize_views(asset, masks);
+    return probe_grounded(views.data(), static_cast<int>(views.size()), box);
+}
+
 SweepResult sweep_move(const SolidGridView* views, int count,
                        const Rect* one_way, int one_way_count, Rect box,
                        Vec2 delta) {
@@ -670,10 +691,16 @@ KinematicResult kinematic_step(const SolidGridView* views, int count,
     out.sweep = sweep_core(views, count, one_way, one_way_count, nullptr, 0,
                            box, delta, nullptr, nullptr);
     if (out.sweep.result == TileQueryResult::error) return out;  // 全事件 false
-    out.ev.grounded = kinematic_grounded(views, count, one_way, one_way_count,
-                                         out.sweep.box);
+    // 探针语义与公共 probe_grounded 共用（同一份实现）。合法入参下两者逐位一致
+    //（20000 组随机比对无差异）；本步到此已保证 box 合法，而 probe_grounded 另校验
+    //  one_way 的指针/计数——非法入参（count<0 或 count>0 而指针为空）会让它返回
+    //  error，此时按「无支撑」处理（旧实现在同一输入下可能返回 true 甚至解引用空指针，
+    //  都不是可依赖行为）。
+    out.ev.grounded = probe_grounded(views, count, one_way, one_way_count,
+                                     out.sweep.box) == TileQueryResult::solid;
     const bool was_ground =
-        kinematic_grounded(views, count, one_way, one_way_count, box);
+        probe_grounded(views, count, one_way, one_way_count, box) ==
+        TileQueryResult::solid;
     out.ev.landed = out.ev.grounded && !was_ground;
     out.ev.hit_ceiling = out.sweep.blocked_y && delta.y < 0.0f;
     out.ev.hit_wall = out.sweep.blocked_x;
@@ -869,6 +896,33 @@ ErrorOr<SolidGrid> SolidGrid::load(const SceneAsset& asset, int layer) {
     SolidGrid grid;
     auto r = grid.refresh(asset, layer);
     if (!r) return tl::make_unexpected(std::move(r).error());
+    return grid;
+}
+
+ErrorOr<SolidGrid> SolidGrid::create(int width, int height, int tile_w, int tile_h,
+                                     const std::function<bool(int, int)>& blocked,
+                                     int origin_x, int origin_y) {
+    auto bad = [](const std::string& msg) {
+        return tl::make_unexpected(Error{ErrorCode::kInvalidArgument, msg});
+    };
+    if (!blocked) return bad("SolidGrid::create: 阻挡谓词为空");
+    if (width <= 0 || height <= 0 || width > kLayerDimMax || height > kLayerDimMax ||
+        tile_w <= 0 || tile_h <= 0 || tile_w > kLayerDimMax || tile_h > kLayerDimMax)
+        return bad("SolidGrid::create: 网格/tile 尺寸非法或越界: " +
+                   std::to_string(width) + "x" + std::to_string(height) + " tile " +
+                   std::to_string(tile_w) + "x" + std::to_string(tile_h));
+
+    SolidGrid grid;
+    grid.mask_.assign(static_cast<std::size_t>(width) * height, 0);
+    for (int ty = 0; ty < height; ++ty)
+        for (int tx = 0; tx < width; ++tx)
+            grid.mask_[static_cast<std::size_t>(ty) * width + tx] =
+                blocked(tx, ty) ? 1 : 0;
+    // layer_id 固定 -1：本形态不来自任何资产层。set_tile 的首条判据是
+    // `layer != view_.layer_id`，故对它的同步写会以层不一致报错（fail-loud），
+    // 而不是把写入静默落到无关资产上。
+    grid.view_ = SolidGridView{width, height, tile_w, tile_h, origin_x, origin_y,
+                               grid.mask_.data(), width, -1};
     return grid;
 }
 

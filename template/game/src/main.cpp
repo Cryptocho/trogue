@@ -44,43 +44,44 @@ constexpr float kMoveDuration = 0.12f;  // 单格移动动画时长（秒）
 constexpr double kFixedDt = 1.0 / 60.0;  // 固定模拟步长（秒）
 
 // ── 内置起步场景（palette 模式，四面墙 + 玩家 + 木箱）──
-// 用 tg::Json 逐层构造，避免手写超长 tiles 数组；与磁盘 tro-scene 完全同构。
+// 用引擎的类型化写路径（tg::SceneSpec → SceneAsset::create）构造，不必手拼 JSON。
 constexpr int kMapW = 20, kMapH = 15;
 
-std::string builtin_scene_json() {
-    tg::Json ground = tg::Json::array();
-    tg::Json walls = tg::Json::array();
+tg::ErrorOr<tg::SceneAsset> builtin_scene() {
+    tg::SceneSpec spec;
+    spec.tile_width = kTileSize;
+    spec.tile_height = kTileSize;
+    spec.palette = {tg::Color{42, 45, 58, 255}, tg::Color{127, 140, 163, 255}};
+    std::vector<int> ground_tiles, wall_tiles;
+    ground_tiles.reserve(static_cast<std::size_t>(kMapW) * kMapH);
+    wall_tiles.reserve(static_cast<std::size_t>(kMapW) * kMapH);
     for (int y = 0; y < kMapH; ++y) {
         for (int x = 0; x < kMapW; ++x) {
-            ground.push_back(0);
+            ground_tiles.push_back(0);
             const bool edge = (x == 0 || y == 0 || x == kMapW - 1 || y == kMapH - 1);
-            walls.push_back(edge ? 1 : -1);
+            wall_tiles.push_back(edge ? 1 : -1);
         }
     }
-    auto make_layer = [](const char* name, bool solid, const tg::Json& tiles) {
-        tg::Json l;
-        l["name"] = name;
-        l["width"] = kMapW;
-        l["height"] = kMapH;
-        l["solid"] = solid;
-        l["tiles"] = tiles;
-        return l;
-    };
+    tg::SceneLayerSpec ground;
+    ground.name = "ground";
+    ground.width = kMapW;
+    ground.height = kMapH;
+    ground.tiles = std::move(ground_tiles);
+    tg::SceneLayerSpec walls;
+    walls.name = "walls";
+    walls.solid = true;
+    walls.width = kMapW;
+    walls.height = kMapH;
+    walls.tiles = std::move(wall_tiles);
+    spec.layers = {std::move(ground), std::move(walls)};
+    spec.name = "builtin";
+    spec.has_background = true;
+    spec.background = "#101018";
 
-    tg::Json palette = tg::Json::array({"#2a2d3a", "#7f8ca3"});
-    tg::Json layers = tg::Json::array();
-    layers.push_back(make_layer("ground", false, ground));
-    layers.push_back(make_layer("walls", true, walls));
-
-    tg::Json tilemap;
-    tilemap["tile_width"] = kTileSize;
-    tilemap["tile_height"] = kTileSize;
-    tilemap["palette"] = palette;
-    tilemap["layers"] = layers;
-
+    // 实体按 schema 原样携带（类型化快照不含 animations，故写路径用 JSON 承载）
     auto make_entity = [](const char* id, const char* type, int gx, int gy,
                           const char* color) {
-        tg::Json e;
+        tg::Json e = tg::Json::object();
         e["id"] = id;
         e["type"] = type;
         e["x"] = gx * kTileSize;
@@ -93,18 +94,9 @@ std::string builtin_scene_json() {
     tg::Json entities = tg::Json::array();
     entities.push_back(make_entity("player", "player", 10, 7, "#e94560"));
     entities.push_back(make_entity("crate_1", "crate", 14, 7, "#8a6f4c"));
+    spec.entities = std::move(entities);
 
-    tg::Json meta;
-    meta["name"] = "builtin";
-    meta["background"] = "#101018";
-
-    tg::Json scene;
-    scene["format"] = "tro-scene";
-    scene["version"] = 2;
-    scene["meta"] = meta;
-    scene["tilemap"] = tilemap;
-    scene["entities"] = entities;
-    return scene.dump();
+    return tg::SceneAsset::create(spec, "<builtin>");
 }
 
 // ── game 自己的对象模型（引擎不认识它） ──
@@ -292,8 +284,7 @@ void load_scene(Game& g, const std::string& path) {
                      loaded.error().message.c_str());
     }
     if (!loaded) {
-        const std::string text = builtin_scene_json();
-        loaded = tg::SceneAsset::load_json(text, "<builtin>");
+        loaded = builtin_scene();
     }
     if (!loaded) {
         TraceLog(LOG_ERROR, "[game] 内置场景解析失败: %s",

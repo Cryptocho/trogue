@@ -26,20 +26,6 @@ bool room_solid(int tx, int ty) noexcept {
     return tx <= 0 || ty <= 0 || tx >= kRoomW - 1 || ty >= kRoomH - 1;
 }
 
-std::vector<std::uint8_t> room_mask() {
-    std::vector<std::uint8_t> m(static_cast<std::size_t>(kRoomW) * kRoomH, 0);
-    for (int ty = 0; ty < kRoomH; ++ty) for (int tx = 0; tx < kRoomW; ++tx)
-        m[static_cast<std::size_t>(ty) * kRoomW + tx] = room_solid(tx, ty) ? 1 : 0;
-    return m;
-}
-
-tg::SolidGridView room_view(std::vector<std::uint8_t>& mask) noexcept {
-    // 字段序对齐 SolidGridView 声明：width/height/tile_w/tile_h/origin_x/origin_y/
-    // mask/stride/layer_id（行主序，与 room_mask 一致）
-    return tg::SolidGridView{kRoomW, kRoomH, kTile, kTile, 0, 0,
-                             mask.data(), kRoomW, 0};
-}
-
 int xp_need(int level) noexcept { return 3 + level; }
 int bullet_dmg(int level) noexcept { return 1 + level / 10; }
 int player_hp(const World& w) noexcept { return w.player >= 0 ? w.hp[w.player] : 0; }

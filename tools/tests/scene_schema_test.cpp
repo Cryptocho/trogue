@@ -936,6 +936,68 @@ bool test_load_json() {
     return ok;
 }
 
+// ── solid_layer_indices：solid 层索引查询（值快照） ──
+bool test_solid_layer_indices() {
+    bool ok = true;
+    // palette 模式：层 0 非 solid、层 1 solid → {1}
+    {
+        auto r = tg::SceneAsset::load_json(
+            R"({"format":"tro-scene","version":2,"tilemap":{)"
+            R"("tile_width":16,"tile_height":16,"palette":["#000000","#ffffff"],)"
+            R"("layers":[{"name":"g","width":2,"height":1,"solid":false,"tiles":[0,0]},)"
+            R"({"name":"w","width":2,"height":1,"solid":true,"tiles":[1,-1]}]}})");
+        REQUIRE(r.has_value());
+        const std::vector<int> idx = r->solid_layer_indices();
+        if (idx != std::vector<int>{1}) {
+            ::tg_test::record_failure(__FILE__, __LINE__, "palette 场景应报 solid 层 {1}");
+            ok = false;
+        } else {
+            ::tg_test::record_ok();
+        }
+    }
+    // bare（无地形数据）→ 空
+    {
+        auto r = tg::SceneAsset::load_json(
+            R"({"format":"tro-scene","version":2,"tilemap":{"layers":[]}})");
+        REQUIRE(r.has_value());
+        if (!r->solid_layer_indices().empty()) {
+            ::tg_test::record_failure(__FILE__, __LINE__, "bare 场景应报空");
+            ok = false;
+        } else {
+            ::tg_test::record_ok();
+        }
+    }
+    // 多层多 solid → 升序；与 layer(i).solid 逐一自洽
+    {
+        auto r = tg::SceneAsset::load_json(
+            R"({"format":"tro-scene","version":2,"tilemap":{)"
+            R"("tile_width":16,"tile_height":16,"palette":["#000000","#ffffff"],)"
+            R"("layers":[{"name":"a","width":1,"height":1,"solid":true,"tiles":[0]},)"
+            R"({"name":"b","width":1,"height":1,"solid":false,"tiles":[0]},)"
+            R"({"name":"c","width":1,"height":1,"solid":true,"tiles":[1]}]}})");
+        REQUIRE(r.has_value());
+        const std::vector<int> idx = r->solid_layer_indices();
+        if (idx != (std::vector<int>{0, 2})) {
+            ::tg_test::record_failure(__FILE__, __LINE__, "应报 solid 层 {0,2}");
+            ok = false;
+        } else {
+            ::tg_test::record_ok();
+        }
+        for (int i = 0; i < r->layer_count(); ++i) {
+            bool listed = false;
+            for (int v : idx) listed = listed || v == i;
+            if (listed != r->layer(i).solid) {
+                ::tg_test::record_failure(__FILE__, __LINE__,
+                                          "solid_layer_indices 应与 layer(i).solid 自洽");
+                ok = false;
+            } else {
+                ::tg_test::record_ok();
+            }
+        }
+    }
+    return ok;
+}
+
 int main() {
     std::filesystem::create_directories("build");  // CWD=项目根；ctest WORKING_DIRECTORY 保证
     std::filesystem::create_directories("assets");  // fixture tileset 写 assets/ 根
@@ -947,6 +1009,7 @@ int main() {
     test_palette_layers();
     test_tiles_array();
     test_entities();
+    test_solid_layer_indices();
     test_sprite();
     test_descriptor_extras();
     test_animations();

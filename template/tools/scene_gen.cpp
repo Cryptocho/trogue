@@ -9,8 +9,9 @@
 //     "entities": [ ... ]                        // 可选：原样透传进 tro-scene.entities
 //   }
 // 输出：tro-scene v2，两层——"ground"（非 solid，terrain 0 格）与
-//   "walls"（solid，terrain 1 格）；输出父目录不存在时自动创建；落盘前用
-//   tg::SceneAsset::load_json 回读自检。
+//   "walls"（solid，terrain 1 格）；输出父目录不存在时自动创建；**先**经引擎的
+//   tg::SceneAsset::create（SceneSpec 值类型 → 资产，校验与 load_json 同一条路径）
+//   自检、**再**落盘，故任何失败都不会留下半成品文件。
 //
 // 失败语义（不做半成品）：spec/网格/字段类型不合法 → 退出码 2，未做任何写入；
 //   tileset 加载或校验失败、场景自检失败、**任一格 pick_tile 取不到 tile** →
@@ -194,7 +195,7 @@ int main(int argc, char** argv) {
                    ? terrain[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)]
                    : -1;
     };
-    json tiles[kTerrainCount] = {json::array(), json::array()};
+    std::vector<int> tiles[kTerrainCount];
     int sampled = 0;
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
@@ -229,36 +230,39 @@ int main(int argc, char** argv) {
         }
     }
 
-    json layers = json::array();
+    // 组装构造描述（引擎侧类型化写路径）：层与 tileset 是本工具的产出主体；
+    // entities 原样搬运（工具不解释实体字段）。
     const char* layer_names[kTerrainCount] = {"ground", "walls"};
+    tg::SceneSpec scene_spec;
+    scene_spec.tile_width = tw;
+    scene_spec.tile_height = th;
+    scene_spec.tilesets = {tg::TilesetRef{"terrain", tileset_path}};
     for (int t = 0; t < kTerrainCount; ++t) {
-        layers.push_back(json{{"name", layer_names[t]},
-                              {"width", w},
-                              {"height", h},
-                              {"solid", t == 1},
-                              {"tileset", "terrain"},
-                              {"tiles", tiles[t]}});
+        tg::SceneLayerSpec layer;
+        layer.name = layer_names[t];
+        layer.solid = (t == 1);
+        layer.width = w;
+        layer.height = h;
+        layer.tileset = "terrain";
+        layer.tiles = std::move(tiles[t]);
+        scene_spec.layers.push_back(std::move(layer));
     }
-    json tilemap = {{"tile_width", tw},
-                    {"tile_height", th},
-                    {"tilesets", json::array({json{{"name", "terrain"},
-                                                   {"path", tileset_path}}})},
-                    {"layers", layers}};
-    json meta = json::object();
-    if (!name.empty()) meta["name"] = name;
-    if (spec.contains("background") && spec["background"].is_string())
-        meta["background"] = spec["background"].get<std::string>();
-    json scene = {
-        {"format", "tro-scene"},
-        {"version", 2},
-        {"meta", meta},
-        {"tilemap", tilemap},
-        {"entities", spec.contains("entities") ? spec["entities"] : json::array()},
-    };
+    scene_spec.name = name;
+    if (spec.contains("background")) {
+        scene_spec.has_background = true;
+        scene_spec.background = spec["background"].get<std::string>();
+    }
+    scene_spec.entities = spec.contains("entities") ? spec["entities"] : json::array();
 
-    // 回读自检：同一解析/校验路径，失败不落盘
+    // 先自检（与落盘用同一份文本，校验路径同 load_json）、后落盘：任何失败都不产生半成品
     const std::string diag_name = name.empty() ? "scene_gen" : name;
-    auto loaded = tg::SceneAsset::load_json(scene.dump(), diag_name);
+    auto text = tg::scene_spec_to_json(scene_spec);
+    if (!text) {
+        std::fprintf(stderr, "scene_gen: 场景序列化失败: %s\n",
+                     text.error().message.c_str());
+        return 1;
+    }
+    auto loaded = tg::SceneAsset::load_json(*text, diag_name);
     if (!loaded) {
         std::fprintf(stderr, "scene_gen: 场景自检失败: %s\n",
                      loaded.error().message.c_str());
@@ -270,7 +274,13 @@ int main(int argc, char** argv) {
     const auto parent = std::filesystem::path(out_path).parent_path();
     if (!parent.empty()) std::filesystem::create_directories(parent, ec);
     std::ofstream out(out_path, std::ios::binary);
-    out << scene.dump(1) << "\n";
+    // 产物保持既有可读形态（缩进 1）：先解析回 JSON 再缩进输出
+    try {
+        out << json::parse(*text).dump(1) << "\n";
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "scene_gen: 输出格式化失败: %s\n", e.what());
+        return 1;
+    }
     out.close();
     if (!out) {
         std::fprintf(stderr, "scene_gen: 写 %s 失败（目录不可写或磁盘空间不足）\n",

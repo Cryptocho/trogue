@@ -67,11 +67,11 @@
 
 符号名以 `engine/include/trogue/*.hpp` 为准。
 
-- **资产（`scene.hpp`）**：`tg::SceneAsset` 是**不可变/只读资产对象**（RAII），拥有 tile 层、tileset、背景、descriptor 与（若资产内嵌）动画帧表；公共头不暴露 tiles 缓冲区、GPU 对象或可写指针。层与 tileset 不作为公共类型暴露；实体与层信息通过**值类型快照**（`tg::SceneEntity`、`tg::LayerInfo`）返回，内部字符串引用只在 asset 存活期间有效。`SceneAsset::load_json(text, name)` 与 `load(path)` 同一解析/校验路径（程序生成场景的一等公民入口）。受限写入：`update_layer_tiles`（整层）、`set_tile_at`（单格，层局部 tile 坐标）。
+- **资产（`scene.hpp`）**：`tg::SceneAsset` 是**不可变/只读资产对象**（RAII），拥有 tile 层、tileset、背景、descriptor 与（若资产内嵌）动画帧表；公共头不暴露 tiles 缓冲区、GPU 对象或可写指针。层与 tileset 不作为公共类型暴露；实体与层信息通过**值类型快照**（`tg::SceneEntity`、`tg::LayerInfo`）返回，内部字符串引用只在 asset 存活期间有效。`SceneAsset::load_json(text, name)` 与 `load(path)` 同一解析/校验路径（程序生成场景的一等公民入口）。**程序生成场景的类型化写路径**：`tg::SceneSpec`/`tg::SceneLayerSpec`/`TilesetRef`（值类型，schema 构造子集镜像）+ `SceneAsset::create(spec)`（序列化后仍走 `load_json`，校验单一来源）+ `scene_spec_to_json(spec)` 供需要落盘的消费方。实体在 `SceneSpec` 中**原样携带 JSON**而非镜像我读路径快照——`SceneEntity` 不含 `animations`，镜像会静默丢字段。缺省字段按 schema 缺省省略（bare 不写 tile 尺寸，故 bare 资产 `tile_width()==0` 不变）。`tg::Json` 别名亦在本头（`ipc.hpp` 各自声明同名同型别名，避免包含耦合）。受限写入：`update_layer_tiles`（整层）、`set_tile_at`（单格，层局部 tile 坐标）。**solid 层索引查询**：`solid_layer_indices()` 返回值快照，取代「层 1 是 solid」这类散落在 game/tool 里的约定。
 - **descriptor**：`tg::SceneEntity` 是 schema 的通用值快照，不是运行时实体；引擎不提供按 id 改位置、spawn、despawn 或按 `type` 分支的运行时 API。`props`（实体）与 `meta_props()`（场景级）为自由透传，引擎只校验形状、不解释任何键。
 - **tile 查询**：`is_solid_at`/`rect_hits_solid`/`tile_at` 只查显式标记 solid 的 tile 层，返回可区分的错误/清除/实体；descriptor 的 `solid` 只作 game 导入提示，不自动加入引擎碰撞集合。层矩形之外 = 无数据 = 不阻挡。批量查询：`tile_grid`（某层一块 tile 值，tile 坐标）/ `solid_mask`（全部 solid 层可走性合成掩码）。
 - **渲染（`render.hpp`）**：`render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语（`render_sprite` 支持 scale/旋转/flip/tint，scale 须为有限正数，翻转只走显式 flip 字段）。`render_scene_to_png` 把 tile 层渲染到离屏 FBO 并导出 PNG（不含实体/HUD）。`RenderStats`/`render_stats()`/`render_reset_stats()` 提供渲染可观测计数。`reload_texture(path)` 使进程级独立贴图缓存的失效、下次绘制重读盘（图集贴图随 asset RAII，不在此列）。对象排序、相机与 UI 属 game。
-- **碰撞（`collision.hpp`）**：`aabb_overlap`（纯谓词）、`segment_hits_solid`（线段 vs solid 层）、`sweep_move`（轴分离 swept 滑移）、`kinematic_step`（sweep + 探地/探墙/landed 事件派生）、`resolve_overlap`（最小轴脱出）、`DynBox` + `sweep_move_mixed`（静态层 ∪ 动态盒）、`SolidGrid`（渲染色 tile 与碰撞掩码的原子同步写）、单向平台（矩形数组重载，机制性穿越规则）。**速度积分、土狼/缓冲/可变跳高、动态-动态互推解算等手感与规则归 game。**
+- **碰撞（`collision.hpp`）**：`aabb_overlap`（纯谓词）、`segment_hits_solid`（线段 vs solid 层）、`sweep_move`（轴分离 swept 滑移）、`kinematic_step`（sweep + 探地/探墙/landed 事件派生）、`resolve_overlap`（最小轴脱出）、`DynBox` + `sweep_move_mixed`（静态层 ∪ 动态盒）、`SolidGrid`（渲染色 tile 与碰撞掩码的原子同步写；另有 `create(谓词建格)` 支非资产来源掩码——该形态 `layer_id == -1`，`set_tile` 必然 fail-loud，`refresh` 会整体替换掩码故不得用于它）、单向平台（矩形数组重载，机制性穿越规则）。**探针查询**：`probe_grounded`（视图/one_way/asset 三重载，返回三态 `solid|clear|error`）与 `kinematic_step` 的探地**共用同一实现**——`KinematicEvents::grounded` 只在跑过一步后才有意义，spawn/reset 后要立即判定贴地请用 `probe_grounded`（`is_solid_at` 是点查询，不能替代底边探地矩形）。**三态纪律**：几何查询的 `error`（参数非法）**不等于可通行**，只判 `== solid` 会漏掉它。**速度积分、土狼/缓冲/可变跳高、动态-动态互推解算等手感与规则归 game。**
 - **动画（`animation.hpp`）**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer` 消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、暂停/恢复、帧事件与完成回调、`co_await` 完成；它**输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。`tg::AnimationAsset::load/load_json` 消费独立 `tro-animations` v1。
 - **Tween（`tween.hpp`）**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。**`repeats` 契约（头文件与测试双钉）**：`>0` = 首段之后再重播 N 次（共 1+N 段），段末各发一次 `t=1.0` 采样，`on_complete` 只在最后一段后触发一次；`<0` = 无限，`on_complete` 永不触发（须显式 `cancel`）；`delay` 只在首段前等待一次（重播段从 delay 位置继续），单次 `tick` 至多完成一段。**timer idiom**：值恒定的补间即定时器（`add_float(0,0,spec,忽略采样,on_complete)`），串行演出为「先 `add` 拿 id → `co_await wait(id)`」配 `tg::TaskRunner`；`wait` 等最终完成，对不存在/已取消/已完成的 id 立即完成（顺序反了会静默穿过）。
 - **Autotile（`terrain.hpp`）**：`tg::TerrainTable`（tro-tileset terrain 数据的只读匹配表）+ `tg::pick_tile`（无状态纯函数：8 方向 pattern → tile id；确定性评分降级 + 同分取最小 id）。它输出 tile id 供 game 拼装场景；**地形指派、程序生成、动态改图的触发归 game**，engine 不保存地形状态、不做扩散式重排。
@@ -160,7 +160,7 @@ trogue/
 ├── tools/
 │   ├── ipc_smoke.py       # IPC 冒烟测试
 │   ├── placeholder_tileset.py  # 占位瓦片集生成器（已标注 tro-tileset + 贴图）
-│   ├── scene_gen.cpp      # 离线占位地图生成 CLI（网格 → pick_tile 采样 → tro-scene）
+│   ├── scene_gen.cpp      # 离线占位地图生成 CLI（网格 → pick_tile 采样 → tg::SceneSpec → tro-scene）
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── build/  build-release/ # 构建产物（gitignore）
 ├── reference/             # 引擎源码参考副本（gitignore；Godot 4.7.2 + raylib 6.0，查证行为用）
@@ -329,7 +329,7 @@ python3 tools/ipc_smoke.py
 > **定位**：正式美术/瓦片集尚未就位时，让 Agent 立刻拿到**能跑、能 autotile、零外部依赖**的资产。两个工具都是确定性、无头、可校验的离线 CLI，产物落 `assets/`；生成完即可直接起游戏看画面。
 
 - `python3 tools/placeholder_tileset.py [--name placeholder] [--tile-size 16] [--lower-name ground] [--upper-name wall] [--lower-color C] [--upper-color C]` → `assets/tilesets/<n>.json` + `assets/textures/<n>.png`。产出 **32 tile** 的占位 Wang 集（2 地形 × 16 角组合，corners mode）：`peering_bits` 与 `terrain` **由构造保证自洽**，每个地形池都覆盖全部 4 角组合，故 `pick_tile` 恒精确命中（零降级）；贴图是纯色块（底色 = 本地形色，异地形角画 1/4 边长的角块），视觉与标注同源。
-- `./build/tools/trogue_scene_gen <spec.json> <out_scene.json> [--name <场景名>]` → tro-scene v2。spec = `{"tileset": <assets 相对路径>, "grid": ["...#", ...]}`（等宽网格：`'.'` = terrain 0、`'#'` = terrain 1），可选 `"name"`/`"background"`/`"entities"`（entities 原样透传；存在即须为声明类型，否则拒绝）。流程：顶点采样（4 邻格多数投票）→ 引擎 `tg::pick_tile` → 两层 `ground`（非 solid）+ `walls`（solid）→ 落盘前 `SceneAsset::load_json` 回读自检。输出父目录按需自动创建。**失败不产半成品**：spec/网格/类型不合法 → 退出码 2；tileset 校验失败、自检失败或**任一格 `pick_tile` 取不到 tile**（该地形池缺角组合）→ 退出码 1 且不落盘。
+- `./build/tools/trogue_scene_gen <spec.json> <out_scene.json> [--name <场景名>]` → tro-scene v2。spec = `{"tileset": <assets 相对路径>, "grid": ["...#", ...]}`（等宽网格：`'.'` = terrain 0、`'#'` = terrain 1），可选 `"name"`/`"background"`/`"entities"`（entities 原样透传；存在即须为声明类型，否则拒绝）。流程：顶点采样（4 邻格多数投票）→ 引擎 `tg::pick_tile` → 组装 `tg::SceneSpec`（两层 `ground`（非 solid）+ `walls`（solid），`entities` 原样搬运）→ **先** `scene_spec_to_json` + `load_json` 自检、**后**落盘。输出父目录按需自动创建。**失败不产半成品**：spec/网格/类型不合法 → 退出码 2；tileset 校验失败、自检失败或**任一格 `pick_tile` 取不到 tile**（该地形池缺角组合）→ 退出码 1 且不落盘。
 - **产物是占位**：色块视觉 + 临时碰撞，正式瓦片集到位后重新生成/替换即可；工具不引入运行时概念，game/engine 不感知。
 
 ## 项目模板（template/）
@@ -464,7 +464,7 @@ python3 tools/ipc_smoke.py
 6. 询问用户是否写 commit message；如需则给出**英文** commit message 预览等待用户确认，**禁止直接提交**
 7. 确认后提交**所有**变更（包括非本次变更），然后推送（`git push`，本地 main 追踪远端）
 
-> **计划书纪律**：里程碑计划书（`docs/plan-*.md`，含分卷）是**临时产物**。门禁审查与实现期可存在；**里程碑一旦落地即删除**，不得留在仓库里充当历史或二手文档。设计结论沉淀到本文件与 `docs/history.md`，实现记录沉淀到 CHANGELOG。本文件与代码注释**不得引用计划书路径**（见「注释自足纪律」）。
+> **计划书纪律**：里程碑计划书（`docs/plan-*.md`，含分卷）是**临时产物**。门禁审查与实现期可存在；**里程碑一旦落地即删除**，不得留在仓库里充当历史或二手文档。设计结论沉淀到本文件；`docs/history.md` 只收**被取代/删除**的设计原文，逐项实现记录沉淀到 CHANGELOG。本文件与代码注释**不得引用计划书路径**（见「注释自足纪律」）。
 
 > **远端拓扑**：唯一远端 `origin = https://github.com/Cryptocho/trogue`（原版 Lua 项目的仓库）；本地 main → 远端分支 `trogue-raylib`，两分支**零共同历史、永不 merge**；远端 main（Lua 原版）永不触碰；本地仓库不含 `trogue-orign/`（gitignore），两分支内容零重叠。remote URL 内嵌 `$GIT_PAT` 凭证（仅存本地 .git/config，勿打印/勿外传）。
 
@@ -492,6 +492,6 @@ python3 tools/ipc_smoke.py
 
 > 当前无未完成的主线项（新项先入 `docs/BACKLOG.md`，立里程碑时按门禁升入此处）。
 
-**引擎能力线（已交付概览）**：资产解析与校验（tro-scene/tro-tileset/tro-animations）、tile 层查询与受限写入、显式渲染与离屏导出、渲染可观测计数、帧动画播放器、Tween 补间与协程等待（含 `repeats` 契约与 timer/串行演出 idiom 的文档与测试）、autotile 选择器、碰撞几何与运动学步进（单向平台/最小轴脱出/混合扫掠/SolidGrid）、确定性随机、固定步时钟与虚拟输入、IPC 传输与事件通道、热重载通知、Godot 导出插件。逐项变更记录见 `CHANGELOG.md`。
+**引擎能力线（已交付概览）**：资产解析与校验（tro-scene/tro-tileset/tro-animations）、tile 层查询与受限写入（含 solid 层索引查询）、显式渲染与离屏导出、渲染可观测计数、帧动画播放器、Tween 补间与协程等待（含 `repeats` 契约与 timer/串行演出 idiom 的文档与测试）、autotile 选择器、碰撞几何与运动学步进（单向平台/最小轴脱出/混合扫掠/SolidGrid）、碰撞视图的谓词构造与 `probe_grounded` 探针查询、确定性随机、固定步时钟与虚拟输入、IPC 传输与事件通道、热重载通知、Godot 导出插件。程序生成场景的类型化写路径（`tg::SceneSpec` + `SceneAsset::create` + `scene_spec_to_json`）与案例工具（`tools/scene_gen`）同批交付。逐项变更记录见 `CHANGELOG.md`。
 
 **引擎能力验证线（探针：`game/`）**：回合制最小闭环、敌人 AI 与 RuleEngine 最小子集、动画查看器；模板侧两个范式范例（`template/game/examples/` 的 ECS 风格 `swarm` 与 OOP 风格 `platformer`）作为「引擎不规定对象模型」的可见、可运行证据。这些玩法系统是验证副产品，可被替换或丢弃。

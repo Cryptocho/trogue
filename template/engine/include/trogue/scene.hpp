@@ -34,6 +34,11 @@ struct SceneImpl;
 }
 class AnimationSet;  // 定义于 animation.hpp；scene.hpp 只返回引用（前向即可）
 
+// JSON 载体的公共别名：需要构造/读取 JSON（拼 tro-scene、读 props）的调用方经
+// 本头即可拿到，不必 include IPC 传输头。ipc.hpp 亦各自声明同名同型别名——两处
+// 独立声明，避免 ipc→scene（或反向）的包含耦合。
+using Json = nlohmann::json;
+
 // ════════════════════ 枚举 ════════════════════
 
 // tile 层查询结果。error = 参数非有限/矩形非正/层越界。
@@ -84,11 +89,58 @@ struct LayerInfo {
     std::string name;            // 缺省 "layer"
     int width = 0, height = 0;   // 像素 tile 网格尺寸
     int origin_x = 0, origin_y = 0;  // 层左上角世界偏移（可负）
-    bool solid = false;
+    bool solid = false;          // 有哪些 solid 层可查 SceneAsset::solid_layer_indices()
     int tileset_index = -1;      // >=0 图集；-1 = palette/bare
     std::string tileset_name;    // 图集 = 该层 tileset 的 name；palette/bare = 空
     int nonempty = 0;            // 非空（≠-1）tile 数
 };
+
+// ════════════════════ 场景构造描述（写路径） ════════════════════
+//
+// 用途：程序生成场景时用 C++ 值类型描述，再由 SceneAsset::create 变成资产，不必手拼
+// tro-scene JSON。**本组类型是 schema 的构造子集镜像，schema 仍是权威**：序列化后一律
+// 走 load_json，限额/三态组合/引用/唯一性等校验只在那里实现一次。
+//
+// 实体不镜像成 C++ 类型（SceneSpec::entities 为原样 JSON）：读路径的 SceneEntity 快照
+// 不含 animations，拿它做写路径会把含动画的实体静默丢字段。
+//
+// 边界：只做「C++ 值 → 资产」，不做反向导出（读回仍走 LayerInfo/SceneEntity 快照）。
+
+// 图集引用（写路径的 name/path 对；path 相对 assets/）。
+struct TilesetRef {
+    std::string name;
+    std::string path;
+};
+
+// 层构造描述。
+struct SceneLayerSpec {
+    std::string name = "layer";
+    bool solid = false;
+    int width = 0, height = 0;       // tile 网格尺寸（由 load_json 校验）
+    int origin_x = 0, origin_y = 0;  // 像素偏移（可负）
+    std::string tileset;             // 空 = palette 模式；非空 = 引用 SceneSpec::tilesets 的 name
+    std::vector<int> tiles;          // 行主序；长度与值域由 load_json 校验
+};
+
+// 场景构造描述（构造子集镜像；未列出的 schema 字段请直接手写 tro-scene JSON）。
+// 注意 SceneEntity 的 w/h == 0 语义是「取缺省（= 场景 tile 尺寸）」，不是尺寸 0。
+struct SceneSpec {
+    int tile_width = 16, tile_height = 16;  // 有地形数据时写出；三者皆空（bare）时不写
+    std::vector<Color> palette;             // 非空才写（palette 模式）
+    std::vector<TilesetRef> tilesets;       // 非空才写（图集模式）
+    std::vector<SceneLayerSpec> layers;
+    Json entities = Json::array();          // 原样携带（schema 形状；见本节头部说明）
+    std::string name;                       // meta.name（空 = 不写该键）
+    bool has_background = false;            // 与 SpriteDesc::has 同风格的显式标记
+    std::string background;                 // meta.background 原字符串（#rrggbb / #rrggbbaa）
+    Json props = Json::object();            // meta.props（空 object = 按缺省省略）
+};
+
+// 序列化（不做 schema 校验）：SceneSpec → tro-scene JSON 文本，供需要落盘的消费方
+// （离线生成工具）。非法 spec 会产出被 load_json 拒绝的文本——这正是「校验单一来源」
+// 的体现。本层只判两类无法委托给 JSON 校验的失败（见实现）：非有限数值会被 JSON
+// 序列化成 null（静默改写）与非法 UTF-8 会让 dump 抛异常（收成错误码，不跨 API 抛）。
+ErrorOr<std::string> scene_spec_to_json(const SceneSpec& spec);
 
 // ════════════════════ SceneAsset ════════════════════
 
@@ -105,6 +157,12 @@ public:
     // 路径仍按 assets/ 约定从磁盘解析。不参与 watcher（内存场景无文件可监听）。
     static expected<SceneAsset, AssetError> load_json(
         std::string_view text, std::string_view name = "<memory>");
+
+    // 由构造描述建资产（与 load/load_json 同一校验路径：序列化后仍走 load_json）。
+    // 返回类型与 AssetError 同型（AssetError = tg::Error 的具名别名）。
+    // name 仅用于错误诊断（同 load_json 的 name 参数），与 spec.name（= meta.name）无关。
+    static ErrorOr<SceneAsset> create(const SceneSpec& spec,
+                                      std::string_view name = "<memory>");
 
     SceneAsset(const SceneAsset&) = delete;
     SceneAsset& operator=(const SceneAsset&) = delete;
@@ -124,6 +182,12 @@ public:
     int layer_count() const;
     // 只读引用（存活期）；index 越界 → 断言失败（调用方先查 layer_count）。
     const LayerInfo& layer(int index) const;
+
+    // 资产里标记为 solid 的层索引（升序值快照；无 solid 层 → 空）。
+    // 用途：solid 层索引是资产数据的一部分，不该由每个消费者各自约定「层 1 是 solid」。
+    // 注意它只报告资产里的 `solid` 标记（= 导入提示），是否把这些层纳入自己的碰撞
+    // 集合仍归 game；引擎的 tile-only 查询也只读被标记的层。
+    std::vector<int> solid_layer_indices() const;
 
     int entity_count() const;
     // 值快照（复制），sprite.asset_id 由本 asset 的 asset_id 填充。

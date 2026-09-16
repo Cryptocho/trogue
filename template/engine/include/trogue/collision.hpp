@@ -15,6 +15,7 @@
 // 不暴露 raylib 类型、无随机（确定性）。
 
 #include <cstdint>
+#include <functional>  // std::function（SolidGrid::create 的阻挡谓词参数）
 #include <string>
 #include <vector>
 
@@ -43,6 +44,14 @@ struct SolidGridView {
 };
 
 // ════════════════════ 几何谓词 ════════════════════
+
+// 三态语义（本文件全部几何查询一致，调用方必须显式区分 error）：
+//   error   = 参数非法（非有限坐标/非正尺寸/视图指针与计数不匹配）
+//   clear   = 无阻挡
+//   solid   = 命中阻挡
+// **error ≠ 可通行**——只判 `== solid` 会把参数错误静默当成「没撞到」，调用方的
+// 输入 bug 就变成「实体穿墙」这类难查的现象；需要「非阻挡」时应判 `!= solid`
+// 并让 error 走错误分支。
 
 // 轴对齐矩形相交：半开 [x,x+w)×[y,y+h)；仅边界相接（如 a.x+a.w == b.x）→ false。
 // 任一 w/h <= 0（含 NaN）→ false。
@@ -167,6 +176,31 @@ KinematicResult kinematic_step(const SolidGridView* views, int count,
 KinematicResult kinematic_step(const SceneAsset& asset, const Rect* one_way,
                                int one_way_count, Rect box, Vec2 delta);
 
+// ════════════════════ 探针查询：探地 ════════════════════
+//
+// 与 kinematic_step 内部的探地**同一语义**（同一份实现）：对 box 底边下方
+// kKinematicProbe 厚、宽度 = box.w 的矩形做查询。
+//
+// 用途：`KinematicEvents::grounded` 只在**跑过一步之后**才有意义；spawn/reset/
+// 传送之后要对任意 box 立即提问「脚下是否有支撑」，用本函数。注意
+// `is_solid_at` 是**点查询**，不能替代探地矩形语义：底边中点落在 tile 边界或
+// 紧邻空格的列上时，点查询为 clear 而探地矩形已命中。
+//
+// 返回三态（参数非法不伪装成「悬空」）：
+//   solid = 脚下有支撑（命中 solid 层 **或** one_way 平台——探地语境的语义扩展，
+//           因为两者都能站）
+//   clear = 悬空
+//   error = 参数非法（box 非有限/非正尺寸，或 views/one_way 指针与计数不匹配）；
+//           参数非法先判，一律 error（即使 one_way 同时命中）
+TileQueryResult probe_grounded(const SolidGridView* views, int count, Rect box);
+
+TileQueryResult probe_grounded(const SolidGridView* views, int count,
+                               const Rect* one_way, int one_way_count, Rect box);
+
+// 便捷重载：逐层物化 asset 的 solid 层后查询（O(层数×格数)）。
+// **逐帧查询请持 SolidGrid / 视图走上面的重载**；本重载适合一次性判断与测试。
+TileQueryResult probe_grounded(const SceneAsset& asset, Rect box);
+
 // ════════════════════ 最小轴脱出（depenetration） ════════════════════
 
 struct OverlapResult {
@@ -235,6 +269,14 @@ MixedSweepResult sweep_move_mixed(const SceneAsset& asset,
 // RAII 自持掩码，是「渲染 tile（SceneAsset）+ 碰撞真值（掩码）」双真相的同步
 // 载体：set_tile 把两份写入合并为一次调用，任何失败路径下两份真值都不分叉。
 // 掩码语义与既有物化一致：tiles != -1 → 1（掩码只记阻挡与否，不记 tile 值）。
+//
+// 两种来源：
+//   load(asset, layer) —— 与某个资产的 solid 层绑定，支持 refresh/set_tile 的同步写，
+//                         view().layer_id = 该层索引（可被 segment_hits_solid 原样报出）；
+//   create(...)        —— 由谓词构造的独立掩码（无关联资产），view().layer_id == -1。
+// create 出来的实例**不适用** refresh/set_tile：它们要么要求层号等于 layer_id
+// （set_tile 会因 -1 永不匹配而报错），要么会整体重建掩码（refresh 会静默丢弃谓词
+// 结果并改写 layer_id）——「层 1 是 solid 这类约定」不适用时，请改用本形态。
 class SolidGrid {
 public:
     SolidGrid() = default;
@@ -254,7 +296,18 @@ public:
     }
 
     // 从 asset 第 layer 层物化掩码；层越界或非 solid 层 → error（不创建）。
+    // 「哪几层是 solid」请用 SceneAsset::solid_layer_indices() 查，不要硬编码层号。
     static ErrorOr<SolidGrid> load(const SceneAsset& asset, int layer);
+
+    // 由谓词构造掩码（非资产来源：程序生成房间、测试夹具等）。
+    // blocked(tx, ty) 返回该格是否阻挡；tx/ty 为层局部 tile 坐标（0 <= tx < width）。
+    // 校验：width/height/tile_w/tile_h <= 0 或**任一超过 kLayerDimMax** → kInvalidArgument；
+    //       blocked 为空（未设置）→ kInvalidArgument（不把 bad_function_call 抛出去）。
+    // origin_x/origin_y 不校验（可为负，与场景层 origin 语义一致）。
+    // 产物：view() 的 width/height/tile_w/tile_h 同入参、stride == width、layer_id == -1。
+    static ErrorOr<SolidGrid> create(int width, int height, int tile_w, int tile_h,
+                                     const std::function<bool(int tx, int ty)>& blocked,
+                                     int origin_x = 0, int origin_y = 0);
 
     // 整层重物化：O(w·h)（大地图高频改格用 set_tile，勿整层 refresh）。
     // 层不存在或非 solid 层 → error，旧掩码保留。
@@ -266,8 +319,9 @@ public:
     expected<void, Error> set_tile(SceneAsset& asset, int layer, int tx, int ty,
                                    int value);
 
-    // 掩码视图；layer_id = load/refresh 使用的 layer。移动赋值后源对象的
-    // view() 失效；本对象的 view() 始终指向自身缓冲区。
+    // 掩码视图；load/refresh 出来的实例 layer_id = 该层索引；create 出来的实例 layer_id = -1
+    // （非资产来源，会被 segment_hits_solid 原样报进 TileHit.layer，调用方不能据此区分
+    //  「层索引」与「占位」）。移动赋值后源对象的 view() 失效；本对象的 view() 始终指向自身缓冲区。
     const SolidGridView& view() const { return view_; }
 
 private:

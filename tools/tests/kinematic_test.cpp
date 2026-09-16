@@ -491,6 +491,40 @@ void test_invalid_and_determinism() {
           a.ev.landed == b.ev.landed && a.ev.wall_dir == b.ev.wall_dir);
 }
 
+// ════════════════════ probe_grounded ↔ kinematic_step 一致性 ════════════════════
+// 探针语义只有一份实现（probe_grounded 导出后 kinematic_step 改调它）：同一 box
+// 上两条路径必须同值。delta 取**恰 0.0**——零位移时 sweep_core 不改 box，故
+// kinematic_step 的 grounded 用的就是入参 box 本身。
+void test_probe_matches_step() {
+    Grid g(8, 8);
+    for (int x = 0; x < 8; ++x) g.fill(x, 4);  // 地面行 ty=4（世界 y 64..80）
+
+    const Rect boxes[] = {{32, 32, 16, 16}, {32, 48, 16, 16}, {0, 48, 16, 16},
+                          {100, 48, 16, 16}, {32, 64, 16, 16}};
+    for (const Rect& box : boxes) {
+        const KinematicResult k =
+            tg::kinematic_step(&g.view, 1, box, Vec2{0.0f, 0.0f});
+        const bool probe =
+            tg::probe_grounded(&g.view, 1, box) == TileQueryResult::solid;
+        CHECK(k.ev.grounded == probe);
+    }
+
+    // one_way 也走同一路径：站在薄板上两条路径都判 grounded
+    const Rect plat{32, 64, 32, 6};
+    const Rect on_plat{32, 48, 16, 16};
+    const KinematicResult k2 = tg::kinematic_step(&g.view, 1, &plat, 1, on_plat,
+                                                  Vec2{0.0f, 0.0f});
+    CHECK(k2.ev.grounded);
+    CHECK(tg::probe_grounded(&g.view, 1, &plat, 1, on_plat) ==
+          TileQueryResult::solid);
+
+    // 参数非法：probe 报 error（不伪装成悬空），不进「非阻挡」分支
+    CHECK(tg::probe_grounded(&g.view, 1, Rect{32, 48, 0, 16}) ==
+          TileQueryResult::error);
+    CHECK(tg::probe_grounded(&g.view, 1, Rect{std::nanf(""), 48, 16, 16}) ==
+          TileQueryResult::error);
+}
+
 }  // namespace
 
 int main() {
@@ -499,6 +533,7 @@ int main() {
     test_resolve_overlap();
     test_mixed_sweep();
     test_solid_grid();
+    test_probe_matches_step();
     test_invalid_and_determinism();
     if (::tg_test::g_failures == 0) {
         std::printf("kinematic_test: all %d checks passed\n",

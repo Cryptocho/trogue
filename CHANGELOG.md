@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### 引擎：场景构造写路径（SceneSpec/create）、碰撞探针与视图易错面收尾
+
+- 影响的文件: `engine/include/trogue/scene.hpp`、`engine/include/trogue/collision.hpp`、`engine/src/scene_spec.cpp`（新增）、`engine/src/scene_asset.cpp`、`engine/src/collision.cpp`、`engine/CMakeLists.txt`、`tools/scene_gen.cpp`、`tools/CMakeLists.txt`、`tools/tests/scene_json_alias_test.cpp`（新增）、`tools/tests/scene_spec_test.cpp`（新增）、`tools/tests/collision_test.cpp`、`tools/tests/kinematic_test.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`template/engine/`（快照同步）、`template/tools/scene_gen.cpp`（快照同步）、`template/game/src/main.cpp`、`template/game/examples/common/scene_make.hpp`、`template/game/examples/swarm/{sim.hpp,sim.cpp,main.cpp,sim_test.cpp}`、`template/game/examples/platformer/{sim.cpp,sim_test.cpp}`、`AGENTS.md`、`docs/BACKLOG.md`、`docs/history.md`
+
+#### Added
+- **程序生成场景的类型化写路径**：`tg::SceneSpec` / `SceneLayerSpec` / `TilesetRef`（值类型，tro-scene v2 构造子集镜像）+ `SceneAsset::create(spec, name)` + 自由函数 `tg::scene_spec_to_json(spec)`。`create` 内部序列化后仍走 `load_json`，故限额、三态互斥、引用存在性、实体 id 唯一性、tiles 长度与值域等校验依然只有一份实现；`scene_spec_to_json` 供需要落盘的消费方（离线生成工具）复用同一份序列化。字段策略与 schema 缺省一一对应：顶层 `format`/`version`/`meta`/`tilemap`/`entities` 恒写（`meta` 空 object、`entities` 空数组），`palette`/`tilesets` 非空才写，bare（无 palette 且无 tilesets 且无层）不写 tile 尺寸——故 bare 资产 `tile_width() == 0` 的既有契约不变。实体**按 schema 原样携带 JSON**而不镜像成 `SceneEntity`：后者是读路径快照、不含 `animations`，镜像会把含动画的实体静默丢字段。该层自行判定的失败仅两类：`props`/`entities` 中的非有限数值（JSON 会把 NaN/Inf 序列化成 `null`，属静默改写）与 `dump` 抛出的非法 UTF-8，二者都收成 `kInvalidArgument`，不跨公共 API 抛裸异常。
+- `tg::Json` 别名在 `scene.hpp` 一并声明：需要构造/读取 JSON 的调用方经资产头即可拿到，不必 include IPC 传输头。`ipc.hpp` 保留自己那份同型别名，两处独立声明以避免 ipc↔scene 的包含耦合。
+- `SceneAsset::solid_layer_indices()`：返回被标记为 solid 的层索引（升序值快照）。此前「哪一层是 solid」是 game 与建场景工具之间的隐式约定（范例里靠「层 1 是 solid」对齐，错位只能等 `SolidGrid::load` 报错才发现）。
+- `SolidGrid::create(width, height, tile_w, tile_h, blocked, origin_x, origin_y)`：由谓词构造掩码，供非资产来源的网格（程序生成房间、测试夹具）——此前 RAII 的 `SolidGrid` 只能从资产层物化，无 asset 的纯逻辑路径必须自持裸缓冲、手拼 9 字段视图。校验 `width`/`height`/`tile_w`/`tile_h` 的非正与越界（同一 `kLayerDimMax` 上界）与空谓词，全部返回 `kInvalidArgument`；产物 `stride == width`、`layer_id == -1`（因此 `set_tile` 的层校验必然不匹配 → fail-loud；`refresh` 会整体替换掩码，头注释明令不得用于该形态）。
+- `tg::probe_grounded(...)`（探针查询）：视图重载、单向平台重载与 `SceneAsset` 便捷重载，返回三态 `solid|clear|error`——`solid` 表示脚下有支撑（含单向平台），参数非法先判 `error`，绝不伪装成「悬空」。`KinematicEvents::grounded` 只在跑过一步之后才有意义（spawn/reset 后恒 false），此前没有等价的即时查询（`is_solid_at` 是点查询，不能替代底边下方 1px 的矩形探地语义）。
+- 测试：新增只 include `trogue/scene.hpp` 的编译期断言 TU（`tg::Json` 可达性判据，删别名即编译失败）；新增 `scene_spec_test`（三态构造与回读、实体含 `animations`/`props` 的原样透传、错误路径与「校验单一来源」、`scene_spec_to_json` 与 `create` 等价、非法 UTF-8 与非有限数值两个自有失败面）；`collision_test` 增 `SolidGrid::create` 正常/负路径与 `probe_grounded`（含「点查询不能替代探地矩形」的反例）；`kinematic_test` 增「同一 box 上 `probe_grounded` 与 `kinematic_step` 同值」一致性用例；`scene_schema_test` 增 `solid_layer_indices`。
+
+#### Changed
+- `kinematic_step` 的探地改为调用公共 `probe_grounded`：探针语义从「内部实现 + 公共查询各一份」收敛为单一实现。合法入参下行为逐位不变（以旧实现原文对 20000 组随机 mask/box/one_way 比对，0 处差异）；仅非法入参（`one_way` 计数为负，或计数为正而指针为空）由旧的「忽略该参数 / 解引用空指针」变为按「无支撑」处理——这些入参本就不在契约内。
+- `collision.hpp` 显式写明几何查询的三态纪律：`error` 表示参数非法，**不等于可通行**，只判 `== solid` 会漏掉该分支（此前只有实现里能看出）。
+- 四个消费方改用新的写路径/查询，行为与产物均回归确认无损：`tools/scene_gen`（组装 `SceneSpec` → 先自检后落盘，产物与改造前逐字节相同）、模板内置场景（`builtin_scene()` 取代手拼 JSON，失败仍走「保留旧场景」路径）、`template/game/examples/common/scene_make.hpp`（ASCII → `SceneSpec`，文件不再产出 JSON）、`game/src/main.cpp` 的 `genmap`（palette 双层改由 `SceneSpec` 构造，IPC wire 契约不变）；`swarm` 删掉手写 `room_mask`/`room_view` 改用 `SolidGrid::create(room_solid)`，`platformer` 用 `solid_layer_indices()` 取代硬编码「层 1」并新增「spawn 后未步进即可探地」用例。
+- `docs/history.md` 头部与 `AGENTS.md` 的「计划书纪律」一次改齐：设计结论进 `AGENTS.md`，`docs/history.md` 只收被取代/删除的设计原文，逐项实现记录进 `CHANGELOG`（原两处纪律文本互相指向、且引用了 `AGENTS.md` 中已不存在的「历史实现阶段记录」节）。
+
+#### Tests
+- 根仓库：Debug 构建零告警；CTest 21/21（新增 `scene_json_alias_test`、`scene_spec_test` `checks=61 failures=0`；`collision_test` 235、`kinematic_test` 248、`scene_schema_test` 145、`anim_tween_test` 162 checks 全绿）。
+- `tools/ipc_smoke.py` 起服实跑 99/99（含 `genmap` 的层名/solid/tileset 为 null/`nonempty` 等 wire 契约断言，确认改造无损）。
+- `tools/scene_gen` 端到端：同一 spec 的新旧二进制产物逐字节相同；含 `entities`（带 `props`）的 spec 原样透传；被拒场景不产生输出文件。
+- 模板独立构建与范例回归：全树零告警、CTest 2/2（`swarm_sim_test` 26 checks、`platformer_sim_test` 28 checks）；两范例 `--headless --seconds 20` 摘要与改造前逐字一致（swarm 改用引擎建格后仍是 `steps=1200 spawned=21 kills=11 pickups=4 level=2 player_hp=100 deaths=1 seed=20260916`，platformer 仍是 `steps=1200 x=932 y=234 grounded=0 deaths=0 won=1 enemies=2`）；模板起步游戏 + 模板 IPC 冒烟 45/45。
+- 结构等价性钉子：`swarm` 的 `SolidGrid::create(room_solid)` 掩码与按同一公开谓词逐格重建的期望字节**逐字节相同**（20 秒摘要只有 8 个标量，不足以发现「掩码变了但统计量未变」）。
+- 快照一致性：`diff -r engine template/engine`、`template/tools/scene_gen.cpp`、`template/tools/placeholder_tileset.py` 均逐字节一致。
+
 ### 引擎/模板：Tween 语义文档收尾 + 两个范式范例（「引擎不规定架构」的可见证据）
 
 - 影响的文件: `engine/include/trogue/tween.hpp`、`engine/src/tween.cpp`、`tools/tests/anim_tween_test.cpp`、`template/engine/`（快照同步）、`template/game/examples/`（新增：`common/harness.hpp`、`common/scene_make.hpp`、`CMakeLists.txt`、`swarm/sim.hpp`、`swarm/sim.cpp`、`swarm/main.cpp`、`swarm/sim_test.cpp`、`platformer/sim.hpp`、`platformer/sim.cpp`、`platformer/main.cpp`、`platformer/sim_test.cpp`）、`template/game/CMakeLists.txt`、`template/tools/CMakeLists.txt`、`template/README.md`、`template/AGENTS.md`、`AGENTS.md`、`docs/BACKLOG.md`

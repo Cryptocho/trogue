@@ -53,8 +53,15 @@ int main(int argc, char** argv) {
     tg::SceneAsset scene = hp::make_ascii_scene(
         rows, swarm::kTile, tg::Color{32, 34, 44, 255}, tg::Color{108, 120, 147, 255},
         tg::Color{16, 18, 24, 255}, "swarm");
-    std::vector<std::uint8_t> mask = swarm::room_mask();
-    const tg::SolidGridView view = swarm::room_view(mask);
+    // 掩码由引擎按同一谓词构造（RAII 自持 buffer；layer_id = -1 表示非资产来源）
+    auto grid_or = tg::SolidGrid::create(swarm::kRoomW, swarm::kRoomH, swarm::kTile,
+                                         swarm::kTile, swarm::room_solid);
+    if (!grid_or) {  // 入参是编译期常量：失败即程序错误
+        std::fprintf(stderr, "[swarm] 掩码构造失败: %s\n", grid_or.error().message.c_str());
+        return 1;
+    }
+    const tg::SolidGrid& grid = *grid_or;
+    const tg::SolidGridView& view = grid.view();
 
     swarm::World world;
     swarm::reset_round(world);

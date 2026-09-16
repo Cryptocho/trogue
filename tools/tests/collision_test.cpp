@@ -493,6 +493,120 @@ bool test_solid_grid_views() {
     return true;
 }
 
+// ── SolidGrid::create：谓词建格（非资产来源的掩码） ──
+bool test_solid_grid_create() {
+    using tg::ErrorCode;
+    using tg::SolidGrid;
+    using tg::TileQueryResult;
+    const auto blocked = [](int tx, int ty) {  // 8×8 房间：一圈墙 + 中心偏一格
+        return tx == 0 || ty == 0 || tx == 7 || ty == 7 || (tx == 3 && ty == 3);
+    };
+    auto grid = SolidGrid::create(8, 8, 16, 16, blocked);
+    REQUIRE(grid.has_value());
+    const tg::SolidGridView& v = grid->view();
+    CHECK(v.width == 8 && v.height == 8);
+    CHECK(v.tile_w == 16 && v.tile_h == 16);
+    CHECK(v.stride == 8);   // create 内部显式置 stride = width
+    CHECK(v.layer_id == -1);  // 非资产来源：与任何真实层都不相等
+    CHECK(v.origin_x == 0 && v.origin_y == 0);
+    int mismatches = 0;
+    for (int ty = 0; ty < 8; ++ty)
+        for (int tx = 0; tx < 8; ++tx)
+            if ((v.mask[static_cast<std::size_t>(ty) * 8 + tx] != 0) != blocked(tx, ty))
+                ++mismatches;
+    CHECK(mismatches == 0);  // 掩码逐格等于谓词
+    CHECK(tg::is_solid_at(&v, 1, Vec2{8, 8}) == TileQueryResult::solid);
+    CHECK(tg::is_solid_at(&v, 1, Vec2{56, 56}) == TileQueryResult::solid);
+    CHECK(tg::is_solid_at(&v, 1, Vec2{40, 40}) == TileQueryResult::clear);
+    CHECK(tg::is_solid_at(&v, 1, Vec2{-100, -100}) == TileQueryResult::clear);
+    CHECK(tg::rect_hits_solid(&v, 1, Rect{8, 8, 16, 16}) == TileQueryResult::solid);
+
+    // 移动后视图自洽（view() 指向对象自身缓冲区）
+    auto moved = std::move(*grid);
+    CHECK(moved.view().mask != nullptr);
+    CHECK(tg::is_solid_at(&moved.view(), 1, Vec2{8, 8}) == TileQueryResult::solid);
+
+    // 负路径：尺寸非法/超限额/空谓词 → kInvalidArgument，且不产生半成品
+    const auto bad_size = SolidGrid::create(0, 8, 16, 16, blocked);
+    REQUIRE(!bad_size.has_value());
+    CHECK(bad_size.error().code == ErrorCode::kInvalidArgument);
+    CHECK(!SolidGrid::create(8, 8, 0, 16, blocked).has_value());
+    CHECK(!SolidGrid::create(8, 8, 16, -1, blocked).has_value());
+    CHECK(!SolidGrid::create(tg::kLayerDimMax + 1, 1, 16, 16, blocked).has_value());
+    CHECK(!SolidGrid::create(1, tg::kLayerDimMax + 1, 16, 16, blocked).has_value());
+    const std::function<bool(int, int)> empty_pred;
+    const auto bad_pred = SolidGrid::create(8, 8, 16, 16, empty_pred);
+    REQUIRE(!bad_pred.has_value());
+    CHECK(bad_pred.error().code == ErrorCode::kInvalidArgument);
+
+    // set_tile 对 create 实例 fail-loud：层号永不等于 layer_id(-1)，不会把写入
+    // 静默落到无关资产上
+    LoadedScene s;
+    REQUIRE(load(wall_scene(), s));
+    auto grid2 = SolidGrid::create(4, 4, 16, 16, blocked);
+    REQUIRE(grid2.has_value());
+    const auto st = grid2->set_tile(*s.asset, 0, 1, 1, 1);
+    REQUIRE(!st.has_value());
+    CHECK(st.error().code == ErrorCode::kInvalidArgument);
+    return true;
+}
+
+// ── probe_grounded：探地探针（三态、one_way、与点查询的区别） ──
+bool test_probe_grounded() {
+    using tg::TileQueryResult;
+    LoadedScene s;
+    REQUIRE(load(wall_scene(), s));
+    const SceneAsset& a = *s.asset;
+
+    // 站在 row4 墙上（底边 y=64 = 墙顶）→ 有支撑；抬高一格 → 悬空
+    CHECK(tg::probe_grounded(a, Rect{0, 48, 16, 16}) == TileQueryResult::solid);
+    CHECK(tg::probe_grounded(a, Rect{0, 32, 16, 16}) == TileQueryResult::clear);
+    // 层外 → clear（层矩形外 = 无数据 = 不阻挡）
+    CHECK(tg::probe_grounded(a, Rect{-100, -100, 16, 16}) == TileQueryResult::clear);
+    // 参数非法 → error（不伪装成「悬空」）
+    CHECK(tg::probe_grounded(a, Rect{0, 48, 0, 16}) == TileQueryResult::error);
+    CHECK(tg::probe_grounded(a, Rect{std::nanf(""), 48, 16, 16}) ==
+          TileQueryResult::error);
+
+    // 点查询不能替代探地矩形语义：箱宽跨两格、只有其中一格有支撑时，探地为
+    // solid 而底边中点（落在空格那一侧）的点查询为 clear。
+    {
+        LoadedScene s2;
+        REQUIRE(load(cell_only_scene(4, 5, 0, 4), s2));
+        const SceneAsset& a2 = *s2.asset;
+        const Rect wide{0, 48, 32, 16};  // 底边 y=64 → 探地矩形 [0,64,32,1]
+        CHECK(tg::probe_grounded(a2, wide) == TileQueryResult::solid);
+        CHECK(tg::is_solid_at(a2, Vec2{wide.x + wide.w / 2.0f,
+                                       wide.y + wide.h}) ==
+              TileQueryResult::clear);  // 中点 (16,64) 属 tile (1,4) = 空格
+    }
+
+    // 视图重载 + one_way 重载
+    std::array<std::uint8_t, 64> mask{};
+    mask[4 * 8 + 0] = 1;  // (0,4) 实心
+    const tg::SolidGridView v{8, 8, 16, 16, 0, 0, mask.data(), 0, 3};
+    CHECK(tg::probe_grounded(&v, 1, Rect{0, 48, 16, 16}) == TileQueryResult::solid);
+    CHECK(tg::probe_grounded(&v, 1, Rect{32, 48, 16, 16}) == TileQueryResult::clear);
+    std::array<std::uint8_t, 64> empty_mask{};
+    const tg::SolidGridView no_solid{8, 8, 16, 16, 0, 0, empty_mask.data(), 0, -1};
+    const tg::Rect plat{0, 64, 32, 6};  // 薄板：顶边 y=64
+    CHECK(tg::probe_grounded(&no_solid, 1, &plat, 1, Rect{0, 48, 16, 16}) ==
+          TileQueryResult::solid);  // 站在板上 → 有支撑（探地语境扩展）
+    CHECK(tg::probe_grounded(&no_solid, 1, &plat, 1, Rect{0, 32, 16, 16}) ==
+          TileQueryResult::clear);  // 板顶上方一格 → 悬空
+    // 参数非法优先：即使 one_way 命中，也一律 error
+    CHECK(tg::probe_grounded(&no_solid, 1, &plat, 1, Rect{0, 48, 0, 16}) ==
+          TileQueryResult::error);
+    // 计数/指针不匹配 → error
+    CHECK(tg::probe_grounded(nullptr, 1, Rect{0, 48, 16, 16}) ==
+          TileQueryResult::error);
+    CHECK(tg::probe_grounded(&v, -1, Rect{0, 48, 16, 16}) ==
+          TileQueryResult::error);
+    CHECK(tg::probe_grounded(&v, 0, Rect{0, 48, 16, 16}) ==
+          TileQueryResult::clear);  // 空视图数组合法：无阻挡
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -502,6 +616,8 @@ int main() {
     ok = test_sweep_bruteforce() && ok;
     ok = test_sweep_semantics() && ok;
     ok = test_solid_grid_views() && ok;
+    ok = test_solid_grid_create() && ok;
+    ok = test_probe_grounded() && ok;
     std::printf("[collision_test] checks=%d failures=%d\n", tg_test::g_checks,
                 tg_test::g_failures);
     if (tg_test::g_failures == 0 && ok) {

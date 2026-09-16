@@ -139,10 +139,20 @@ void Jumper::update(const Level& lv, float dt) {
 // ── Level ──
 
 Level::Level(tg::SceneAsset asset) : asset_(std::move(asset)) {
-    // 层 1 = solid 墙层：与 level_rows/build_scene（以及 hp::make_ascii_scene）的两层
-    // 约定一致；物化成掩码后所有位移查询都走它，不再直接读 tile 层。
-    auto grid = tg::SolidGrid::load(asset_, 1);
-    if (!grid) { std::fprintf(stderr, "[platformer] solid 层缺失\n"); std::abort(); }
+    // solid 层索引从资产查（不再硬编码「层 1 是 solid」）：本范例的场景由
+    // build_scene 唯一提供，恰好一层 solid；层数不符即关卡构造错误，直接失败。
+    const std::vector<int> solids = asset_.solid_layer_indices();
+    if (solids.size() != 1) {
+        std::fprintf(stderr, "[platformer] 场景需要恰好 1 个 solid 层，实际 %zu\n",
+                     solids.size());
+        std::abort();
+    }
+    auto grid = tg::SolidGrid::load(asset_, solids[0]);
+    if (!grid) {
+        std::fprintf(stderr, "[platformer] solid 层物化失败: %s\n",
+                     grid.error().message.c_str());
+        std::abort();
+    }
     grid_ = std::move(*grid);
 
     // 单向平台是 game 自持矩形（场景 tile 层里不存在）：薄板，从下往上穿过、自上

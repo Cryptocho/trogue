@@ -125,6 +125,19 @@ int main() {
         CHECK(a.alive_enemies() == b.alive_enemies() && a.deaths() == b.deaths());
     }
 
+    // ⑨ spawn 之后「立即探地」：KinematicEvents::grounded 只在跑过一步之后才有
+    //    意义（本文件 ③ 的注释就踩过这条），未推进任何步时 probe_grounded 已能
+    //    回答「脚下是否有支撑」。默认出生点 box (32,240,12,16) 站在地面上：
+    //    探地矩形 (32,256,12,1) 命中 solid 层。
+    {
+        plat::Level lv{plat::build_scene(plat::kTile)};
+        const tg::Rect b = lv.player().box();
+        CHECK(!lv.player().grounded());  // 一步未跑：事件未派生
+        CHECK(tg::probe_grounded(lv.scene(), b) == tg::TileQueryResult::solid);
+        lv.step(plat::Input{});          // 跑一步后事件派生：与探针结论一致
+        CHECK(lv.player().grounded());
+    }
+
     std::printf("checks=%d failures=%d\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

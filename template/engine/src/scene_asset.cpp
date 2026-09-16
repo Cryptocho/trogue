@@ -102,6 +102,12 @@ const LayerInfo& SceneAsset::layer(int index) const {
     // 契约：调用方先查 layer_count；越界为程序错误（不静默）
     return impl_->layers[static_cast<std::size_t>(index)];
 }
+std::vector<int> SceneAsset::solid_layer_indices() const {
+    std::vector<int> out;
+    for (std::size_t i = 0; i < impl_->layers.size(); ++i)
+        if (impl_->layers[i].solid) out.push_back(static_cast<int>(i));
+    return out;
+}
 int SceneAsset::entity_count() const {
     return static_cast<int>(impl_->entities.size());
 }

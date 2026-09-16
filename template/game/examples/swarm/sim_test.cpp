@@ -6,6 +6,7 @@
 // 站着不动最终被打死并重置、升级规则生效。
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>  // std::exit（掩码构造失败的常量入参即程序错误）
 #include <string>
 #include <vector>
 
@@ -33,22 +34,33 @@ void check(bool ok, const char* what) {
         }                                                                \
     } while (false)
 
+// 房间碰撞视图：由引擎按公开谓词构造（RAII 自持掩码，移动后视图自洽）
+tg::SolidGrid make_grid() {
+    auto grid = tg::SolidGrid::create(swarm::kRoomW, swarm::kRoomH, swarm::kTile,
+                                      swarm::kTile, swarm::room_solid);
+    if (!grid) {  // 入参是编译期常量：失败即程序错误
+        std::fprintf(stderr, "swarm_sim_test: SolidGrid::create 失败: %s\n",
+                     grid.error().message.c_str());
+        std::abort();
+    }
+    return std::move(*grid);
+}
+
 // 固定步跑满 seconds 秒（默认无输入）：同参数必得相同 World —— 这就是确定性口径
 swarm::World run(int seconds, swarm::Input in = swarm::Input{}) {
-    std::vector<std::uint8_t> mask = swarm::room_mask();
-    const tg::SolidGridView view = swarm::room_view(mask);
+    const tg::SolidGrid grid = make_grid();
     swarm::World w;
     swarm::reset_round(w);
-    for (int i = 0; i < seconds * 60; ++i) swarm::step(w, in, &view, 1, swarm::kDt);
+    for (int i = 0; i < seconds * 60; ++i)
+        swarm::step(w, in, &grid.view(), 1, swarm::kDt);
     return w;
 }
 
 // 所有实体都不得与墙重叠：墙碰撞的验收口径 = 引擎 rect_hits_solid 判 clear
 bool all_inside(const swarm::World& w) {
-    std::vector<std::uint8_t> mask = swarm::room_mask();
-    const tg::SolidGridView view = swarm::room_view(mask);
+    const tg::SolidGrid grid = make_grid();
     for (int i = 0; i < swarm::count(w); ++i)
-        if (tg::rect_hits_solid(&view, 1, swarm::rect_of(w, i)) ==
+        if (tg::rect_hits_solid(&grid.view(), 1, swarm::rect_of(w, i)) ==
             tg::TileQueryResult::solid)
             return false;
     return true;
@@ -102,6 +114,25 @@ int main() {
     CHECK(swarm::fire_interval(5) < swarm::fire_interval(1));
     CHECK(swarm::bullet_dmg(10) == swarm::bullet_dmg(1) + 1);
     CHECK(swarm::xp_need(1) == 4);
+
+    // ⑧ 掩码等价性：SolidGrid::create(谓词) 与逐格重建的期望字节逐字节相同
+    //    （摘要只有 8 个标量，对「掩码变了但没影响统计量」的变化会漏报）
+    {
+        const tg::SolidGrid grid = make_grid();
+        const tg::SolidGridView& v = grid.view();
+        REQUIRE(v.width == swarm::kRoomW && v.height == swarm::kRoomH);
+        REQUIRE(v.tile_w == swarm::kTile && v.tile_h == swarm::kTile);
+        CHECK(v.stride == swarm::kRoomW);  // create 内部显式置 stride = width
+        CHECK(v.layer_id == -1);           // 非资产来源掩码
+        int mismatches = 0;
+        for (int ty = 0; ty < swarm::kRoomH; ++ty)
+            for (int tx = 0; tx < swarm::kRoomW; ++tx) {
+                const std::uint8_t want = swarm::room_solid(tx, ty) ? 1 : 0;
+                if (v.mask[static_cast<std::size_t>(ty) * swarm::kRoomW + tx] != want)
+                    ++mismatches;
+            }
+        CHECK(mismatches == 0);
+    }
 
     std::printf("checks=%d failures=%d\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

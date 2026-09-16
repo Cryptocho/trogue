@@ -76,6 +76,20 @@ add_test(NAME task_runner_test COMMAND trogue_task_runner_test)
 set_tests_properties(task_runner_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── tg::Json 可达性判据（只 include 资产头，不引 IPC/伞头）──
+add_executable(trogue_scene_json_alias_test tests/scene_json_alias_test.cpp)
+target_link_libraries(trogue_scene_json_alias_test PRIVATE trogue_engine
+                                                            ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME scene_json_alias_test COMMAND trogue_scene_json_alias_test)
+
+# ── SceneSpec / SceneAsset::create 单测（纯公共 API，链接生产库） ──
+add_executable(trogue_scene_spec_test tests/scene_spec_test.cpp tests/test_util.hpp)
+target_link_libraries(trogue_scene_spec_test PRIVATE trogue_engine
+                                                       ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME scene_spec_test COMMAND trogue_scene_spec_test)
+set_tests_properties(scene_spec_test PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── 碰撞几何原语单测（纯公共 API，链接生产库） ──
 add_executable(trogue_collision_test tests/collision_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_collision_test PRIVATE trogue_engine
