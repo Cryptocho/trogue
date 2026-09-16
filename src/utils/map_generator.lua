@@ -11,6 +11,10 @@ local Poisson = require("src.utils.poisson_disk")
 -- Forest options:
 --   - treeMinDist (number): Minimum distance between trees (default 2.0).
 --   - densityThreshold (number): Minimum FBM density to place tree (default 0.3).
+--   - bushMinDist (number): Minimum distance between bushes (default 4.0).
+--   - bushDensityThreshold (number): Minimum FBM density to place bush (default 0.55).
+--   - grassMinDist (number): Minimum distance between grass patches (default 2.5).
+--   - grassDensityThreshold (number): Minimum FBM density to place grass (default 0.4).
 --   - fbmOctaves (number): FBM octave count (default 6).
 --   - fbmPersistence (number): FBM persistence/lacunarity (default 0.5).
 --   - fbmScale (number): FBM frequency scale (default 4.0).
@@ -65,6 +69,46 @@ local function generateMap(type, width, height, options)
             local ty = math.floor(point.y)
             if tx >= 1 and tx <= width and ty >= 1 and ty <= height then
                 mapData[ty] = mapData[ty]:sub(1, tx - 1) .. "^" .. mapData[ty]:sub(tx + 1)
+            end
+        end
+
+        -- Bush placement (Poisson sampling)
+        local bushMinDist = (options and options.bushMinDist) or 4.0
+        local bushDensityThreshold = (options and options.bushDensityThreshold) or 0.55
+        local bushPoints = Poisson.sampleWithDensity(
+            densityMap, width, height,
+            bushMinDist,
+            poissonMaxAttempts,
+            bushDensityThreshold,
+            poissonSeed and poissonSeed + 1000
+        )
+        for _, point in ipairs(bushPoints) do
+            local bx = math.floor(point.x)
+            local by = math.floor(point.y)
+            if bx >= 1 and bx <= width and by >= 1 and by <= height then
+                if mapData[by]:sub(bx, bx) == "." then
+                    mapData[by] = mapData[by]:sub(1, bx - 1) .. "+" .. mapData[by]:sub(bx + 1)
+                end
+            end
+        end
+
+        -- Grass/mushroom placement (Poisson sampling)
+        local grassMinDist = (options and options.grassMinDist) or 2.5
+        local grassDensityThreshold = (options and options.grassDensityThreshold) or 0.4
+        local grassPoints = Poisson.sampleWithDensity(
+            densityMap, width, height,
+            grassMinDist,
+            poissonMaxAttempts,
+            grassDensityThreshold,
+            poissonSeed and poissonSeed + 2000
+        )
+        for _, point in ipairs(grassPoints) do
+            local gx = math.floor(point.x)
+            local gy = math.floor(point.y)
+            if gx >= 1 and gx <= width and gy >= 1 and gy <= height then
+                if mapData[gy]:sub(gx, gx) == "." then
+                    mapData[gy] = mapData[gy]:sub(1, gx - 1) .. "," .. mapData[gy]:sub(gx + 1)
+                end
             end
         end
 

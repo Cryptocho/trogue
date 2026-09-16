@@ -17,6 +17,8 @@ local TweenSystem = require("src.systems.tween_system")
 local InventoryUI = require("src.systems.inventory_ui")
 local FogOfWar = require("src.systems.fog_of_war")
 
+local TILE_BUSH = 10
+
 -- Load configuration
 local Config = require("src.config")
 local Coordinates = require("src.core.coordinates")
@@ -227,7 +229,12 @@ function love.draw()
                                     local playerScreenX = playerWx + offsetX
                                     local playerScreenY = playerWy + offsetY
                                     
-                                    local tv = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
+                                    local tv
+                                    if tree.tileType == TILE_BUSH then
+                                        tv = mapRenderer.bushVariants[tree.variant] or mapRenderer.bushVariants[1]
+                                    else
+                                        tv = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
+                                    end
                                     if playerScreenX + Config.TILE_SIZE > treeScreenX and
                                        playerScreenX < treeScreenX + tv.regionW and
                                        playerScreenY + Config.TILE_SIZE > treeScreenY and
@@ -241,7 +248,12 @@ function love.draw()
                             end
                             
                             -- Mouse hover transparency (check entire tree draw area)
-                            local tvh = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
+                            local tvh
+                            if tree.tileType == TILE_BUSH then
+                                tvh = mapRenderer.bushVariants[tree.variant] or mapRenderer.bushVariants[1]
+                            else
+                                tvh = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
+                            end
                             if mx >= tree.drawX and mx <= tree.drawX + tvh.regionW and
                                my >= tree.drawY and my <= tree.drawY + tvh.regionH then
                                 alpha = 0.3
