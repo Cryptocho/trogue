@@ -361,11 +361,6 @@ function InputSystem:handleClick(x, y)
         self:stopAutoMove()
     end
 
-    -- 如果视野内有敌人，不允许开始自动移动
-    if distance > 1 and self:hasEnemyInSight() then
-        return
-    end
-
     if self.turnSystem then
         self.turnSystem:startTurn()
     end
@@ -376,9 +371,17 @@ function InputSystem:handleClick(x, y)
     if distance > 1 then
         local path = self:findPath(playerPos.x, playerPos.y, worldX, worldY, playerId, mapRenderer)
         if path and #path > 1 then
-            -- 使用自动移动
-            self:startAutoMove(path, playerId)
-            return
+            -- 检查视野内是否有敌人
+            if self:hasEnemyInSight() then
+                -- 有敌人，单步移动一格
+                local firstStep = path[2]
+                moveDx = firstStep.x - playerPos.x
+                moveDy = firstStep.y - playerPos.y
+            else
+                -- 没有敌人，开始自动移动
+                self:startAutoMove(path, playerId)
+                return
+            end
         else
             return
         end
@@ -436,8 +439,9 @@ function InputSystem:findPath(startX, startY, goalX, goalY, excludeEntity, mapRe
         return not mapRenderer:isSolid(tx, ty)
     end
 
+    -- Don't treat entities as blocking for pathfinding (only check map collision)
     local function getBlockingEntity(tx, ty)
-        return self:getEntityAt(tx, ty, excludeEntity)
+        return nil
     end
 
     return Coordinates.findPath(startX, startY, goalX, goalY, isPassable, getBlockingEntity)
@@ -651,7 +655,7 @@ function InputSystem:autoMoveStep()
         return
     end
 
-    -- 检查是否有敌人在视野内
+    -- 检查是否有敌人在视野内，如果有则中断自动移动
     if self:hasEnemyInSight() then
         self:stopAutoMove()
         return

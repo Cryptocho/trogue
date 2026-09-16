@@ -8,11 +8,16 @@ All notable changes to this project will be documented in this file.
 
 - 影响的文件: `src/systems/input.lua`, `src/systems/turn.lua`
 - 点击远处格子时自动寻路并逐步移动到目标位置
-- 每步移动消耗一个回合，敌人回合后继续移动
+- 每步移动消耗一个回合，敌人回合后等待移动动画完成再继续下一步
 - 移动过程中检测视野内敌人（13x13 区域，切比雪夫距离 ≤ 6）
-- 检测到敌人时立即停止自动移动
+- 检测到敌人时立即停止自动移动，改为单步移动
+- 视野内有敌人时，点击远处位置只移动一格（单步移动）
+- 视野内无敌人时，点击远处位置开始自动移动（一回合一格连续移动）
 - 按键或点击新位置时取消当前自动移动
 - 碰撞时自动停止移动
+- `InputSystem` 新增 `TurnEnd` 事件监听，实现事件驱动的自动移动流程
+- 新增方法：`startAutoMove`、`autoMoveStep`、`hasEnemyInSight`、`stopAutoMove`
+- 寻路不再被敌人实体阻挡，只检查地图障碍物
 
 ### 战争迷雾系统
 
