@@ -14,6 +14,7 @@
 
 #include <cstdint>  // std::uint64_t
 #include <memory>   // std::unique_ptr
+#include <optional>  // std::optional<Rect>（视口裁剪 overload 形参）
 #include <string>
 #include <string_view>
 #include <vector>
@@ -243,6 +244,8 @@ private:
                                       int w, int h, std::uint8_t* out_mask);
     // 渲染自由函数需要读 Impl（tile 数据 / 图集槽位）：friend。
     friend RenderResult render_scene(const SceneAsset& asset);
+    friend RenderResult render_scene(const SceneAsset& asset,
+                                     std::optional<Rect> viewport);
     friend RenderResult render_sprite(const SceneAsset& asset,
                                       const SpriteDesc& sprite, Vec2 pos,
                                       Color tint, Vec2 scale, float rotation);

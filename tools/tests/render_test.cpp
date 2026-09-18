@@ -6,8 +6,17 @@
 //   ② 合法调用但未建窗口 → window_checks 增、texture_attempts==0（段②不执行段③）；
 //   ③ draw_rect 非法矩形 → param_failures 增；合法矩形未建窗口 → window_checks 增。
 // 本机无窗口（不 InitWindow），render_* 应全程安全 no-op 不崩、不触碰 GPU。
+//
+// 视口裁剪（render_scene(asset, viewport)）：
+//   段①   viewport 非有限 / w<=0 / h<=0 → param_failures 增、Invalid
+//   段①'  CPU-only 计数（视口与层交集内的非空格 tile）→ 累加 culled_tiles
+//         在段②之前已完成；无窗口单测因此能稳定断言 culled_tiles
+//   段②   窗口检查：未就绪 → WindowUnavailable（culled_tiles 已稳定）
+//   段③   视口内 tile 绘制（裁剪路径）/ 全层 tile 绘制（非裁剪路径）
 #include <limits>
+#include <cmath>     // std::nan / std::numeric_limits
 #include <cstdio>
+#include <optional>
 #include <string>
 
 #include "trogue/trogue.hpp"
@@ -38,6 +47,33 @@ tg::ErrorOr<SceneAsset> make_asset() {
                        "tiles":[1,-1,-1,-1,  -1,-1,-1,-1,  -1,-1,-1,-1,  -1,-1,-1,-1]}]},
             "entities":[{"id":"a","type":"x","x":0,"y":0,"w":16,"h":16}]})",
                     f);
+        std::fclose(f);
+    }
+    auto r = SceneAsset::load(path);
+    std::remove(path.c_str());
+    return r;
+}
+
+// 构造一个 100×100 全非空格 palette 场景（视口裁剪裁剪比例与不交测试用）。
+// 全 1 = 10000 瓦全画，origin=(0,0)，tile_w=tile_h=16。
+tg::ErrorOr<SceneAsset> make_large_palette_asset() {
+    static int seq = 0;
+    const std::string path =
+        "build/tmp_render_large_" + std::to_string(seq++) + ".json";
+    {
+        std::FILE* f = std::fopen(path.c_str(), "wb");
+        std::fputs("{\"format\":\"tro-scene\",\"version\":2,\"tilemap\":{"
+                   "\"tile_width\":16,\"tile_height\":16,"
+                   "\"palette\":[\"#2a2d3a\",\"#7f8ca3\"],"
+                   "\"layers\":[{\"name\":\"g\",\"width\":100,\"height\":100,"
+                   "\"solid\":true,\"tiles\":[",
+                   f);
+        // 行主序 100×100 = 10000 瓦，全部 tile=1（palette[1]）
+        for (int i = 0; i < 10000; ++i) {
+            if (i > 0) std::fputc(',', f);
+            std::fputc('1', f);
+        }
+        std::fputs("]}]},\"meta\":{\"name\":\"large_palette\"}}", f);
         std::fclose(f);
     }
     auto r = SceneAsset::load(path);
@@ -183,6 +219,103 @@ bool test_flip_rotation_params() {
     return ok;
 }
 
+// 视口裁剪比例：100×100 全非空格 palette 层，vp=(0,0,160,160) →
+// tx0=0, tx1=ceil(160/16)=10；ty 同理；视口内 10×10=100 瓦；
+// culled = nonempty(10000) - drawn_in_vp(100) = 9900。
+// 段①' 在段② 之前累加 culled_tiles → 无窗口单测也能断言。
+bool test_viewport_cull_ratio() {
+    bool ok = true;
+    render_test_reset_stats();
+    auto asset_or = make_large_palette_asset();
+    REQUIRE(asset_or.has_value());
+    const RenderStats before = render_test_stats();
+
+    const tg::Rect vp{0.0f, 0.0f, 160.0f, 160.0f};
+    // 无窗口 → WindowUnavailable；但 culled_tiles 已在段①' 累加
+    CHECK(render_scene(*asset_or, vp) == RenderResult::WindowUnavailable);
+
+    const RenderStats after = render_test_stats();
+    CHECK(after.culled_tiles == before.culled_tiles + 9900);
+    CHECK(after.param_failures == before.param_failures);  // 段① 合法
+    CHECK(after.window_checks == before.window_checks + 1);  // 段② 跑过一次
+    CHECK(after.texture_attempts == before.texture_attempts);  // palette 不触纹理加载
+    return ok;
+}
+
+// viewport 非法路径：NaN / 负宽 / +∞ 三件套 → 段① 拒绝。
+bool test_viewport_invalid_params() {
+    bool ok = true;
+    render_test_reset_stats();
+    auto asset_or = make_asset();
+    REQUIRE(asset_or.has_value());
+    const RenderStats before = render_test_stats();
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    CHECK(render_scene(*asset_or, tg::Rect{nan, 0.0f, 100.0f, 100.0f}) ==
+          RenderResult::Invalid);
+    CHECK(render_scene(*asset_or, tg::Rect{0.0f, 0.0f, -1.0f, 100.0f}) ==
+          RenderResult::Invalid);
+    CHECK(render_scene(*asset_or, tg::Rect{0.0f, 0.0f, 100.0f, inf}) ==
+          RenderResult::Invalid);
+
+    const RenderStats after = render_test_stats();
+    CHECK(after.param_failures == before.param_failures + 3);
+    CHECK(after.window_checks == before.window_checks);  // 段① 拒绝不触段②
+    CHECK(after.culled_tiles == before.culled_tiles);    // 段①' 未跑
+    return ok;
+}
+
+// nullopt 等价：旧 overload `render_scene(asset)` 与新 overload `render_scene(asset, nullopt)`
+// 在三段计数上完全等价——两次调用各自的"前后差值"逐字段相等。
+bool test_viewport_nullopt_equivalence() {
+    bool ok = true;
+    render_test_reset_stats();
+    auto asset_or = make_asset();
+    REQUIRE(asset_or.has_value());
+
+    const RenderStats before = render_test_stats();
+
+    // 旧 overload
+    CHECK(render_scene(*asset_or) == RenderResult::WindowUnavailable);
+    const RenderStats after_old = render_test_stats();
+
+    // 新 overload + nullopt
+    CHECK(render_scene(*asset_or, std::nullopt) == RenderResult::WindowUnavailable);
+    const RenderStats after_new = render_test_stats();
+
+    // 两次调用的差值：window_checks +1、texture_attempts +0、culled_tiles +0、param_failures +0
+    CHECK(after_new.window_checks - after_old.window_checks ==
+          after_old.window_checks - before.window_checks);
+    CHECK(after_new.texture_attempts - after_old.texture_attempts ==
+          after_old.texture_attempts - before.texture_attempts);
+    CHECK(after_new.culled_tiles - after_old.culled_tiles ==
+          after_old.culled_tiles - before.culled_tiles);
+    CHECK(after_new.param_failures - after_old.param_failures ==
+          after_old.param_failures - before.param_failures);
+    return ok;
+}
+
+// 视口与层不交：vp 完全在 100×100 层外 → 整层 skip；culled_tiles == nonempty。
+// 无窗口下返回值 = WindowUnavailable（段② 失败），但段①' 已累加 culled_tiles。
+bool test_viewport_disjoint_from_layer() {
+    bool ok = true;
+    render_test_reset_stats();
+    auto asset_or = make_large_palette_asset();
+    REQUIRE(asset_or.has_value());
+    const RenderStats before = render_test_stats();
+
+    const tg::Rect vp{-1000.0f, -1000.0f, 10.0f, 10.0f};
+    // tx0 = floor(-1000/16) = -63 → clamp 0；tx1 = ceil(-990/16) = -61 → min(-61, 100) = -61；
+    // 0 ≥ -61 → 整层 skip → culled = 10000
+    CHECK(render_scene(*asset_or, vp) == RenderResult::WindowUnavailable);
+
+    const RenderStats after = render_test_stats();
+    CHECK(after.culled_tiles == before.culled_tiles + 10000);
+    CHECK(after.param_failures == before.param_failures);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -190,6 +323,10 @@ int main() {
     test_window_unavailable_no_draw();
     test_reload_texture_contract();
     test_flip_rotation_params();
+    test_viewport_cull_ratio();
+    test_viewport_invalid_params();
+    test_viewport_nullopt_equivalence();
+    test_viewport_disjoint_from_layer();
     // 清理独立贴图缓存（未加载任何东西，幂等）
     tg::shutdown_render();
     std::printf("[render test] checks=%d failures=%d\n", ::tg_test::g_checks,

@@ -19,6 +19,10 @@
 - **A4** 模板 IPC 输入校验规范（`AGENTS.md`）+ 每条命令负向路径断言（`tools/ipc_smoke.py`）+ handler 去裸 `.get<T>()`。
 - **B1 T1** `tg::Random::draws()`（只读原始抽取计数）。T2/T3 明确不采纳。
 - **B3（采纳部分）** 修工具 + 文档澄清（即 A3）；**不采纳**「升为一等标准模块」。
+- **C3** 相机视口级场景渲染 → `tg::render_scene(asset, std::optional<Rect> viewport)` overload +
+  `RenderStats::culled_tiles` 字段（CPU-only，段② 前累加）+ 4 个新 TEST_BODY + swarm 迁移
+  （512×512 程序化地图从 20 fps 恢复 60 fps 上限）。流式 chunk 拆分划归 sim 侧职责，
+  `SceneSpec`+`load_json` 已暴露，不开新引擎 API。
 
 ---
 

@@ -12,8 +12,9 @@
 // shutdown_render() 统一释放。
 #include "trogue/render.hpp"
 
-#include <cmath>     // std::floor
+#include <cmath>     // std::ceil / std::floor
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -135,18 +136,113 @@ detail::SceneImpl::~SceneImpl() {
     }
 }
 
-RenderResult render_scene(const SceneAsset& asset) {
-    // ① 参数校验：asset 引用即保证存活；无显式参数可失效。
-    auto& impl = *asset.impl_;
+// ── 视口裁剪（CPU 端） ──
+//
+// 把世界坐标矩形 viewport 换算成某层局部 tile 范围 `(tx0, ty0, tx1, ty1)`
+// （半开区间）。返回 `false` = 视口与层无交（整层 skip）。
+//
+// 计算公式：
+//   tx0 = floor((vp.x - origin_x) / tile_w)
+//   tx1 = ceil((vp.x + vp.w - origin_x) / tile_w)
+//   ty0/ty1 同理
+//   tx0 ← max(tx0, 0)
+//   tx1 ← min(tx1, layer.width)
+//   ty0 ← max(ty0, 0)
+//   ty1 ← min(ty1, layer.height)
+// 选 ceil 是保守：vp 右/下边恰好对齐瓦边界时，右侧/下侧瓦仍画，非可见区域零丢失。
+// clamp 不用 `std::clamp`（只接单值），对四个端点分别 `std::max` / `std::min` 夹紧。
+bool compute_layer_range(const LayerInfo& info, int tile_w, int tile_h,
+                       const tg::Rect& vp,
+                       int* tx0, int* ty0, int* tx1, int* ty1) {
+    const float fx0 = (vp.x - static_cast<float>(info.origin_x)) /
+                      static_cast<float>(tile_w);
+    const float fy0 = (vp.y - static_cast<float>(info.origin_y)) /
+                      static_cast<float>(tile_h);
+    const float fx1 = (vp.x + vp.w - static_cast<float>(info.origin_x)) /
+                      static_cast<float>(tile_w);
+    const float fy1 = (vp.y + vp.h - static_cast<float>(info.origin_y)) /
+                      static_cast<float>(tile_h);
+    *tx0 = std::max(0, static_cast<int>(std::floor(fx0)));
+    *ty0 = std::max(0, static_cast<int>(std::floor(fy0)));
+    *tx1 = std::min(info.width,  static_cast<int>(std::ceil(fx1)));
+    *ty1 = std::min(info.height, static_cast<int>(std::ceil(fy1)));
+    return *tx0 < *tx1 && *ty0 < *ty1;
+}
+
+// `render_scene_impl`：tile 层绘制的单一入口，被两个 public overload 共用。
+//
+// 纪律（头注释钉死，防未来回归）：
+//   - 不调 BeginMode2D/EndMode2D、不接收 camera；全部变换由调用方在
+//     `BeginMode2D()...EndMode2D()` 区间内设置。
+//   - 段② window_checks 只增一次（不论 viewport 是否有值；非裁剪路径与裁剪路径
+//     行为对称）。
+//   - culled_tiles 在段② 之前已稳定（CPU-only 计数通道）——保证无窗口单测也能
+//     拿到稳定的 culled_tiles，不依赖 GL 上下文。
+//
+// 三段顺序：
+//   ①   参数校验（viewport 矩形合法性）
+//   ①'  CPU-only 计数（仅 viewport 路径；累加 culled_tiles）
+//   ②   窗口就绪（IsWindowReady；失败返回 WindowUnavailable，①' 已稳定 culled_tiles）
+//   ③   逐层绘制（仅 viewport 内 tile；非裁剪路径绘制全层 tile）
+RenderResult render_scene_impl(detail::SceneImpl& impl,
+                               std::optional<tg::Rect> viewport) {
+    // ① viewport 参数校验（仅裁剪路径；与 draw_rect 风格一致）
+    if (viewport.has_value()) {
+        const tg::Rect& vp = *viewport;
+        if (!std::isfinite(vp.x) || !std::isfinite(vp.y) ||
+            !std::isfinite(vp.w) || !std::isfinite(vp.h) ||
+            vp.w <= 0.0f || vp.h <= 0.0f) {
+            ++g_render_stats.param_failures;
+            TraceLog(LOG_ERROR, "[render] render_scene viewport 非法");
+            return RenderResult::Invalid;
+        }
+    }
+
+    // ①' CPU-only 计数：累加 culled_tiles（在段②之前；不触碰 GL）
+    if (viewport.has_value()) {
+        const tg::Rect& vp = *viewport;
+        for (std::size_t li = 0; li < impl.layers.size(); ++li) {
+            const LayerInfo& info = impl.layers[li];
+            const auto& tiles = impl.layer_tiles[li];
+            // bare 层无 tile_tiles；culled = nonempty - 0 = nonempty，但实际
+            // 不绘（视口与裸层恒等空）；计 0 以免误报。
+            if (info.tileset_index < 0 && impl.mode == detail::SceneImpl::Mode::bare) {
+                continue;
+            }
+            int tx0 = 0, ty0 = 0, tx1 = info.width, ty1 = info.height;
+            if (!compute_layer_range(info, impl.tile_w, impl.tile_h, vp,
+                                     &tx0, &ty0, &tx1, &ty1)) {
+                // 视口与层无交：所有非空格 tile 全裁掉
+                g_render_stats.culled_tiles += info.nonempty;
+                continue;
+            }
+            int drawn_in_vp = 0;
+            for (int ty = ty0; ty < ty1; ++ty) {
+                for (int tx = tx0; tx < tx1; ++tx) {
+                    const int v =
+                        tiles[static_cast<std::size_t>(ty) * info.width + tx];
+                    if (v >= 0) ++drawn_in_vp;
+                }
+            }
+            g_render_stats.culled_tiles += info.nonempty - drawn_in_vp;
+        }
+    }
 
     // ② 窗口就绪
     ++g_render_stats.window_checks;
     if (!IsWindowReady()) return RenderResult::WindowUnavailable;
 
-    // ③ 逐层绘制
+    // ③ 逐层绘制（裁剪路径仅绘视口内 tile）
     for (std::size_t li = 0; li < impl.layers.size(); ++li) {
         const LayerInfo& info = impl.layers[li];
         const auto& tiles = impl.layer_tiles[li];
+        int tx0 = 0, ty0 = 0, tx1 = info.width, ty1 = info.height;
+        bool clipped = false;
+        if (viewport.has_value()) {
+            clipped = !compute_layer_range(info, impl.tile_w, impl.tile_h,
+                                          *viewport, &tx0, &ty0, &tx1, &ty1);
+            if (clipped) continue;
+        }
         if (info.tileset_index >= 0) {
             // 图集模式
             const std::size_t ts = static_cast<std::size_t>(info.tileset_index);
@@ -156,8 +252,8 @@ RenderResult render_scene(const SceneAsset& asset) {
             }
             Texture2D& tex = *static_cast<Texture2D*>(tp);
             const auto& tsm = impl.tilesets[ts];
-            for (int ty = 0; ty < info.height; ++ty) {
-                for (int tx = 0; tx < info.width; ++tx) {
+            for (int ty = ty0; ty < ty1; ++ty) {
+                for (int tx = tx0; tx < tx1; ++tx) {
                     const int v =
                         tiles[static_cast<std::size_t>(ty) * info.width + tx];
                     if (v < 0) continue;
@@ -180,8 +276,8 @@ RenderResult render_scene(const SceneAsset& asset) {
             }
         } else if (info.tileset_index == -1 && impl.mode != detail::SceneImpl::Mode::bare) {
             // palette 模式：色块
-            for (int ty = 0; ty < info.height; ++ty) {
-                for (int tx = 0; tx < info.width; ++tx) {
+            for (int ty = ty0; ty < ty1; ++ty) {
+                for (int tx = tx0; tx < tx1; ++tx) {
                     const int v =
                         tiles[static_cast<std::size_t>(ty) * info.width + tx];
                     if (v < 0) continue;
@@ -199,6 +295,14 @@ RenderResult render_scene(const SceneAsset& asset) {
         // bare：零层，no-op（前面直接返回或空循环）
     }
     return RenderResult::Drawn;
+}
+
+RenderResult render_scene(const SceneAsset& asset) {
+    return render_scene_impl(*asset.impl_, std::nullopt);
+}
+
+RenderResult render_scene(const SceneAsset& asset, std::optional<tg::Rect> viewport) {
+    return render_scene_impl(*asset.impl_, viewport);
 }
 
 RenderResult render_sprite(const SceneAsset& asset, const SpriteDesc& sprite,

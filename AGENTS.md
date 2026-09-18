@@ -70,7 +70,7 @@
 - **资产（`scene.hpp`）**：`tg::SceneAsset` 是**不可变/只读资产对象**（RAII），拥有 tile 层、tileset、背景、descriptor 与（若资产内嵌）动画帧表；公共头不暴露 tiles 缓冲区、GPU 对象或可写指针。层与 tileset 不作为公共类型暴露；实体与层信息通过**值类型快照**（`tg::SceneEntity`、`tg::LayerInfo`）返回，内部字符串引用只在 asset 存活期间有效。`SceneAsset::load_json(text, name)` 与 `load(path)` 同一解析/校验路径（程序生成场景的一等公民入口）。**程序生成场景的类型化写路径**：`tg::SceneSpec`/`tg::SceneLayerSpec`/`TilesetRef`（值类型，schema 构造子集镜像）+ `SceneAsset::create(spec)`（序列化后仍走 `load_json`，校验单一来源）+ `scene_spec_to_json(spec)` 供需要落盘的消费方。实体在 `SceneSpec` 中**原样携带 JSON**而非镜像我读路径快照——`SceneEntity` 不含 `animations`，镜像会静默丢字段。缺省字段按 schema 缺省省略（bare 不写 tile 尺寸，故 bare 资产 `tile_width()==0` 不变）。`tg::Json` 别名亦在本头（`ipc.hpp` 各自声明同名同型别名，避免包含耦合）。受限写入：`update_layer_tiles`（整层）、`set_tile_at`（单格，层局部 tile 坐标）。**solid 层索引查询**：`solid_layer_indices()` 返回值快照，取代「层 1 是 solid」这类散落在 game/tool 里的约定。
 - **descriptor**：`tg::SceneEntity` 是 schema 的通用值快照，不是运行时实体；引擎不提供按 id 改位置、spawn、despawn 或按 `type` 分支的运行时 API。`props`（实体）与 `meta_props()`（场景级）为自由透传，引擎只校验形状、不解释任何键。
 - **tile 查询**：`is_solid_at`/`rect_hits_solid`/`tile_at` 只查显式标记 solid 的 tile 层，返回可区分的错误/清除/实体；descriptor 的 `solid` 只作 game 导入提示，不自动加入引擎碰撞集合。层矩形之外 = 无数据 = 不阻挡。批量查询：`tile_grid`（某层一块 tile 值，tile 坐标）/ `solid_mask`（全部 solid 层可走性合成掩码）。
-- **渲染（`render.hpp`）**：`render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语（`render_sprite` 支持 scale/旋转/flip/tint，scale 须为有限正数，翻转只走显式 flip 字段）。`render_scene_to_png` 把 tile 层渲染到离屏 FBO 并导出 PNG（不含实体/HUD）。`RenderStats`/`render_stats()`/`render_reset_stats()` 提供渲染可观测计数。`reload_texture(path)` 使进程级独立贴图缓存的失效、下次绘制重读盘（图集贴图随 asset RAII，不在此列）。对象排序、相机与 UI 属 game。
+- **渲染（`render.hpp`）**：`render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语（`render_sprite` 支持 scale/旋转/flip/tint，scale 须为有限正数，翻转只走显式 flip 字段）。`render_scene(asset)` 绘制资产全部 tile；新 overload `render_scene(asset, std::optional<Rect> viewport)` 接受可选世界坐标矩形裁剪每层 tile 范围（按各层 origin/tile_w/tile_h 换算后 floor/ceil + clamp，半开区间），`std::nullopt` = 不裁剪（与无 viewport overload 等价）。**视口裁剪无相机变换**：viewport 是世界坐标，调用方从自己的 Camera2D 自己换算后再传入；engine 不调用 BeginMode2D/EndMode2D、不接收 camera，全部变换由 game 在 `BeginMode2D()...EndMode2D` 区间内设置。`render_scene_to_png` 把 tile 层渲染到离屏 FBO 并导出 PNG（不含实体/HUD；走无 viewport overload）。`RenderStats`/`render_stats()`/`render_reset_stats()` 提供渲染可观测计数（`culled_tiles` 字段仅由视口路径在段② 之前累加，CPU-only，无窗口单测可稳定断言）。`reload_texture(path)` 使进程级独立贴图缓存的失效、下次绘制重读盘（图集贴图随 asset RAII，不在此列）。对象排序、相机与 UI 属 game。
 - **碰撞（`collision.hpp`）**：`aabb_overlap`（纯谓词）、`segment_hits_solid`（线段 vs solid 层）、`sweep_move`（轴分离 swept 滑移）、`kinematic_step`（sweep + 探地/探墙/landed 事件派生）、`resolve_overlap`（最小轴脱出）、`DynBox` + `sweep_move_mixed`（静态层 ∪ 动态盒）、`SolidGrid`（渲染色 tile 与碰撞掩码的原子同步写；另有 `create(谓词建格)` 支非资产来源掩码——该形态 `layer_id == -1`，`set_tile` 必然 fail-loud，`refresh` 会整体替换掩码故不得用于它）、单向平台（矩形数组重载，机制性穿越规则）。**探针查询**：`probe_grounded`（视图/one_way/asset 三重载，返回三态 `solid|clear|error`）与 `kinematic_step` 的探地**共用同一实现**——`KinematicEvents::grounded` 只在跑过一步后才有意义，spawn/reset 后要立即判定贴地请用 `probe_grounded`（`is_solid_at` 是点查询，不能替代底边探地矩形）。**三态纪律**：几何查询的 `error`（参数非法）**不等于可通行**，只判 `== solid` 会漏掉它。**速度积分、土狼/缓冲/可变跳高、动态-动态互推解算等手感与规则归 game。**
 - **动画（`animation.hpp`）**：`tg::AnimationSet`（只读动画集视图）+ `tg::AnimationPlayer` 消费实体 `animations`/tro-animations 帧表，提供 play/stop/seek/速度/loop、暂停/恢复、帧事件与完成回调、`co_await` 完成；它**输出当前帧的视觉描述（贴图/region/offset/tint），不自动 draw、不绑定实体生命周期**。`tg::AnimationAsset::load/load_json` 消费独立 `tro-animations` v1。
 - **Tween（`tween.hpp`）**：`tg::TweenManager` 提供 float/`Vec2`/`Color` 补间执行原语（`TweenSpec` 时长/缓动/延迟/循环、on_update/on_complete、`wait()` 协程等待）；game 决定补间对象、目标值与触发。engine 不把 Tween 与任何实体或系统耦合。**`repeats` 契约（头文件与测试双钉）**：`>0` = 首段之后再重播 N 次（共 1+N 段），段末各发一次 `t=1.0` 采样，`on_complete` 只在最后一段后触发一次；`<0` = 无限，`on_complete` 永不触发（须显式 `cancel`）；`delay` 只在首段前等待一次（重播段从 delay 位置继续），单次 `tick` 至多完成一段。**timer idiom**：值恒定的补间即定时器（`add_float(0,0,spec,忽略采样,on_complete)`），串行演出为「先 `add` 拿 id → `co_await wait(id)`」配 `tg::TaskRunner`；`wait` 等最终完成，对不存在/已取消/已完成的 id 立即完成（顺序反了会静默穿过）。
@@ -145,7 +145,7 @@ trogue/
 ├── assets/                # 游戏资产（引擎按 CWD assets/ 约定读取）
 │   ├── scenes/            # 手写示例 + 占位生成场景（tools/scene_gen 产物）
 │   ├── animations/        # tro-animations v1 独立动画资产（导出产物）
-│   ├── tilesets/          # tro-tileset 产物（Godot 导出 / 占位生成）
+│   ├── tilesets/          # tro-tileset 产物（PixelLab / Godot 导出 / 占位生成）
 │   └── textures/          # 贴图（导出时自动拷贝 / 占位生成）
 ├── editor/                # Godot 4.7 可选视觉标注/预览项目（可由人或 Agent headless 使用）
 │   └── addons/scene_exporter/  # 导出插件 v4（菜单 + headless）
@@ -160,7 +160,8 @@ trogue/
 ├── tools/
 │   ├── ipc_smoke.py       # IPC 冒烟测试
 │   ├── placeholder_tileset.py  # 占位瓦片集生成器（已标注 tro-tileset + 贴图）
-│   ├── scene_gen.cpp      # 离线占位地图生成 CLI（网格 → pick_tile 采样 → tg::SceneSpec → tro-scene）
+│   ├── scene_gen.cpp      # 普通 cell-terrain 离线地图生成 CLI（网格 → pick_tile → tro-scene）
+│   ├── dual_grid_scene_gen.cpp # PixelLab vertex_grid → dual-grid visual layer
 │   └── tests/             # 无窗口单测 + OOP/ECS consumer smoke（CTest）
 ├── build/  build-release/ # 构建产物（gitignore）
 ├── reference/             # 引擎源码参考副本（gitignore；Godot 4.7.2 + raylib 6.0，查证行为用）
@@ -284,7 +285,8 @@ python3 tools/ipc_smoke.py
 - **多格 tile 与原点（只增可选字段，`version` 仍为 2）**：`tiles[]` 条目可选 `size_in_atlas: [w,h]`（各 ∈ [1,4096]，缺省 `[1,1]`）、`texture_origin: [x,y]`（int 可负，缺省 `[0,0]`）、`y_sort_origin: y`（int，缺省 `0`）。校验：数组长度 2 且元素 int，origin/sort 绝对值 ≤65536。region 越界不在 load 期校验（load 不读纹理文件）。margins/separation 非 0 图集不支持，插件 warning。
 - **tile 绘制语义（对齐 Godot 4.7.2）**：dest 左上 = cell 中心 − region.size/2 − texture_origin；1×1 且 origin=0 时退化为「格子左上角」。多格 tile 逻辑上仍只占一个 cell（solid 查询/tile_at 语义不变）；同层多格 tile 重叠次序 = 行主序扫描序。`y_sort_origin` 解析存储、暂不消费。
 - texture 单贴图；**一个场景的多张贴图由 tro-scene v2 的 `tilesets` 数组表达**（每贴图一个 tro-tileset JSON）。
-- `terrain_sets`：Godot terrain set 透传（`mode`: sides / corners / corners_and_sides）；`peering_bits` 仅导出该 mode 用到的邻位、值 = terrain 序号。引擎解析 + 校验并消费：autotile 选择器（`tg::load_terrain_table`/`tg::pick_tile`）按 peering_bits 把地形 pattern 确定性映射为 tile id。
+- `terrain_sets`：普通 cell-terrain/Godot terrain set 透传（`mode`: sides / corners / corners_and_sides）；`peering_bits` 仅导出该 mode 用到的邻位、值 = terrain 序号。引擎解析 + 校验并消费：`tg::load_terrain_table`/`tg::pick_tile` 按 peering_bits 把地形 pattern 确定性映射为 tile id。
+- `dual_grid`：PixelLab `tileset15` 的可选四角查表元数据：`{"mode":"corners","terrains":["lower","upper"],"tile_count":16}`；对应 tile 条目使用 `dual_grid_corners: {"NW":0,"NE":1,"SW":0,"SE":1}`。它描述视觉 tile 的四个象限，不是普通 cell terrain pool；由 `tg::load_dual_grid_table`/`tg::pick_dual_grid_tile` 精确选择，缺失组合返回 `kNotFound`，不做降级。
 - `custom_data` 透传，引擎忽略。
 
 ### tro-animations v1
@@ -316,9 +318,10 @@ python3 tools/ipc_smoke.py
 > **定位**：PixelLab MCP（外部像素美术生成服务）→ tro-* 运行时资产的**上游转换层**，与 `editor/`（Godot 导出管线）平级——都是「上游创作输入 → assets/ 中的 tro-*」。引擎与 game 运行时零 PixelLab 概念；本层是纯离线工具（Python，依赖仅 Pillow + stdlib）。
 
 - **MCP 调用纪律**：调用任何 PixelLab 工具前先查官方文档 `https://api.pixellab.ai/mcp/docs`；批量生成前 `get_balance`；pro 模式必须走 confirm_cost 报价流程（先报价 → 用户确认 → 再调）。全局 skill `pixellab-mcp`（`~/.agents/skills/`）承载操作指南。
-- **唯一数据流：角色/动画**（产物落 `assets/`）：`import-character` / `import-character-sheet` → `assets/textures/pixellab/<n>.png` + `assets/animations/<n>.json`，fps/loop 为显式参数。
-- **瓦片集不经 PixelLab 导入**：PixelLab 只产出**有限标注**的 Wang 集（角标注不足以支撑引擎 `peering_bits` autotile 语义），故转换层不提供 `import-tileset`。正式瓦片集由使用者提供：在 Godot 中逐格标注 terrain/peering_bits 后经 scene_exporter 导出，或直接手写 tro-tileset v2。
-- **确定性**：同输入重跑产物 byte-identical；`assets/pixellab_manifest.json` 按 (源类型, 源 id) upsert 记录来源 URL + 产物 sha256（已入库，含仍存活角色资产的条目）。下载 URL 可能过期——**产物 + sha256 为权威**。
+- **角色/动画数据流**（产物落 `assets/`）：`import-character` / `import-character-sheet` → `assets/textures/pixellab/<n>.png` + `assets/animations/<n>.json`，fps/loop 为显式参数。
+- **tileset15 数据流**：标准 PixelLab top-down 16-tile `tileset15` 可由 `import-tileset --meta <json> --image <png> --name <n>` 转为 `tro-tileset v2` 的 `dual_grid` + `dual_grid_corners`。它保留四角视觉语义，不复制成 cell terrain pool；引擎通过 `tg::load_dual_grid_table` / `tg::pick_dual_grid_tile` 精确查找。PixelLab 的 25-tile transition 形态当前拒绝导入，避免静默丢失 pattern。
+- **确定性**：同输入重跑产物 byte-identical；`assets/pixellab_manifest.json` 按 (源类型, 源 id) upsert 记录来源 URL + 产物 sha256（已入库，含仍存活角色和 tileset 条目）。下载 URL 可能过期——**产物 + sha256 为权威**。
+- **两种地形采样必须区分**：`tools/scene_gen` 的 `.`/`#` 是普通 cell-terrain + 多数投票占位路径；PixelLab dual-grid 使用 `(w+1)×(h+1)` `vertex_grid`，视觉 cell 的 NW/NE/SW/SE 直接读取四个顶点，由 `tools/dual_grid_scene_gen` 生成单一视觉层。
 - **明确损失**：spritesheet 边 > 4096px、图像尺寸 <8px → 拒绝导入并报错，不静默伪造兼容。
 - **导入验收**：`python3 pixellab/pxlab.py check-grid --image <png>`（只在检测到整数倍块放大时降采样）、`python3 pixellab/pxlab.py verify`（校验 manifest 中每个产物的 sha256）。
 - **独立 tro-animations 有运行时加载器**：`tg::AnimationAsset::load/load_json` 消费 `tro-animations` v1；实体内嵌 `animations` 仍由 `SceneAsset::animation_set` 提供。
@@ -329,8 +332,9 @@ python3 tools/ipc_smoke.py
 > **定位**：正式美术/瓦片集尚未就位时，让 Agent 立刻拿到**能跑、能 autotile、零外部依赖**的资产。两个工具都是确定性、无头、可校验的离线 CLI，产物落 `assets/`；生成完即可直接起游戏看画面。
 
 - `python3 tools/placeholder_tileset.py [--name placeholder] [--tile-size 16] [--lower-name ground] [--upper-name wall] [--lower-color C] [--upper-color C]` → `assets/tilesets/<n>.json` + `assets/textures/<n>.png`。产出 **32 tile** 的占位 Wang 集（2 地形 × 16 角组合，corners mode）：`peering_bits` 与 `terrain` **由构造保证自洽**，每个地形池都覆盖全部 4 角组合，故 `pick_tile` 恒精确命中（零降级）；贴图是纯色块（底色 = 本地形色，异地形角画 1/4 边长的角块），视觉与标注同源。
-- `./build/tools/trogue_scene_gen <spec.json> <out_scene.json> [--name <场景名>]` → tro-scene v2。spec = `{"tileset": <assets 相对路径>, "grid": ["...#", ...]}`（等宽网格：`'.'` = terrain 0、`'#'` = terrain 1），可选 `"name"`/`"background"`/`"entities"`（entities 原样透传；存在即须为声明类型，否则拒绝）。流程：顶点采样（4 邻格多数投票）→ 引擎 `tg::pick_tile` → 组装 `tg::SceneSpec`（两层 `ground`（非 solid）+ `walls`（solid），`entities` 原样搬运）→ **先** `scene_spec_to_json` + `load_json` 自检、**后**落盘。输出父目录按需自动创建。**失败不产半成品**：spec/网格/类型不合法 → 退出码 2；tileset 校验失败、自检失败或**任一格 `pick_tile` 取不到 tile**（该地形池缺角组合）→ 退出码 1 且不落盘。
-- **产物是占位**：色块视觉 + 临时碰撞，正式瓦片集到位后重新生成/替换即可；工具不引入运行时概念，game/engine 不感知。
+- `./build/tools/trogue_scene_gen <spec.json> <out_scene.json> [--name <场景名>]` → 普通 cell-terrain tro-scene v2；spec = `{"tileset": <assets 相对路径>, "grid": ["...#", ...]}`，流程和多数投票语义保持不变。
+- `./build/tools/trogue_dual_grid_scene_gen <spec.json> <out_scene.json>` → PixelLab dual-grid tro-scene v2；spec = `{"tileset": <assets 相对路径>, "vertex_grid": [[0,1,...], ...]}`，输入尺寸为视觉 cell 尺寸 + 1，输出单一 `visual` layer，缺失组合 fail-loud。
+- **产物是占位**：`placeholder_tileset.py` 的色块视觉 + 临时碰撞仍可用于普通路径；PixelLab dual-grid 资产是外部视觉输入，tile 选择不引入游戏玩法概念。
 
 ## 项目模板（template/）
 
@@ -477,6 +481,8 @@ python3 tools/ipc_smoke.py
 > **不重复造轮子**：引擎已提供的通用能力（如 `tg::TweenManager` 的数值/位置/颜色补间、`tg::AnimationPlayer` 动画）**必须直接复用，不得在 game 层手写等价物**。凡通用表现、算法、数据结构，先检索引擎 `trogue/*.hpp` 与既有代码有无现成实现；有则直接调用。game 层只写「引擎原语之上的决策/组合/编排」。
 
 > **数值精度纪律**：涉及像素对齐/网格对齐的插值不得用指数趋近 lerp（float 永不收敛，残差被 `DrawRectangle(int)` 截断 → 恒定错位 + 相机同源放大成帧间抖动）。正确做法：固定时长 tween（引擎 `TweenManager`），播完**精确 snap 到目标整数像素**；绘制用浮点原语（raylib `DrawRectanglePro`），勿经 `DrawRectangle(int)` 截断。表现层可观测性由 IPC 实体快照的 transform 视图承担，Agent 凭「视觉位置 == 逻辑坐标」数值断言即可发现。
+
+> **不擅自回退未提交改动**：Agent **不得**用 `git checkout -- <path>`、`git restore <path>`、`git reset --hard`、`git stash`、手动重写工作区内容等手段**动到用户未提交的工作**（包括 subagent 审查标记为 nit/无关脏改的未提交修改）。哪怕理由是「与本里程碑无关」「清理评审焦点」「属于 nit」。**先停下来问用户**——给出选项（保留、回退、单独处理），等明确指示再动。原则：未提交改动 = 用户主权；Agent 只读、提问、改自己刚写的代码。这一条也覆盖「Agent 自检发现『误改』要自己撤销」的情形——撤销自己的手笔同样要先问。
 
 ## CHANGELOG 格式规范
 

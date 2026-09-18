@@ -2,6 +2,58 @@
 
 ## [Unreleased]
 
+### 视口裁剪（render）
+
+- 影响的文件: `engine/include/trogue/render.hpp`、`engine/include/trogue/scene.hpp`、`engine/src/render.cpp`、`tools/tests/render_test.cpp`、`template/game/examples/swarm/main.cpp`、`template/engine/{include/trogue/render.hpp,include/trogue/scene.hpp,src/render.cpp}`、`AGENTS.md`、`docs/BACKLOG.md`
+
+#### Added
+- `tg::render_scene(const SceneAsset& asset, std::optional<tg::Rect> viewport)` overload：按世界坐标矩形裁剪每层 tile 范围，每层 origin/tile_w/tile_h 换算后 floor/ceil + clamp 取半开 `[tx0, tx1) × [ty0, ty1)`。`std::nullopt` = 不裁剪（旧 `render_scene(asset)` overload 保留并定义为转发，9 个既有调用点零回归）。`Rect` 参数非法（非有限 / `w<=0` / `h<=0`）→ 段① 拒绝 + `param_failures++` + `Invalid`（与 `draw_rect` 非法矩形风格一致）。**视口裁剪无相机变换**：viewport 是世界坐标，调用方从自己的 Camera2D 自己换算后再传入；engine 不调用 BeginMode2D/EndMode2D、不接收 camera——纪律与 `render.hpp:4-7` 一致。
+- `tg::RenderStats::culled_tiles`（additive 字段）：仅由视口路径累加「该层因视口被跳过的非空格 tile 总数」= `Σ_layers(LayerInfo::nonempty − 视口内非空格 tile 数)`。**关键实现细节**：累加在段①' CPU-only 计数通道完成（位于段② `IsWindowReady` **之前**），不触碰 GL，因此无窗口单测也能稳定断言裁剪比例（旧 `tools/tests/render_test.cpp:1-8` 硬约束「本机无窗口 render_* 应全程安全 no-op」自洽）。非裁剪路径（nullopt 或旧 overload）恒为 0。
+- 内部 helper `render_scene_impl(detail::SceneImpl&, std::optional<tg::Rect>)`：tile 层绘制的单一入口，被两个 public overload 共用；三段顺序 `① viewport 校验 → ①' CPU-only culled_tiles 累加 → ② IsWindowReady → ③ 逐层绘制`，头注释钉死「不调 BeginMode2D/EndMode2D、不接收 camera；段② window_checks 只增一次；culled_tiles 在段② 前已稳定」防未来回归。`SceneAsset` 加 `friend render_scene(const SceneAsset&, std::optional<Rect>)` 声明以访问 `impl_`。
+- 内部 helper `compute_layer_range()`：把 world Rect 换算成某层局部 tile 半开区间；返回 `false` = 视口与层无交（整层 skip）。clamp 不用 `std::clamp`（只接单值），对四个端点分别 `std::max(0, x)` + `std::min(y, dim)` 夹紧；选 `ceil` 是保守——vp 右/下边恰好对齐瓦边界时仍画右/下侧瓦，非可见区域零丢失。
+- swarm main.cpp 迁移（修 BACKLOG C3 性能症状：512×512 程序化 moss 地图 20 fps → 期望 60 fps）：`draw_world` lambda 内从 Camera2D 推 `tg::Rect vp`，调用新 overload；屏幕像素与改造前**逐位一致**（视口覆盖区域未变，只是非可见瓦的 `DrawTextureRec` 调用被裁掉，绘制调用从 262144 降至 ~1900）。
+- 4 个新 TEST_BODY（`tools/tests/render_test.cpp`）：viewport 裁剪比例（100×100 全非空格 palette + `Rect{0,0,160,160}` → `culled_tiles == 9900`）/ viewport 非法路径（NaN / 负宽 / +∞ → 段① 拒绝）/ nullopt 等价（旧 `render_scene(asset)` ≡ 新 `render_scene(asset, std::nullopt)` 逐字段差值相等）/ 视口与层不交（`Rect{-1000,-1000,10,10}` → 整层 skip，`culled_tiles == 10000`）；既有 4 个 TEST_BODY 零回归。新增 fixture `make_large_palette_asset()`（100×100 palette 全 1）。
+- AGENTS.md「引擎公共 API 边界 → 渲染」段补一句 viewport overload + 无相机变换纪律 + `culled_tiles` 字段语义。
+
+### 开发纪律：补「不擅自回退未提交改动」
+
+- 影响的文件: `AGENTS.md`
+
+#### Added
+- 「## 开发流程」下新增「> **不擅自回退未提交改动**」段（与「数值精度纪律」「不重复造轮子」平级）：Agent 不得用 `git checkout -- <path>` / `git restore <path>` / `git reset --hard` / `git stash` / 手动重写工作区等手段动到用户未提交的工作；包括 subagent 标记为 nit/无关脏改的未提交修改。必须先停下来问用户，给出选项（保留 / 回退 / 单独处理），等明确指示再动。原则：未提交改动 = 用户主权；Agent 只读、提问、改自己刚写的代码。同时覆盖「Agent 自检发现『误改』要自己撤销」的情形。
+
+### 模板示例：两个范式范例可玩化 + PixelLab 离线资产接入
+
+- 影响的文件: `template/game/examples/swarm/{sim.hpp,sim.cpp,main.cpp,sim_test.cpp}`、`template/game/examples/platformer/{sim.hpp,sim.cpp,main.cpp,sim_test.cpp}`、`template/game/examples/CMakeLists.txt`、`template/assets/textures/pixellab/{swarm_hero,swarm_enemy,swarm_bullet,swarm_orb,swarm_hero_dash,platformer_hero,platformer_patroller,platformer_jumper,platformer_gem,platformer_flag}.png`、`template/assets/animations/swarm_hero_dash.json`、`template/assets/pixellab_manifest.json`、`template/AGENTS.md`、`template/README.md`
+
+#### Added
+- **swarm 冲刺**：Edge-triggered `dash` 输入（Shift）+ 冷却计时（1.2s）+ 加速倍率（2.4×）+ 无敌帧（0.18s 内敌接触不扣血）。新增状态 `dash_timer / dash_cd / dashes`，摘要 `dashes=` 字段；`steer_system` 中按「冷到 0 且本步边沿」触发，重按不重复计数；冲刺期间玩家渲染优先使用 `swarm_hero_dash.png` 5 帧 `tro-animations`（12 fps, loop），资产加载失败退回 `tint` 加亮。
+- **platformer 收集 + 检查点**：3 枚 `Gem`（AABB ∩ 圆周拾取，拾取后从列表移除，HUD 计数）+ 1 个检查点（重叠即激活，重生点改写，死亡/重开从这里复活）。玩家 AABB ∩ goal 触发 `won_=true`，死亡不掉出关卡。窗口层迭代未拾取晶体用 `platformer_gem.png` 绘制；检查点按激活态发亮绿/黄。
+- **敌人类型判据不再依赖颜色魔法数**：`Enemy::kind()` 虚函数（Patroller=0、Jumper=1）替换 `c.r > c.g` 的启发式；`main.cpp` 按 `e->kind()` 选贴图，修复两个敌人都会被误判为 jumper 的 bug。
+- **离线 PixelLab 产物纳入 manifest**：`template/assets/pixellab_manifest.json` 重写为 entries[] 格式。5 个 swarm entries 含真实 `source_type/source_id/imported_at`，dash JSON sha256 与 PNG 同条目；5 个 platformer PNG 标 `source_type=manual` 占位（未走过 import-character 路径，不伪造 source id）。`python3 pixellab/pxlab.py verify` 由静默 0 ok 转为 11 ok, 0 failed。
+
+#### Refactored
+- **`AnimationPlayer` 与 `AnimationAsset` 同寿命绑定**：新增 `DashAnim { tg::AnimationAsset asset; tg::AnimationPlayer player; }`（成员顺序保证 player 先析构、asset 后释放），`load_dash_anim()` 返回 `std::optional<DashAnim>`。修复旧实现 `load_dash_anim` 中 `asset` 在 expected 内是函数局部变量、函数返回后即析构、player 持有的 `set_->data_` 悬垂的 P0 use-after-free（玩家冲刺时 `play/advance/current_frame` 读已释放内存）。`AnimationPlayer` 是非拥有绑定，`AnimationAsset` 必须先于播放器销毁或同寿命——这一约束由 DashAnim 结构化绑定强制保障。
+
+#### Tests
+- `swarm_sim_test` 加 ⑫：进程内 `AnimationAsset::load` + `AnimationPlayer::bind/play/advance/current_frame` 烟雾测试，断言 fps=12 下 `frame_index()` 推进、loop 回卷、`current_frame().region` 正确。该测试是上述 UAF 修复的回归保护：任何把 player 与 asset 拆为独立持有者（让 asset 先析构）的退化都会在该测试复现 UAF 而失败。
+- `swarm_sim_test` 扩充 ⑨⑩⑪：冲刺边沿触发、冲刺无敌帧、摘要含 `dashes=`。
+- `platformer_sim_test` 扩充 ⑨⑩⑪：`probe_grounded` 与 `kinematic_step` 行为一致、晶体拾取计数累积、检查点激活前后死亡重生点变化。
+
+### 引擎/资产管线：PixelLab tileset15 dual-grid 导入与精确选 tile
+
+- 影响的文件: `engine/include/trogue/terrain.hpp`、`engine/src/terrain.cpp`、`engine/src/tileset_parse.hpp`、`engine/src/scene_impl.hpp`、`engine/src/scene_asset.cpp`、`tools/dual_grid_scene_gen.cpp`、`tools/CMakeLists.txt`、`tools/tests/terrain_test.cpp`、`tools/tests/test_dual_grid_scene_gen.py`、`pixellab/pxlab.py`、`pixellab/tileset.py`、`pixellab/tests/test_tileset.py`、`assets/tilesets/pixellab_grass_water_test.json`、`assets/textures/pixellab/pixellab_grass_water_test.png`、`assets/scenes/pixellab_grass_water_test.json`、`assets/pixellab_manifest.json`、`template/engine/`、`template/tools/`、`template/pixellab/`、`AGENTS.md`
+
+#### Added
+- `tg::DualGridTable`、`tg::load_dual_grid_table` 与 `tg::pick_dual_grid_tile`：按 `NW/NE/SW/SE` 四角组合精确查找，合法缺失组合返回 `kNotFound`，不复用普通 cell-terrain 的降级选择。
+- PixelLab `tileset15` 的离线转换命令 `python3 pixellab/pxlab.py import-tileset`，输出带 `dual_grid` / `dual_grid_corners` 的 `tro-tileset v2`，按 `bounding_box` 校验图集区域并记录 manifest 来源和 SHA-256。
+- `trogue_dual_grid_scene_gen`：从 `(w+1)×(h+1)` `vertex_grid` 直接采样视觉 cell，生成单一 `visual` tile layer；普通 `trogue_scene_gen` 语义保持不变。
+- PixelLab grass/water 真实生成 fixture 与 dual-grid 测试场景。
+
+#### Tests
+- 新增 metadata 字段、角组合、bbox 对齐/边界、路径安全、字节稳定性测试，以及 dual-grid 16 组合、缺失/非法组合和 vertex-grid 场景 golden 测试。
+- Debug 构建与 CTest 22/22 通过；PixelLab Python 单测 9/9 通过；headless IPC 场景加载和截图验证通过。
+
 ### 引擎：场景构造写路径（SceneSpec/create）、碰撞探针与视图易错面收尾
 
 - 影响的文件: `engine/include/trogue/scene.hpp`、`engine/include/trogue/collision.hpp`、`engine/src/scene_spec.cpp`（新增）、`engine/src/scene_asset.cpp`、`engine/src/collision.cpp`、`engine/CMakeLists.txt`、`tools/scene_gen.cpp`、`tools/CMakeLists.txt`、`tools/tests/scene_json_alias_test.cpp`（新增）、`tools/tests/scene_spec_test.cpp`（新增）、`tools/tests/collision_test.cpp`、`tools/tests/kinematic_test.cpp`、`tools/tests/scene_schema_test.cpp`、`game/src/main.cpp`、`template/engine/`（快照同步）、`template/tools/scene_gen.cpp`（快照同步）、`template/game/src/main.cpp`、`template/game/examples/common/scene_make.hpp`、`template/game/examples/swarm/{sim.hpp,sim.cpp,main.cpp,sim_test.cpp}`、`template/game/examples/platformer/{sim.cpp,sim_test.cpp}`、`AGENTS.md`、`docs/BACKLOG.md`、`docs/history.md`

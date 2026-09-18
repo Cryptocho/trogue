@@ -14,6 +14,7 @@
 // 确定性推进与 IPC 传输；画什么、何时响等美学与玩法决策归调用方。
 
 #include <cstdint>  // std::uint64_t
+#include <optional>  // std::optional<Rect>
 #include <string_view>
 
 #include "trogue/scene.hpp"  // SceneAsset / SpriteDesc
@@ -23,7 +24,19 @@ namespace tg {
 
 // 绘制该 asset 的全部 tile 层（层序 = 资产数组序）；不含任何实体。
 // 前置：调用方处于 BeginMode2D()...EndMode2D() 区间；asset 存活。
+// 视口裁剪见 overload `render_scene(asset, viewport)`；本 overload 等价于传
+// `std::nullopt`（绘制资产全部 tile，不裁剪）。
 RenderResult render_scene(const SceneAsset& asset);
+
+// 同上，但额外按世界坐标矩形 viewport 裁剪每层 tile 范围：每层 origin/tile_w/tile_h
+// 换算后，只迭代与 viewport 相交的 tile 格（半开 `[tx0, tx1) × [ty0, ty1)`）。
+// **无相机变换**：viewport 是世界坐标，调用方从自己的 Camera2D 自己换算后再传入。
+// **engine 不调用 BeginMode2D/EndMode2D、不接收 camera**：全部变换由调用方在
+// `BeginMode2D()...EndMode2D()` 区间内设置；本函数在变换已生效的世界坐标系中绘制。
+// 前置：调用方处于 BeginMode2D()...EndMode2D() 区间；asset 存活。
+// 参数非法（viewport 非有限 / w<=0 / h<=0）→ Invalid + 错误日志，asset 不被修改；
+// std::nullopt = 不裁剪（绘制资产全部 tile；与无 viewport overload 等价）。
+RenderResult render_scene(const SceneAsset& asset, std::optional<Rect> viewport);
 
 // 绘制一个显式 sprite 快照。pos = 期望的左上角世界坐标（game 决定来源）。
 // 归属校验：sprite.asset_id == asset.asset_id()，否则 Invalid + 错误日志。
@@ -62,10 +75,16 @@ RenderResult render_scene_to_png(const SceneAsset& asset, int w, int h,
 // 累计。供消费方在无截图/无法目视时断言「渲染确实发生」及失败的类别
 //（如 Drawn 但 texture_attempts 增长 = 贴图缺失分支）。进程内单调累计，
 // 不随调用清零。
+//
+// culled_tiles 仅由 `render_scene(asset, viewport)` 的段①' CPU 计数通道累加
+//（段② 窗口检查**之前**运行，不触碰 GL，因此无窗口单测也能稳定断言）。
+// 语义 = 每层 `LayerInfo::nonempty − 视口内非空格 tile 数` 之和；非裁剪路径
+// （nullopt 或 `render_scene(asset)` 旧 overload）恒为 0。
 struct RenderStats {
     int param_failures = 0;    // 段① 参数/归属校验失败次数
     int window_checks = 0;     // 段② 窗口就绪检查次数
     int texture_attempts = 0;  // 段③ 独立贴图加载尝试次数
+    int culled_tiles = 0;      // viewport 裁剪跳过的非空格 tile 总数（仅裁剪路径累加）
 };
 
 RenderStats render_stats();
