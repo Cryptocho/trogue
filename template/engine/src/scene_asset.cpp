@@ -460,6 +460,47 @@ expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
     // terrain_sets（全量解析 + 校验）
     if (auto r = parse_terrain_sets(ts, source, out.terrain_sets); !r)
         return tl::unexpected(r.error());
+    if (auto dg = ts.find("dual_grid"); dg != ts.end()) {
+        const auto mode = dg->find("mode");
+        if (!dg->is_object() || mode == dg->end() || !mode->is_string() ||
+            mode->get_ref<const std::string&>() != "corners")
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(source, "dual_grid.mode 必须为 corners")));
+        const auto names = dg->find("terrains");
+        const auto declared = dg->find("tile_count");
+        if (names == dg->end() || !names->is_array() || names->empty() ||
+            names->size() > static_cast<std::size_t>(kTerrainsPerSetMax) ||
+            declared == dg->end() || !declared->is_number_integer())
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(source, "dual_grid terrains/tile_count 非法")));
+        int declared_count = 0;
+        try {
+            declared_count = declared->get<int>();
+        } catch (const std::exception&) {
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(source, "dual_grid.tile_count 越界")));
+        }
+        if (declared_count != count)
+            return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                      at(source, "dual_grid.tile_count 与 tiles 不一致")));
+        out.has_dual_grid = true;
+        out.dual_grid.terrain_count = static_cast<int>(names->size());
+        for (const auto& name : *names) {
+            if (!name.is_string() || name.get<std::string>().empty())
+                return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                          at(source, "dual_grid.terrains 必须为非空字符串")));
+            for (const auto& old : *names)
+                if (&old != &name && old == name)
+                    return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                              at(source, "dual_grid.terrains 名称重复")));
+        }
+    }
+    if (!out.has_dual_grid) {
+        for (const auto& tile : *tiles)
+            if (tile.is_object() && tile.contains("dual_grid_corners"))
+                return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                          at(source, "dual_grid_corners 需要 dual_grid")));
+    }
     // 逐一解析 tiles[]：数组顺序即 id；每个 tile 自带 col/row（图集内坐标），
     // 建 id → TileVisual 表供渲染（不允许按 id 推公式——Godot 导出的 col/row
     // 可能非顺序排列）。size_in_atlas/texture_origin/y_sort_origin 为 tro-tileset
@@ -555,6 +596,37 @@ expected<TilesetParsed, Error> parse_tileset_document(const json& ts,
         TerrainTileEntry entry;
         if (auto r = parse_tile_terrain(t, source, out.terrain_sets, i, entry); !r)
             return tl::unexpected(r.error());
+        if (out.has_dual_grid) {
+            const auto dc = t.find("dual_grid_corners");
+            if (dc == t.end() || !dc->is_object())
+                return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                          at(source, "dual_grid_corners 缺失")));
+            DualGridTileEntry dual;
+            const char* keys[] = {"NW", "NE", "SW", "SE"};
+            for (int j = 0; j < 4; ++j) {
+                const auto v = dc->find(keys[j]);
+                if (v == dc->end() || !v->is_number_integer())
+                    return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                              at(source, "dual_grid_corners 角值非法")));
+                int corner = -1;
+                try {
+                    corner = v->get<int>();
+                } catch (const std::exception&) {
+                    return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                              at(source, "dual_grid_corners 角值越界")));
+                }
+                if (corner < 0 || corner >= out.dual_grid.terrain_count)
+                    return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                              at(source, "dual_grid_corners 角值越界")));
+                dual.corners[static_cast<std::size_t>(j)] = corner;
+            }
+            dual.tile_id = i;
+            for (const auto& old : out.dual_grid.tiles)
+                if (old.corners == dual.corners)
+                    return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                              at(source, "dual_grid_corners 重复")));
+            out.dual_grid.tiles.push_back(dual);
+        }
         SceneImpl::TilesetMeta::TileVisual tv;
         tv.region = Rect{static_cast<float>(col * out.tile_w),
                          static_cast<float>(row * out.tile_h),
@@ -603,6 +675,8 @@ expected<void, Error> load_tileset_meta(const std::string& rel_path,
     m.tile_visuals = std::move(doc->tile_visuals);
     m.terrain_sets = std::move(doc->terrain_sets);
     m.tile_terrains = std::move(doc->tile_terrains);
+    m.has_dual_grid = doc->has_dual_grid;
+    m.dual_grid = std::move(doc->dual_grid);
     out.tilesets.push_back(std::move(m));
     out.atlas_textures.emplace_back();  // 图集贴图懒加载槽与 tilesets 对齐
     return {};

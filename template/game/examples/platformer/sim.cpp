@@ -158,13 +158,23 @@ Level::Level(tg::SceneAsset asset) : asset_(std::move(asset)) {
     // 单向平台是 game 自持矩形（场景 tile 层里不存在）：薄板，从下往上穿过、自上
     // 落下可站。布局与（未来的）下跳摘除都归本层，引擎只按规则解算并给探地事件。
     one_way_ = {{22.0f * kTile, 14.0f * kTile, 4.0f * kTile, 6.0f},
-                {36.0f * kTile, 14.0f * kTile, 4.0f * kTile, 6.0f},
-                {41.0f * kTile, 12.0f * kTile, 3.0f * kTile, 6.0f}};
-    spawn_ = tg::Vec2{2.0f * kTile, 15.0f * kTile};
-    goal_ = tg::Rect{58.0f * kTile, 15.0f * kTile, kTile, 2.0f * kTile};  // 终点旗（右端墙前）
-    spawns_ = {{0, 27.0f * kTile, 15.0f * kTile, 45.0f}, {1, 52.0f * kTile, 15.0f * kTile, 1.1f}};
-    build_objects();
-}
+                    {36.0f * kTile, 14.0f * kTile, 4.0f * kTile, 6.0f},
+                    {41.0f * kTile, 12.0f * kTile, 3.0f * kTile, 6.0f}};
+        spawn_ = tg::Vec2{2.0f * kTile, 15.0f * kTile};
+        initial_spawn_ = spawn_;
+        goal_ = tg::Rect{58.0f * kTile, 15.0f * kTile, kTile, 2.0f * kTile};  // 终点旗（右端墙前）
+        spawns_ = {{0, 27.0f * kTile, 15.0f * kTile, 45.0f}, {1, 52.0f * kTile, 15.0f * kTile, 1.1f}};
+        // 3 枚晶体：起点附近、悬浮板上方、终点前；检查点在中段高台
+        gems_ = {
+            {tg::Vec2{10.0f * kTile, 14.0f * kTile}, false},
+            {tg::Vec2{31.0f * kTile, 11.0f * kTile}, false},
+            {tg::Vec2{55.0f * kTile, 14.0f * kTile}, false},
+        };
+        checkpoint_pos_ = tg::Vec2{38.0f * kTile, 11.0f * kTile};  // 悬浮板上方
+        checkpoint_active_ = false;
+        gems_collected_ = 0;
+        build_objects();
+    }
 
 // 位移与探点都直接引用网格掩码视图（view() 返回成员引用，取其地址即可）
 tg::KinematicResult Level::move(tg::Rect box, tg::Vec2 delta) const {
@@ -184,13 +194,23 @@ void Level::build_objects() {
 }
 
 // 死亡重置与 R 重开共用：重建对象、won_ 归零（本局作废）；deaths_ 保留（跨重试累计）
-void Level::reset() { won_ = false; build_objects(); }
+// 检查点一旦触发，spawn_ 改为检查点位置；晶体已拾取状态保留（不重置收集进度）
+void Level::reset() {
+    won_ = false;
+    // spawn_ 保持当前值：set_spawn 设的位置，或检查点激活后被改成的检查点位置
+    build_objects();
+}
 
 void Level::set_spawn(tg::Vec2 p) { spawn_ = p; player_.reset(p); }
 
 int Level::alive_enemies() const {
     int n = 0; for (const auto& e : enemies_) n += e->alive() ? 1 : 0; return n;
 }
+
+int Level::gem_count() const {
+    int n = 0; for (const auto& g : gems_) if (!g.taken) ++n; return n;
+}
+int Level::gems_collected() const { return gems_collected_; }
 
 void Level::step(const Input& in) {
     if (in.restart) { reset(); return; }  // 重开不推进本步模拟
@@ -204,6 +224,21 @@ void Level::step(const Input& in) {
         if (!e->alive() || !tg::aabb_overlap(pb, e->box())) continue;
         if (player_.vy() > 0.0f && (pb.y + pb.h) <= (e->box().y + kStompTol)) { e->kill(); player_.bounce(); }
         else player_.hurt();
+    }
+
+    // 收集物：玩家 AABB 与晶体中心点距离 < 8px 即拾取
+    for (auto& g : gems_) {
+        if (g.taken) continue;
+        const float dx = pb.x + pb.w * 0.5f - g.pos.x, dy = pb.y + pb.h * 0.5f - g.pos.y;
+        if (dx * dx + dy * dy < 8.0f * 8.0f) { g.taken = true; ++gems_collected_; }
+    }
+    // 检查点：玩家 AABB 与检查点重叠即激活，重生点改为检查点位置
+    if (!checkpoint_active_) {
+        const tg::Rect cp{checkpoint_pos_.x - 4.0f, checkpoint_pos_.y - 4.0f, 8.0f, 8.0f};
+        if (tg::aabb_overlap(pb, cp)) {
+            checkpoint_active_ = true;
+            spawn_ = checkpoint_pos_;  // 后续死亡/重开从这里重生
+        }
     }
 
     // 掉出场景（坑底）→ 即死；与受伤共用同一条死亡路径：deaths+1 并重置关卡

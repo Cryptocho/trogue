@@ -10,3 +10,6 @@
 
 add_executable(trogue_scene_gen scene_gen.cpp)
 target_link_libraries(trogue_scene_gen PRIVATE trogue_engine)
+
+add_executable(trogue_dual_grid_scene_gen dual_grid_scene_gen.cpp)
+target_link_libraries(trogue_dual_grid_scene_gen PRIVATE trogue_engine)

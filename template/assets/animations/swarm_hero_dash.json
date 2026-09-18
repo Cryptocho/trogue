@@ -1,0 +1,19 @@
+{
+  "format": "tro-animations",
+  "version": 1,
+  "textures": ["textures/pixellab/swarm_hero_dash.png"],
+  "animations": [
+    {
+      "name": "dash",
+      "fps": 12,
+      "loop": true,
+      "frames": [
+        { "texture": 0, "region": [0, 0, 32, 32] },
+        { "texture": 0, "region": [32, 0, 32, 32] },
+        { "texture": 0, "region": [64, 0, 32, 32] },
+        { "texture": 0, "region": [96, 0, 32, 32] },
+        { "texture": 0, "region": [128, 0, 32, 32] }
+      ]
+    }
+  ]
+}

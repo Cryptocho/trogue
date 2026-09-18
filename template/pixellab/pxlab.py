@@ -4,15 +4,16 @@
 子命令：
   import-character --meta <json> --name <n> [--fps 8] [--loop walk,idle] [--jobs 8]
   import-character-sheet --character-id <id> --sheet-url <zip> --name <n>
+  import-tileset --meta <json> --image <png> --name <n>
   check-grid --image <png>
   verify
 
 约定：CWD = 项目根；产物落 assets/（textures/pixellab/、animations/）；
 manifest 落 assets/pixellab_manifest.json（upsert）。
 
-瓦片集不在此导入：PixelLab 只产出有限标注的 Wang 集，其角标注不足以支撑引擎
-peering_bits autotile。占位瓦片集由 tools/placeholder_tileset.py 本地生成，
-正式瓦片集由使用者在 Godot 中逐格标注后经 scene_exporter 导出。
+PixelLab 的标准 16-tile tileset15 通过 import-tileset 转为 tro-tileset v2
+的 dual_grid 角组合表；普通 cell-terrain 占位集仍由 tools/placeholder_tileset.py
+生成，PixelLab 的 dual-grid 选择不伪装成 cell terrain pool。
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from api import fetch_bytes
 from character import build as build_character
 from gridcheck import detect_and_downscale
 from sheet import build as build_sheet
+from tileset import build as build_tileset
 from manifest import sha256_bytes, upsert
 
 
@@ -63,6 +65,26 @@ def cmd_import_character(a: argparse.Namespace) -> int:
     })
     n_clips = len(doc["animations"])
     print(f"OK {a.name}: {png_rel} + {anim_rel} ({n_clips} clips, fps={a.fps})")
+    return 0
+
+
+def cmd_import_tileset(a: argparse.Namespace) -> int:
+    meta = json.load(open(a.meta, encoding="utf-8"))
+    png = open(a.image, "rb").read()
+    output_png, doc = build_tileset(meta, png, a.name)
+    png_rel = _write(f"textures/pixellab/{a.name}.png", output_png)
+    tileset_rel = _write_json(f"tilesets/{a.name}.json", doc)
+    source_id = str(meta.get("id", a.name))
+    upsert("tileset", source_id, {
+        "name": a.name,
+        "download_urls": [u for u in (a.metadata_url, a.image_url) if u],
+        "outputs": [png_rel, tileset_rel],
+        "sha256": {
+            png_rel: sha256_bytes(output_png),
+            tileset_rel: sha256_bytes(_json_bytes(doc)),
+        },
+    })
+    print(f"OK {a.name}: {png_rel} + {tileset_rel} (16 dual-grid tiles)")
     return 0
 
 
@@ -116,6 +138,14 @@ def main() -> int:
     c.add_argument("--jobs", type=int, default=8,
                    help="角色帧下载并发数（1..8，默认 8；输出顺序保持确定）")
     c.set_defaults(fn=cmd_import_character)
+
+    t = sub.add_parser("import-tileset")
+    t.add_argument("--meta", required=True)
+    t.add_argument("--image", required=True)
+    t.add_argument("--name", required=True)
+    t.add_argument("--metadata-url", default="")
+    t.add_argument("--image-url", default="")
+    t.set_defaults(fn=cmd_import_tileset)
 
     s = sub.add_parser("import-character-sheet")
     s.add_argument("--character-id", required=True)

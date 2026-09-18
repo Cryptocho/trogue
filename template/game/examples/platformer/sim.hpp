@@ -68,6 +68,9 @@ private:
 
 class Enemy {
 public:
+    // 类型标识：main 用此选贴图（替代按颜色魔法数区分）；新增敌人只需 override 一行。
+    // 0 = Patroller，1 = Jumper；与 Level::Spawn::kind 同号。
+    virtual int kind() const = 0;
     virtual ~Enemy() = default;
     virtual void update(const Level& lv, float dt) = 0;  // 各自行为
     virtual tg::Color color() const = 0;
@@ -86,6 +89,7 @@ class Patroller final : public Enemy {  // 巡逻兵：撞墙或临空折返，�
     float speed_ = 0;  // 巡逻速度（含方向：正 = 右）；成员写在 public 前 = 私有
 public:
     Patroller(float x, float y, float speed);
+    int kind() const override { return 0; }
     void update(const Level& lv, float dt) override;
     tg::Color color() const override;
 };
@@ -94,6 +98,7 @@ class Jumper final : public Enemy {  // 跳跃兵：落地静默片刻后起跳�
     float t_ = 0, period_ = 1.0f;  // 起跳倒计时 / 周期；成员写在 public 前 = 私有
 public:
     Jumper(float x, float y, float period);
+    int kind() const override { return 1; }
     void update(const Level& lv, float dt) override;
     tg::Color color() const override;
 };
@@ -111,13 +116,22 @@ public:
     void set_spawn(tg::Vec2 p);       // 指定出生点并立即重建（检查点/测试用）
 
     const tg::SceneAsset& scene() const { return asset_; }
-    const std::vector<tg::Rect>& one_way() const { return one_way_; }
-    const Player& player() const { return player_; }
-    const std::vector<std::unique_ptr<Enemy>>& enemies() const { return enemies_; }
-    int alive_enemies() const;
-    int deaths() const { return deaths_; }
-    bool won() const { return won_; }
-    tg::Rect goal() const { return goal_; }
+        const std::vector<tg::Rect>& one_way() const { return one_way_; }
+        const Player& player() const { return player_; }
+        const std::vector<std::unique_ptr<Enemy>>& enemies() const { return enemies_; }
+        int alive_enemies() const;
+        int deaths() const { return deaths_; }
+        bool won() const { return won_; }
+        tg::Rect goal() const { return goal_; }
+
+        // 收集物与检查点：3 枚晶体 + 1 个检查点。晶体被拾取后从列表移除；
+        // 检查点一旦触发，重生点改为该位置（死亡/重开后生效）。
+        struct Gem { tg::Vec2 pos; bool taken = false; };
+        const std::vector<Gem>& gems() const { return gems_; }  // main 绘制未拾取晶体用
+        int gem_count() const;          // 剩余未拾取晶体数
+        int gems_collected() const;      // 累计拾取数
+        bool checkpoint_activated() const { return checkpoint_active_; }
+        tg::Vec2 checkpoint_pos() const { return checkpoint_pos_; }
 
 private:
     struct Spawn {  // 敌人重建的最小描述：reset 完全由数据决定，无随机
@@ -127,16 +141,21 @@ private:
     void build_objects();
 
     tg::SceneAsset asset_;
-    tg::SolidGrid grid_;             // 场景 solid 层物化出的碰撞掩码
-    std::vector<tg::Rect> one_way_;  // game 自持单向平台（tile 层里不存在）
-    std::vector<Spawn> spawns_;
-    std::vector<std::unique_ptr<Enemy>> enemies_;
-    Player player_;
-    tg::Vec2 spawn_{0, 0};
-    tg::Rect goal_{0, 0, 0, 0};
-    int deaths_ = 0;
-    bool won_ = false;
-};
+        tg::SolidGrid grid_;             // 场景 solid 层物化出的碰撞掩码
+        std::vector<tg::Rect> one_way_;  // game 自持单向平台（tile 层里不存在）
+        std::vector<Spawn> spawns_;
+        std::vector<std::unique_ptr<Enemy>> enemies_;
+        Player player_;
+        tg::Vec2 spawn_{0, 0};           // 当前重生点（检查点触发后会变）
+        tg::Vec2 initial_spawn_{0, 0};  // 初始重生点（reset 回到这里）
+        tg::Rect goal_{0, 0, 0, 0};
+        std::vector<Gem> gems_;          // 晶体列表
+        tg::Vec2 checkpoint_pos_{0, 0};  // 检查点位置
+        bool checkpoint_active_ = false;
+        int gems_collected_ = 0;
+        int deaths_ = 0;
+        bool won_ = false;
+    };
 
 // 确定性脚本输入（headless 验证口径）：第 i 步的输入只由 i 决定——一直按住右
 // 方向；每 45 步（0.75s）按住跳跃 12 步（0.2s，松键即减少跳高）。固定步 + 固定

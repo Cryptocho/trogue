@@ -30,7 +30,22 @@
 
 ## 4. 资产
 
-资产来源按项目设计自选（手写 tro-* JSON、离线生成、用户提供的工具），模板不预设任何管线或全局技能。CJK 字体优先独立 `.ttf`/`.otf` 直载；`.ttc`/超大字符集才用 `tools/gen_font.py` 烘焙（`game/src/ui_font.*` 是可选参考）。
+资产来源按项目设计自选（手写 tro-* JSON、离线生成、PixelLab MCP、用户提供的工具）。模板不把 PixelLab 作为运行时依赖；生成后的权威输入仍是 `assets/` 下的 tro-* JSON + PNG。CJK 字体优先独立 `.ttf`/`.otf` 直载；`.ttc`/超大字符集才用 `tools/gen_font.py` 烘焙（`game/src/ui_font.*` 是可选参考）。
+
+模板自带 `assets/textures/pixellab/` 下的离线 PixelLab 贴图（PNG + `assets/pixellab_manifest.json` 记录来源 ID 与 sha256），供两个范式范例使用。**不需要 PixelLab 服务或网络即可构建和运行**；要换美术，删掉对应 PNG 并替换即可。
+
+### PixelLab tileset15
+
+如果安装了可选的 `pixellab/` 快照，PixelLab 标准 top-down 16-tile `tileset15` 可通过：
+
+```bash
+python3 pixellab/pxlab.py import-tileset \
+  --meta <tileset-metadata.json> \
+  --image <tileset.png> \
+  --name <name>
+```
+
+转换结果是 trogue `tro-tileset v2` 的 `dual_grid` / `dual_grid_corners` 表，不是普通 cell-terrain 的两个 terrain pool。使用 `tools/dual_grid_scene_gen` 时，输入必须是 `(w+1)×(h+1)` 的 `vertex_grid`；每个视觉 cell 直接采样 NW/NE/SW/SE 四个顶点。普通 `tools/scene_gen` 的 `.`/`#` 网格和多数投票规则仍只适用于普通 cell-terrain tileset。
 
 ## 5. 实现与验证
 
@@ -43,7 +58,11 @@ cd .. && ./build/bin/trogue
 python3 tools/ipc_smoke.py
 ```
 
-纯逻辑 ctest；IPC 结构化快照断言；截图写项目内临时路径，读完删除，直接读图下结论、不做逐像素比对；观察不到的问题由用户提醒。验收标准以设计文档为准。生成的每个资产都要确认被游戏使用。
+纯逻辑 ctest；IPC 结构化快照断言；**截图写到 `/tmp/<agent-session>/`**（例如
+`/tmp/claude-1000/scratch/`），不要写到项目内 `scratch/`——会话结束 `/tmp` 自然回收，
+项目目录保持干净、不被几十张 PNG 噪音污染。读图直接下结论、不做逐像素比对；观
+察不到的问题由用户提醒。验收标准以设计文档为准。生成的每个资产都要确认被游戏使用。
+确实需要在项目内留视觉证据（例如 PR 截图）再放进 `scratch/` 并写明用途。
 
 ## 6. 调试
 

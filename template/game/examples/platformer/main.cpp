@@ -34,16 +34,84 @@ Camera2D make_camera(const plat::Level& lv) {
     return Camera2D{{cx, cy}, {cx, cy}, 0.0f, 1.0f};
 }
 
-// 世界绘制（调用方已设好 2D 变换）：tile 层 + game 对象色块。
+// 世界绘制（调用方已设好 2D 变换）：tile 层 + game 对象色块或贴图。
 // 单向平台不是场景里的 tile，必须由 game 按自己的碰撞矩形画出来，否则会「隐形站台」。
-void draw_world(const plat::Level& lv) {
+struct PlatSprites {
+    Texture2D hero{}, patroller{}, jumper{}, gem{}, flag{};
+    bool ok = false;
+};
+PlatSprites load_plat_sprites() {
+    PlatSprites s;
+    s.hero = LoadTexture("assets/textures/pixellab/platformer_hero.png");
+    s.patroller = LoadTexture("assets/textures/pixellab/platformer_patroller.png");
+    s.jumper = LoadTexture("assets/textures/pixellab/platformer_jumper.png");
+    s.gem = LoadTexture("assets/textures/pixellab/platformer_gem.png");
+    s.flag = LoadTexture("assets/textures/pixellab/platformer_flag.png");
+    if (s.hero.id == 0 || s.patroller.id == 0 || s.jumper.id == 0 ||
+        s.gem.id == 0 || s.flag.id == 0) {
+        std::fprintf(stderr, "[platformer] 资产加载失败：检查 assets/textures/pixellab/ 下 5 张 PNG\n");
+        return s;
+    }
+    SetTextureFilter(s.hero, TEXTURE_FILTER_POINT);
+    SetTextureFilter(s.patroller, TEXTURE_FILTER_POINT);
+    SetTextureFilter(s.jumper, TEXTURE_FILTER_POINT);
+    SetTextureFilter(s.gem, TEXTURE_FILTER_POINT);
+    SetTextureFilter(s.flag, TEXTURE_FILTER_POINT);
+    s.ok = true;
+    return s;
+}
+void unload_plat_sprites(const PlatSprites& s) {
+    if (s.hero.id) UnloadTexture(s.hero);
+    if (s.patroller.id) UnloadTexture(s.patroller);
+    if (s.jumper.id) UnloadTexture(s.jumper);
+    if (s.gem.id) UnloadTexture(s.gem);
+    if (s.flag.id) UnloadTexture(s.flag);
+}
+
+// 以贴图中心对齐到给定位置绘制（侧视：贴图脚底对齐到 y+h）
+void draw_sprite_centered(const Texture2D& tex, float cx, float bottom_y, Color tint) {
+    const float w = static_cast<float>(tex.width), h = static_cast<float>(tex.height);
+    DrawTexturePro(tex, {0, 0, w, h},
+                   {cx - w * 0.5f, bottom_y - h, w, h},
+                   {0, 0}, 0.0f, tint);
+}
+
+void draw_world(const plat::Level& lv, const PlatSprites& s) {
     tg::render_scene(lv.scene());
+    // 单向平台：保留色块（贴图未覆盖）
     for (const tg::Rect& r : lv.one_way()) tg::draw_rect(r, tg::Color{110, 200, 150, 255});
-    tg::draw_rect(lv.goal(), tg::Color{240, 200, 80, 255});
-    for (const auto& e : lv.enemies()) if (e->alive()) tg::draw_rect(e->box(), e->color());
+    // 终点旗：贴图（脚底对齐到 goal 底边）
+    {
+        const tg::Rect g = lv.goal();
+        draw_sprite_centered(s.flag, g.x + g.w * 0.5f, g.y + g.h,
+                             lv.won() ? Color{255, 220, 120, 255} : WHITE);
+    }
+    // 敌人：按 kind() 选贴图（不依赖颜色魔法数）；无敌帧闪烁由 Player 控制
+    for (const auto& e : lv.enemies()) {
+        if (!e->alive()) continue;
+        const tg::Rect b = e->box();
+        const tg::Color c = e->color();
+        const Color rl{c.r, c.g, c.b, c.a};
+        const Texture2D& tex = (e->kind() == 1) ? s.jumper : s.patroller;
+        draw_sprite_centered(tex, b.x + b.w * 0.5f, b.y + b.h, rl);
+    }
+    // 玩家
     const plat::Player& p = lv.player();
-    if (!p.invulnerable() || p.blink_visible())  // 无敌帧闪烁：显隐由逻辑层给
-        tg::draw_rect(p.box(), tg::Color{235, 90, 90, 255});
+    if (!p.invulnerable() || p.blink_visible()) {
+        const tg::Rect b = p.box();
+        draw_sprite_centered(s.hero, b.x + b.w * 0.5f, b.y + b.h, WHITE);
+    }
+    // 晶体：未拾取才画（贴图脚底对齐到 pos.y）
+    for (const auto& g : lv.gems()) {
+        if (g.taken) continue;
+        draw_sprite_centered(s.gem, g.pos.x, g.pos.y + 4.0f, WHITE);
+    }
+    // 检查点：画一个发光小方块在 checkpoint_pos
+    {
+        const tg::Vec2 cp = lv.checkpoint_pos();
+        const Color c = lv.checkpoint_activated() ? Color{120, 255, 180, 255} : Color{255, 220, 120, 255};
+        DrawRectangle(static_cast<int>(cp.x - 4), static_cast<int>(cp.y - 4), 8, 8, c);
+    }
 }
 
 }  // namespace
@@ -59,50 +127,56 @@ int main(int argc, char** argv) {
     // 场景在内存里构造（零资产文件）：布局与配色只有 plat 侧一份（见 plat::build_scene），
     // 窗口层不再另写一套颜色/网格，避免两处各画一遍同构场景。
     plat::Level level{plat::build_scene(plat::kTile)};
-    long long steps = 0;
-    int exit_code = 0;
+        long long steps = 0;
+        int exit_code = 0;
+        const PlatSprites sprites = load_plat_sprites();
+        if (!sprites.ok) return 1;
 
-    if (!args.shot.empty()) {  // ① 截图口径：跑约 2 秒后写整帧 PNG 再退出
-        for (; steps < kShotSteps; ++steps) level.step(plat::scripted_input(steps));
-        // 截图失败必须非零退出：--shot 是 Agent/无显示环境的视觉验收口径，
-        // 静默返回 0 会让「没有产出 PNG」被当成成功。
-        if (!hp::capture_frame_png(args.shot, kWinW, kWinH, [&level]() {
+        if (!args.shot.empty()) {  // ① 截图口径：跑约 2 秒后写整帧 PNG 再退出
+            for (; steps < kShotSteps; ++steps) level.step(plat::scripted_input(steps));
+            // 截图失败必须非零退出：--shot 是 Agent/无显示环境的视觉验收口径，
+            // 静默返回 0 会让「没有产出 PNG」被当成成功。
+            if (!hp::capture_frame_png(args.shot, kWinW, kWinH, [&]() {
+                    BeginMode2D(make_camera(level));
+                    draw_world(level, sprites);
+                    EndMode2D();
+                })) { unload_plat_sprites(sprites); exit_code = 1; }
+        } else if (args.headless || args.seconds > 0.0) {  // ② 验证口径：固定步跑满
+            const double secs = args.seconds > 0.0 ? args.seconds : kDefaultSeconds;
+            const long long total = std::llround(secs * (1.0 / plat::kFixedDt));
+            std::fprintf(stderr, "[input] headless 确定性脚本：持续按住右方向，每 45 步按住跳 12 步\n");
+            for (; steps < total; ++steps) level.step(plat::scripted_input(steps));
+            const tg::Rect b = level.player().box();
+            std::printf("steps=%lld x=%d y=%d grounded=%d deaths=%d won=%d enemies=%d gems=%d checkpoint=%d\n",
+                        steps, static_cast<int>(std::lround(b.x)), static_cast<int>(std::lround(b.y)),
+                        level.player().grounded() ? 1 : 0, level.deaths(), level.won() ? 1 : 0,
+                        level.alive_enemies(), level.gems_collected(),
+                        level.checkpoint_activated() ? 1 : 0);
+        } else {  // ③ 交互口径：真实键盘 + tg::StepClock（真实时间产出固定步）
+            tg::StepClock clock{plat::kFixedDt, 5};
+            while (!WindowShouldClose()) {
+                plat::Input in;
+                in.left = IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT);
+                in.right = IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT);
+                in.jump = IsKeyDown(KEY_SPACE) || IsKeyDown(KEY_W) || IsKeyDown(KEY_UP);
+                in.restart = IsKeyPressed(KEY_R);
+                const tg::StepClock::Tick t = clock.tick(GetFrameTime());
+                for (int s = 0; s < t.steps; ++s) { level.step(in); ++steps; }
+                BeginDrawing();
+                ClearBackground(BLACK);
                 BeginMode2D(make_camera(level));
-                draw_world(level);
+                draw_world(level, sprites);
                 EndMode2D();
-            }))
-            exit_code = 1;
-    } else if (args.headless || args.seconds > 0.0) {  // ② 验证口径：固定步跑满
-        const double secs = args.seconds > 0.0 ? args.seconds : kDefaultSeconds;
-        const long long total = std::llround(secs * (1.0 / plat::kFixedDt));
-        std::fprintf(stderr, "[input] headless 确定性脚本：持续按住右方向，每 45 步按住跳 12 步\n");
-        for (; steps < total; ++steps) level.step(plat::scripted_input(steps));
-        const tg::Rect b = level.player().box();
-        std::printf("steps=%lld x=%d y=%d grounded=%d deaths=%d won=%d enemies=%d\n",
-                    steps, static_cast<int>(std::lround(b.x)), static_cast<int>(std::lround(b.y)),
-                    level.player().grounded() ? 1 : 0, level.deaths(), level.won() ? 1 : 0, level.alive_enemies());
-    } else {  // ③ 交互口径：真实键盘 + tg::StepClock（真实时间产出固定步）
-        tg::StepClock clock{plat::kFixedDt, 5};
-        while (!WindowShouldClose()) {
-            plat::Input in;
-            in.left = IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT);
-            in.right = IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT);
-            in.jump = IsKeyDown(KEY_SPACE) || IsKeyDown(KEY_W) || IsKeyDown(KEY_UP);
-            in.restart = IsKeyPressed(KEY_R);
-            const tg::StepClock::Tick t = clock.tick(GetFrameTime());
-            for (int s = 0; s < t.steps; ++s) { level.step(in); ++steps; }
-            BeginDrawing();
-            ClearBackground(BLACK);
-            BeginMode2D(make_camera(level));
-            draw_world(level);
-            EndMode2D();
-            DrawText(TextFormat("A/D move  SPACE jump  R restart  |  deaths=%d  won=%d",
-                                level.deaths(), level.won() ? 1 : 0), 10, 10, 16, WHITE);
-            EndDrawing();
+                DrawText(TextFormat("A/D move  SPACE jump  R restart  |  deaths=%d  won=%d  gems=%d  cp=%d",
+                                    level.deaths(), level.won() ? 1 : 0,
+                                    level.gems_collected(), level.checkpoint_activated() ? 1 : 0),
+                         10, 10, 16, WHITE);
+                EndDrawing();
+            }
         }
-    }
 
-    tg::shutdown_render();
-    CloseWindow();
-    return exit_code;
-}
+        unload_plat_sprites(sprites);
+        tg::shutdown_render();
+        CloseWindow();
+        return exit_code;
+    }

@@ -87,6 +87,8 @@ struct SceneImpl {
         //（手写/纯装饰 tileset）。渲染不读；TerrainTable 加载共用解析核心。
         std::vector<TerrainSetInfo> terrain_sets;
         std::vector<TerrainTileEntry> tile_terrains;  // 与 tile_visuals 对齐（下标即 id）
+        bool has_dual_grid = false;
+        DualGridTable dual_grid;
     };
     std::vector<TilesetMeta> tilesets;
     std::vector<Color> palette;

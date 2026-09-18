@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 
+
 #include "trogue/config.hpp"
 #include "tileset_parse.hpp"
 #include "util/json_check.hpp"   // is_valid_utf8
@@ -94,6 +95,41 @@ expected<int, Error> pick_tile(const TerrainTable& table, int terrain_set,
         return tl::unexpected(err(ErrorCode::kNotFound, "该 terrain 没有任何候选 tile"));
     }
     return best_id;
+}
+
+expected<DualGridTable, Error> load_dual_grid_table(std::string_view path) {
+    if (path.empty() || path.size() >= static_cast<std::size_t>(kPathMax) ||
+        path.find('\0') != std::string_view::npos ||
+        !detail::is_valid_utf8(path) || !detail::is_safe_relative_path(path)) {
+        return tl::unexpected(err(ErrorCode::kInvalidArgument,
+                                   "dual-grid tileset 路径非法"));
+    }
+    auto parsed = detail::load_tileset_document(path);
+    if (!parsed) return tl::unexpected(parsed.error());
+    if (!parsed->has_dual_grid) {
+        return tl::unexpected(err(ErrorCode::kSchemaViolation,
+                                  "tileset 缺少 dual_grid object"));
+    }
+    return parsed->dual_grid;
+}
+
+expected<int, Error> pick_dual_grid_tile(
+    const DualGridTable& table, const std::array<int, 4>& corners) {
+    if (table.terrain_count <= 0 || table.terrain_count > 256) {
+        return tl::unexpected(err(ErrorCode::kInvalidArgument,
+                                  "dual-grid terrain_count 非法"));
+    }
+    for (int value : corners) {
+        if (value < 0 || value >= table.terrain_count) {
+            return tl::unexpected(err(ErrorCode::kInvalidArgument,
+                                      "dual-grid corner terrain 越界"));
+        }
+    }
+    for (const auto& tile : table.tiles) {
+        if (tile.corners == corners) return tile.tile_id;
+    }
+    return tl::unexpected(err(ErrorCode::kNotFound,
+                              "dual-grid 缺少该四角组合"));
 }
 
 }  // namespace tg

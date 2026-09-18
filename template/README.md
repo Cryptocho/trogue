@@ -1,67 +1,44 @@
 # trogue 游戏项目模板
 
 用 [trogue](https://github.com/Cryptocho/trogue) 引擎从零开发一个游戏的**起点**。
-本目录是一个自包含的项目骨架：复制它、构建它、然后在 `game/` 里写你的游戏。模板中的 `AGENTS.md` 是体验优先的游戏开发指南，引擎 API 只在附录中作为参考。
+本目录是一个自包含的项目骨架：检出这个 template branch、构建它、然后在 `game/` 里写你的游戏。模板中的 `AGENTS.md` 是体验优先的游戏开发指南，引擎 API 只在附录中作为参考。
 
-## 创建新项目
+## 开始开发
+
+在项目根目录执行：
 
 ```bash
-# 在任意空目录（不需要先克隆整个仓库）：
-mkdir my-game && cd my-game
-# 取到本脚本（二选一）：
-#   A. 直接下载：
-curl -fsSL https://raw.githubusercontent.com/Cryptocho/trogue/trogue-raylib/template/scripts/sync_from_source.sh -o sync_from_source.sh
-#   B. 或从已克隆的 trogue 仓库拷：cp <repo>/template/scripts/sync_from_source.sh .
-chmod +x sync_from_source.sh
-./sync_from_source.sh                      # 拉取上游模板铺到当前目录
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 ./build/bin/trogue                         # 从项目根运行（资产按 CWD assets/ 约定读取）
 ```
 
-脚本从上游仓库**临时克隆**（`--depth 1`，用完即删）取模板，你无需克隆整个仓库、
-也无需事后清理。常用选项：
+模板 branch 本身就是完整起点，不需要额外安装器、同步脚本或上游仓库。
 
-| 选项 | 作用 |
-|------|------|
-| `--url <repo>` | 上游仓库 URL（缺省内置；私有库可传带凭证的 URL） |
-| `--ref <ref>` | 上游分支/标签（缺省 `trogue-raylib`） |
-| `--source <dir>` | 用本地 trogue 源仓库代替克隆（离线/开发） |
-| `--full` | 连项目自有文件也覆盖（整份模板重置；慎用） |
+## 分支更新
 
-## 更新到最新引擎
-
-上游修了引擎后，在你的项目根直接重跑同一个脚本：
+引擎、工具和 PixelLab 转换层与该 template branch 一起维护。更新分支后重新配置并构建即可：
 
 ```bash
-./scripts/sync_from_source.sh
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
 ```
-
-它只刷新 vendored 快照（`engine/`、`tools/` 工具与更新器自身；`pixellab/`、
-`editor/` 是可选快照，已装的项目加 `--with-pixellab` / `--with-editor` 才刷新），
-**不动**你的 `game/`、`assets/`、`CMakeLists.txt`、`README.md`、`.gitignore`、
-`AGENTS.md`、`tools/CMakeLists.txt`、`tools/ipc_smoke.py`。
 
 ## 目录
 
 | 目录 | 内容 | 归属 |
 |------|------|------|
-| `engine/` | trogue 引擎静态库（C++20，依赖 raylib + nlohmann/json + tl::expected） | **快照**（勿手改） |
-| `editor/` | Godot 4.7 可选视觉标注/导出工程（scene_exporter v4） | **可选快照**（勿手改） |
-| `pixellab/` | PixelLab MCP → tro-* 资产转换层（Python） | **可选快照**（勿手改） |
-| `tools/` | 离线占位资产工具（`placeholder_tileset.py` + `scene_gen`，快照）+ `gen_font.py` / `ipc_smoke.py`（自有） | 见下 |
+| `engine/` | trogue 引擎静态库（C++20，依赖 raylib + nlohmann/json + tl::expected） | 内置引擎代码 |
+| `pixellab/` | PixelLab MCP → tro-* 资产转换层（Python） | 内置资产工具 |
+| `tools/` | 普通 cell-terrain、PixelLab dual-grid 和占位资产工具 + `gen_font.py` / `ipc_smoke.py` | 内置工具 |
 | `game/` | **你的游戏**（起步骨架，随意改写） | 项目自有 |
 | `game/examples/` | 两个范式范例（类幸存者=ECS 风格、平台跳跃=OOP 风格；起手式参考，可整目录删除） | 项目自有（模板自带） |
-| `assets/` | 你的资产（模板不含资产文件，按需自建） | 项目自有 |
+| `assets/` | 你的资产（模板自带 `textures/pixellab/` 离线贴图与 `pixellab_manifest.json`，按需扩展） | 项目自有 |
 
-## 快照与同步
+## 目录归属
 
-`engine/` 与 `tools/placeholder_tileset.py`、`tools/scene_gen.cpp` 是**从 trogue
-仓库复制来的快照**，权威源是 trogue 仓库——**不要在本项目里手改**；上游更新后，
-在项目根重跑 `./scripts/sync_from_source.sh` 刷新（见上「更新到最新引擎」）。
-可选安装的 `pixellab/`（PixelLab 转换器）与 `editor/`（Godot 标注工程）同样是快照。
+`engine/`、`pixellab/` 和 `tools/` 是 template branch 的内置通用能力。游戏项目可以直接使用，也可以在明确理解引擎契约后扩展；不要把游戏玩法反向移入 `engine/`。
 
 模板自有（可自由修改）：`CMakeLists.txt`、`.gitignore`、`tools/CMakeLists.txt`、
-`tools/gen_font.py`、`tools/ipc_smoke.py`、`game/**`、`assets/**`。
+`tools/gen_font.py`、`tools/ipc_smoke.py`、`game/**`、`assets/**`、本 README 和 `AGENTS.md`。
 
 ## 起步内容
 
@@ -74,11 +51,12 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build
   无 inotify 的平台用 F5 或 IPC `reload` 手动重载）。
 - **两个范式范例**（`game/examples/`，可选；不需要就整个删掉）：同一份引擎公共 API 的
   两种消费方式——`swarm/`（类幸存者，实体上百个、逐系统遍历 → ECS 风格）与
-  `platformer/`（单角色平台跳跃，富状态机 + 多态敌人 → OOP 风格）。两者都零资产、
-  场景在内存构造，可直接跑：
+  `platformer/`（单角色平台跳跃，富状态机 + 多态敌人 → OOP 风格）。两者都使用
+  `assets/textures/pixellab/` 下的离线 PixelLab 贴图（PNG + sha256 manifest），场景
+  在内存构造，可直接跑：
 
   ```bash
-  ./build/bin/swarm        # WASD/方向键移动，R 重开
+  ./build/bin/swarm        # WASD/方向键移动，Shift 冲刺，R 重开
   ./build/bin/platformer   # A/D 移动，空格跳，R 重开
   ./build/bin/swarm --headless --seconds 20      # 固定步跑 20 秒并打印状态摘要
   ./build/bin/platformer --shot /tmp/frame.png   # 离屏整帧截图（Agent/无显示环境可用）

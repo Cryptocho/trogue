@@ -1,0 +1,496 @@
+{
+  "entries": [
+    {
+      "name": "swarm_hero",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/3fabe6a3-63dc-4d6a-914a-b39dc4f0aa3f/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_hero.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_hero.png": "5cc0d8edbfccc5b3786a5560031cf07b5f45a91476fd60397fe75693baa878e7"
+      },
+      "source_type": "character",
+      "source_id": "3fabe6a3-63dc-4d6a-914a-b39dc4f0aa3f",
+      "imported_at": "2026-09-11T14:30:01"
+    },
+    {
+      "name": "swarm_enemy",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/4d2daacb-c4a0-45b0-b7c2-be511ffa897e/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_enemy.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_enemy.png": "7e5dd575e00e82aabd4203e20614d7a709fbb22d9b64e9a8bd91bcd941881df1"
+      },
+      "source_type": "character",
+      "source_id": "4d2daacb-c4a0-45b0-b7c2-be511ffa897e",
+      "imported_at": "2026-09-11T14:30:01"
+    },
+    {
+      "name": "swarm_orb",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/bf41b928-6926-4b0f-b13b-2f210f8816e7/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_orb.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_orb.png": "c870b4b28047dd13fbb10da87e76fb9ec3eee190bb1c3a464aa2c39c67b48cf0"
+      },
+      "source_type": "character",
+      "source_id": "bf41b928-6926-4b0f-b13b-2f210f8816e7",
+      "imported_at": "2026-09-11T14:30:01"
+    },
+    {
+      "name": "swarm_hero_dash",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/c4543b38-fbfd-4e88-9f4d-3046af22986f/download?index=0",
+        "https://api.pixellab.ai/mcp/images/c4543b38-fbfd-4e88-9f4d-3046af22986f/download?index=1",
+        "https://api.pixellab.ai/mcp/images/c4543b38-fbfd-4e88-9f4d-3046af22986f/download?index=2",
+        "https://api.pixellab.ai/mcp/images/c4543b38-fbfd-4e88-9f4d-3046af22986f/download?index=3",
+        "https://api.pixellab.ai/mcp/images/c4543b38-fbfd-4e88-9f4d-3046af22986f/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_hero_dash.png",
+        "animations/swarm_hero_dash.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_hero_dash.png": "51dbdd149cb3dc7b40a2199296af8861b11cbd92b8385115f90f5a1defbdb1bf",
+        "animations/swarm_hero_dash.json": "a7a81d7325ec7ace782ceca6976b6380538fec9b44dffdf22654fb36f4f8e884"
+      },
+      "fps": 12,
+      "loop": [
+        "dash"
+      ],
+      "source_type": "character",
+      "source_id": "c4543b38-fbfd-4e88-9f4d-3046af22986f",
+      "imported_at": "2026-09-11T14:30:01"
+    },
+    {
+      "name": "platformer_hero",
+      "download_urls": [],
+      "outputs": [
+        "textures/pixellab/platformer_hero.png"
+      ],
+      "sha256": {
+        "textures/pixellab/platformer_hero.png": "aa06bf8b2a42530a924e9db13c64ee4466b216a9c7856c26c69471c507237f66"
+      },
+      "source_type": "manual",
+      "source_id": "manual-platformer_hero",
+      "imported_at": "2026-09-17T17:11:00"
+    },
+    {
+      "name": "platformer_patroller",
+      "download_urls": [],
+      "outputs": [
+        "textures/pixellab/platformer_patroller.png"
+      ],
+      "sha256": {
+        "textures/pixellab/platformer_patroller.png": "e2a0c1dba66193a95b2f2f6a62d78e7c246b6335b02cfc097960127276d597ac"
+      },
+      "source_type": "manual",
+      "source_id": "manual-platformer_patroller",
+      "imported_at": "2026-09-17T17:11:00"
+    },
+    {
+      "name": "platformer_jumper",
+      "download_urls": [],
+      "outputs": [
+        "textures/pixellab/platformer_jumper.png"
+      ],
+      "sha256": {
+        "textures/pixellab/platformer_jumper.png": "0222bccfcce7b5f9cc66b2a53b17ec22016e1441ae9d5e8989bcdf9b7c96f0b3"
+      },
+      "source_type": "manual",
+      "source_id": "manual-platformer_jumper",
+      "imported_at": "2026-09-17T17:11:00"
+    },
+    {
+      "name": "platformer_gem",
+      "download_urls": [],
+      "outputs": [
+        "textures/pixellab/platformer_gem.png"
+      ],
+      "sha256": {
+        "textures/pixellab/platformer_gem.png": "d8be29f19a6a7590846c2ee52fb87b95ce31b8d45e090cec1aca9faf52684222"
+      },
+      "source_type": "manual",
+      "source_id": "manual-platformer_gem",
+      "imported_at": "2026-09-17T17:11:00"
+    },
+    {
+      "name": "platformer_flag",
+      "download_urls": [],
+      "outputs": [
+        "textures/pixellab/platformer_flag.png"
+      ],
+      "sha256": {
+        "textures/pixellab/platformer_flag.png": "16f7073ff57a99d2d70d53d5ec99ea2732c457acdb1633d1546589776f1effee"
+      },
+      "source_type": "manual",
+      "source_id": "manual-platformer_flag",
+      "imported_at": "2026-09-17T17:11:00"
+    },
+    {
+      "name": "swarm_bullet_lineshot",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/151daaf1-61af-4478-9eaf-c72a3d8f6012/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_bullet_lineshot.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_bullet_lineshot.png": "e9c19478650177a9f13cc9eb50eb35169dde61f2df52e3fcdc556879aec0db69"
+      },
+      "source_type": "image",
+      "source_id": "151daaf1-61af-4478-9eaf-c72a3d8f6012",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_bullet_spread",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/50b0f12b-3bef-48e8-af7e-58dddb735884/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_bullet_spread.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_bullet_spread.png": "f99a14cad0eb0d569558fb3390e5f9a07b551acaceceda70289aa9c3083ce6b6"
+      },
+      "source_type": "image",
+      "source_id": "50b0f12b-3bef-48e8-af7e-58dddb735884",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_bullet_radial",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/815a9fa3-413e-40ae-8fe0-79ce674a8289/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_bullet_radial.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_bullet_radial.png": "40e55c69c76d01a3e50cf742d35cef9e2094313fc2604b6b9f70759f41acadc4"
+      },
+      "source_type": "image",
+      "source_id": "815a9fa3-413e-40ae-8fe0-79ce674a8289",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_bullet_homing",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/f9b29226-dc6b-40e8-bb8b-2027b5345d54/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_bullet_homing.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_bullet_homing.png": "340d49fa9d1fa4421bfa4cac50bb5018f0245e92aacaca105de4e710e2b22e5e"
+      },
+      "source_type": "image",
+      "source_id": "f9b29226-dc6b-40e8-bb8b-2027b5345d54",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_pickup_heal",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/95e33347-44cd-47a1-9247-0466747766ea/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_pickup_heal.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_pickup_heal.png": "4fff9626c011c7ed05b9327bea91339160625cbcd63eb65933b2fdd5ca2aefc5"
+      },
+      "source_type": "image",
+      "source_id": "95e33347-44cd-47a1-9247-0466747766ea",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_pickup_speed",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/feb76130-9afb-44e0-801f-263021b47177/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_pickup_speed.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_pickup_speed.png": "65c4effdede8f502a7973d0f143751295a202eabf412aa84c4764b9e3704ef04"
+      },
+      "source_type": "image",
+      "source_id": "feb76130-9afb-44e0-801f-263021b47177",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_pickup_invuln",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/45d0242b-57cf-430d-8cc5-9737d1fa8804/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_pickup_invuln.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_pickup_invuln.png": "11ff4c82e184b7d36b261f10213053600628c92f75dea61a8e7822631a0ea0e6"
+      },
+      "source_type": "image",
+      "source_id": "45d0242b-57cf-430d-8cc5-9737d1fa8804",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_boss",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/a46fa940-314f-4007-b10b-5e29324f5660/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_boss.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_boss.png": "db17558adbd0bb10d8d06ff657684b695a573acb8890055affdceb1dfe73591a"
+      },
+      "source_type": "image",
+      "source_id": "a46fa940-314f-4007-b10b-5e29324f5660",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_effect_slash",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/4e218234-e60a-46e8-aa69-d32dc07cd57d/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_effect_slash.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_effect_slash.png": "b38cb72396b2e4d0fe69bf96a56b9bb46d3059da917972beb7214aa6b1bc3f0a"
+      },
+      "source_type": "image",
+      "source_id": "4e218234-e60a-46e8-aa69-d32dc07cd57d",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_effect_bash",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/2ea0d78c-c97f-47e1-af14-b88829cb4c84/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_effect_bash.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_effect_bash.png": "a4c5bfb03a657ccae49b1f7b080c8364d60df9b46c2f9d0051bd0fa30055db1b"
+      },
+      "source_type": "image",
+      "source_id": "2ea0d78c-c97f-47e1-af14-b88829cb4c84",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_orb_crystal",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/3f6079de-f072-4dea-ba0d-825bd34a7afe/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_orb_crystal.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_orb_crystal.png": "1c9d8c948144dadbbef6328ddadd3a54717a1f074f397ba7abbdd1095f69efdc"
+      },
+      "source_type": "image",
+      "source_id": "3f6079de-f072-4dea-ba0d-825bd34a7afe",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_enemy_demon",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/49538a0a-21b7-4604-b432-de5d057395c8/download"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_enemy_demon.png"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_enemy_demon.png": "b650822cf0ad3452d1d5aee847aceec255d269ca661a717a33fed53548e4c376"
+      },
+      "source_type": "image",
+      "source_id": "49538a0a-21b7-4604-b432-de5d057395c8",
+      "imported_at": "2026-09-17T20:00:00"
+    },
+    {
+      "name": "swarm_hero_walk",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/ceb2ad11-e0f6-41af-8484-b828a99acdfb/download?index=0",
+        "https://api.pixellab.ai/mcp/images/ceb2ad11-e0f6-41af-8484-b828a99acdfb/download?index=1",
+        "https://api.pixellab.ai/mcp/images/ceb2ad11-e0f6-41af-8484-b828a99acdfb/download?index=2",
+        "https://api.pixellab.ai/mcp/images/ceb2ad11-e0f6-41af-8484-b828a99acdfb/download?index=3",
+        "https://api.pixellab.ai/mcp/images/ceb2ad11-e0f6-41af-8484-b828a99acdfb/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_hero_walk.png",
+        "animations/swarm_hero_walk.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_hero_walk.png": "9075ebe8cc808468ea7e31ca67bec6ead9daf7a7015ee88bf8aec7c41bfd0a73",
+        "animations/swarm_hero_walk.json": "8efaa75599615c96657577f89e4603144948a0018b40cb614cefee5ac8dd9cb7"
+      },
+      "source_type": "animation",
+      "source_id": "ceb2ad11-e0f6-41af-8484-b828a99acdfb",
+      "imported_at": "2026-09-17T21:45:00"
+    },
+    {
+      "name": "swarm_hero_attack",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/8e445c3a-e78a-40c4-9307-d41f3c3d80e7/download?index=0",
+        "https://api.pixellab.ai/mcp/images/8e445c3a-e78a-40c4-9307-d41f3c3d80e7/download?index=1",
+        "https://api.pixellab.ai/mcp/images/8e445c3a-e78a-40c4-9307-d41f3c3d80e7/download?index=2",
+        "https://api.pixellab.ai/mcp/images/8e445c3a-e78a-40c4-9307-d41f3c3d80e7/download?index=3",
+        "https://api.pixellab.ai/mcp/images/8e445c3a-e78a-40c4-9307-d41f3c3d80e7/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_hero_attack.png",
+        "animations/swarm_hero_attack.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_hero_attack.png": "7fc4860fbcde43904c2d82433d3bebb30953b7177bcf343765fbb64391baf9b6",
+        "animations/swarm_hero_attack.json": "746360c89aa40f63e602a88682b3b3ec566c7b14c8d0300b5cbf3afcf1621b1e"
+      },
+      "source_type": "animation",
+      "source_id": "8e445c3a-e78a-40c4-9307-d41f3c3d80e7",
+      "imported_at": "2026-09-17T21:45:00"
+    },
+    {
+      "name": "swarm_hero_hurt",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/459b4e22-f05b-4275-a5fc-99bf9f481855/download?index=0",
+        "https://api.pixellab.ai/mcp/images/459b4e22-f05b-4275-a5fc-99bf9f481855/download?index=1",
+        "https://api.pixellab.ai/mcp/images/459b4e22-f05b-4275-a5fc-99bf9f481855/download?index=2",
+        "https://api.pixellab.ai/mcp/images/459b4e22-f05b-4275-a5fc-99bf9f481855/download?index=3",
+        "https://api.pixellab.ai/mcp/images/459b4e22-f05b-4275-a5fc-99bf9f481855/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_hero_hurt.png",
+        "animations/swarm_hero_hurt.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_hero_hurt.png": "80fd9fea5120ae1454933e93adbb1f9df94125d5a0a24a8fcde61606f0150f6e",
+        "animations/swarm_hero_hurt.json": "83e2e9193df036185fa82d26b5a12785948402098a5a8c32eb4debe9abdbdecf"
+      },
+      "source_type": "animation",
+      "source_id": "459b4e22-f05b-4275-a5fc-99bf9f481855",
+      "imported_at": "2026-09-17T21:45:00"
+    },
+    {
+      "name": "swarm_hero_death",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/108fb916-008e-43c3-91c3-65dece906d38/download?index=0",
+        "https://api.pixellab.ai/mcp/images/108fb916-008e-43c3-91c3-65dece906d38/download?index=1",
+        "https://api.pixellab.ai/mcp/images/108fb916-008e-43c3-91c3-65dece906d38/download?index=2",
+        "https://api.pixellab.ai/mcp/images/108fb916-008e-43c3-91c3-65dece906d38/download?index=3",
+        "https://api.pixellab.ai/mcp/images/108fb916-008e-43c3-91c3-65dece906d38/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_hero_death.png",
+        "animations/swarm_hero_death.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_hero_death.png": "d0bfef5039cd4e0836b9e2cd1519a5c4df42e48bfb9046edbb5d086fa57d4fd9",
+        "animations/swarm_hero_death.json": "f26f6db5c14f499497dd2ee72bf1d3d4e851c094e9c04fceefe5b9be97798e73"
+      },
+      "source_type": "animation",
+      "source_id": "108fb916-008e-43c3-91c3-65dece906d38",
+      "imported_at": "2026-09-17T21:45:00"
+    },
+    {
+      "name": "swarm_goblin_walk",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/b5c33b95-9aa1-4d8c-b4ec-1435182caaee/download?index=0",
+        "https://api.pixellab.ai/mcp/images/b5c33b95-9aa1-4d8c-b4ec-1435182caaee/download?index=1",
+        "https://api.pixellab.ai/mcp/images/b5c33b95-9aa1-4d8c-b4ec-1435182caaee/download?index=2",
+        "https://api.pixellab.ai/mcp/images/b5c33b95-9aa1-4d8c-b4ec-1435182caaee/download?index=3",
+        "https://api.pixellab.ai/mcp/images/b5c33b95-9aa1-4d8c-b4ec-1435182caaee/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_goblin_walk.png",
+        "animations/swarm_goblin_walk.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_goblin_walk.png": "a236c06e8c7d96d8f91aff477eaa6ecd075f79fe42bf21f586a80741991e8f37",
+        "animations/swarm_goblin_walk.json": "c7836138417215c164347a29afcc957c409ffc104c3a4565230bf050516a6944"
+      },
+      "source_type": "animation",
+      "source_id": "b5c33b95-9aa1-4d8c-b4ec-1435182caaee",
+      "imported_at": "2026-09-17T21:45:00"
+    },
+    {
+      "name": "swarm_demon_hurt",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/a3b0f7be-7710-4fd2-aa0b-d98abd71d3a2/download?index=0",
+        "https://api.pixellab.ai/mcp/images/a3b0f7be-7710-4fd2-aa0b-d98abd71d3a2/download?index=1",
+        "https://api.pixellab.ai/mcp/images/a3b0f7be-7710-4fd2-aa0b-d98abd71d3a2/download?index=2",
+        "https://api.pixellab.ai/mcp/images/a3b0f7be-7710-4fd2-aa0b-d98abd71d3a2/download?index=3",
+        "https://api.pixellab.ai/mcp/images/a3b0f7be-7710-4fd2-aa0b-d98abd71d3a2/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_demon_hurt.png",
+        "animations/swarm_demon_hurt.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_demon_hurt.png": "9a0c0df11d24d239eb0f34dc62ba2d3a37c7fef188fd1314dcb30bbffee9857d",
+        "animations/swarm_demon_hurt.json": "d9b14f36bc64eb1ef7f654dc7e7a5568a929ee904ca2298a77eb272eb0367bb0"
+      },
+      "source_type": "animation",
+      "source_id": "a3b0f7be-7710-4fd2-aa0b-d98abd71d3a2",
+      "imported_at": "2026-09-17T21:45:00"
+    },
+    {
+      "name": "swarm_boss_idle",
+      "download_urls": [
+        "https://api.pixellab.ai/mcp/images/1400b066-35b6-46f7-bbb2-39435de1f7fe/download?index=0",
+        "https://api.pixellab.ai/mcp/images/1400b066-35b6-46f7-bbb2-39435de1f7fe/download?index=1",
+        "https://api.pixellab.ai/mcp/images/1400b066-35b6-46f7-bbb2-39435de1f7fe/download?index=2",
+        "https://api.pixellab.ai/mcp/images/1400b066-35b6-46f7-bbb2-39435de1f7fe/download?index=3",
+        "https://api.pixellab.ai/mcp/images/1400b066-35b6-46f7-bbb2-39435de1f7fe/download?index=4"
+      ],
+      "outputs": [
+        "textures/pixellab/swarm_boss_idle.png",
+        "animations/swarm_boss_idle.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_boss_idle.png": "0784707098b9ab39e77caeea6f805e9c1eb953083a1df389566b7f44633f172e",
+        "animations/swarm_boss_idle.json": "33b5138415d80aa5d93f72390a06312e18622bb7bbe676b5fc32555c64da05bc"
+      },
+      "source_type": "animation",
+      "source_id": "1400b066-35b6-46f7-bbb2-39435de1f7fe",
+      "imported_at": "2026-09-17T21:45:00"
+    },
+    {
+      "name": "swarm_autotile",
+      "download_urls": [],
+      "outputs": [
+        "textures/pixellab/swarm_autotile.png",
+        "tilesets/swarm_autotile.json"
+      ],
+      "sha256": {
+        "textures/pixellab/swarm_autotile.png": "4a0703d2e00c18f5e902a6a2609368e14c7beabafcc369c3c8d66cb1ca5bfcbb",
+        "tilesets/swarm_autotile.json": "76f5f82246543e718c5fd60f783e216814be46a8e4f45cb93901632888ca5aa2"
+      },
+      "source_type": "tileset",
+      "source_id": "e6d16dc4-9346-4dc4-b6dc-70989503a0b4",
+      "imported_at": "2026-09-17T22:34:14"
+    },
+    {
+      "name": "swarm_hud",
+      "download_urls": [],
+      "outputs": [
+        "fonts/swarm_hud.png",
+        "fonts/swarm_hud.ttf"
+      ],
+      "sha256": {
+        "fonts/swarm_hud.png": "4bd673cbd0ca17daadd84850ef585cd5c5f83e078bdd1e1564d7e7d4bf71c074",
+        "fonts/swarm_hud.ttf": "432c8eb361bcd300be82623610177eecfcd4cbf8f306c7cc29a1bf4a967183a3"
+      },
+      "source_type": "font",
+      "source_id": "480c5c34-019f-493d-aaa4-86438022f442",
+      "imported_at": "2026-09-17T22:43:00"
+    }
+  ]
+}

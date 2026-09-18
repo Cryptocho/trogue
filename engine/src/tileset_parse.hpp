@@ -24,6 +24,8 @@ struct TilesetParsed {
     std::vector<SceneImpl::TilesetMeta::TileVisual> tile_visuals;
     std::vector<TerrainSetInfo> terrain_sets;     // 空 = 无 terrain 数据
     std::vector<TerrainTileEntry> tile_terrains;  // 与 tile_visuals 对齐（下标即 id）
+    bool has_dual_grid = false;
+    DualGridTable dual_grid;
 };
 
 // 解析 tro-tileset 文档：format/version/尺寸/texture/tiles/columns/terrain 全量

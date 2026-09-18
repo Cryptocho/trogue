@@ -23,6 +23,24 @@
    "source_type": "character",
    "source_id": "f268b557-7a4a-4cd7-9acb-c030d56c66fa",
    "imported_at": "2026-09-11T14:30:01"
+  },
+  {
+   "name": "pixellab_grass_water_test",
+   "download_urls": [
+    "https://api.pixellab.ai/mcp/tilesets/f1a828ca-61fb-4e20-b8fc-fd9c22388ae8/metadata",
+    "https://api.pixellab.ai/mcp/tilesets/f1a828ca-61fb-4e20-b8fc-fd9c22388ae8/image"
+   ],
+   "outputs": [
+    "textures/pixellab/pixellab_grass_water_test.png",
+    "tilesets/pixellab_grass_water_test.json"
+   ],
+   "sha256": {
+    "textures/pixellab/pixellab_grass_water_test.png": "6ed664b9265cc5809305eada4ed36a83bcc06326a7e2dfe4697dc74b287aba0e",
+    "tilesets/pixellab_grass_water_test.json": "27790986b9b3da1591cb2cb135e09151ecbc4982cf28d0228be5ce1e41b5e901"
+   },
+   "source_type": "tileset",
+   "source_id": "f1a828ca-61fb-4e20-b8fc-fd9c22388ae8",
+   "imported_at": "2026-09-17T14:18:20"
   }
  ]
 }

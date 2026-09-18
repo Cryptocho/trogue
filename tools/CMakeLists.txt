@@ -157,6 +157,17 @@ target_link_libraries(trogue_scene_gen PRIVATE trogue_engine
                                               ${TROGUE_TOOLS_NLOHMANN})
 # 无窗口纯离线工具；功能由 placeholder_tools_test 端到端驱动
 
+# PixelLab tileset15 dual-grid：显式 vertex_grid → 单视觉层场景。
+add_executable(trogue_dual_grid_scene_gen dual_grid_scene_gen.cpp)
+target_link_libraries(trogue_dual_grid_scene_gen PRIVATE trogue_engine
+                                                          ${TROGUE_TOOLS_NLOHMANN})
+add_test(NAME dual_grid_scene_gen_test
+    COMMAND ${CMAKE_COMMAND} -E env
+        TROGUE_DUAL_GRID_SCENE_GEN=$<TARGET_FILE:trogue_dual_grid_scene_gen>
+        python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/tools/tests
+        -p "test_dual_grid_scene_gen.py"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ── Watcher 分类纯函数 + Release 桩 + Ipc 集成 ──
 add_executable(trogue_watcher_ipc_test tests/watcher_ipc_test.cpp tests/test_util.hpp)
 target_link_libraries(trogue_watcher_ipc_test PRIVATE trogue_engine

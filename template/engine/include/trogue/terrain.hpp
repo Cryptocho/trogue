@@ -95,4 +95,24 @@ expected<int, Error> pick_tile(const TerrainTable& table, int terrain_set,
                                int terrain,
                                const std::array<int, kTerrainBitCount>& pattern);
 
+// PixelLab tileset15 / dual-grid 的独立角组合表。它不把 tile 归入某个
+// cell terrain 池；四个值直接描述视觉 tile 的 NW/NE/SW/SE 四个象限。
+struct DualGridTileEntry {
+    std::array<int, 4> corners{};  // NW, NE, SW, SE
+    int tile_id = -1;
+};
+
+struct DualGridTable {
+    int terrain_count = 0;
+    std::vector<DualGridTileEntry> tiles;
+};
+
+// 从 assets-relative tro-tileset v2 文件加载 dual_grid 元数据。
+// 缺失组合允许保留，供诊断 fixture 使用；重复/非法条目拒绝加载。
+expected<DualGridTable, Error> load_dual_grid_table(std::string_view path);
+
+// 只做四角组合精确查找，不降级、不按距离选择。
+expected<int, Error> pick_dual_grid_tile(
+    const DualGridTable& table, const std::array<int, 4>& corners);
+
 }  // namespace tg

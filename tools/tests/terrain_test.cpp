@@ -466,6 +466,53 @@ bool test_corners_mode() {
     return ok;
 }
 
+bool test_dual_grid_exact() {
+    bool ok = true;
+    std::string tiles;
+    for (int c = 0; c < 16; ++c) {
+        if (c > 0) tiles += ",";
+        const int nw = (c & 8) ? 1 : 0;
+        const int ne = (c & 4) ? 1 : 0;
+        const int sw = (c & 1) ? 1 : 0;
+        const int se = (c & 2) ? 1 : 0;
+        tiles += "{\"id\":" + std::to_string(c) +
+                         ",\"col\":" + std::to_string(c % 4) +
+                         ",\"row\":" + std::to_string(c / 4) +
+                         ",\"dual_grid_corners\":{"
+                         "\"NW\":" + std::to_string(nw) +
+                         ",\"NE\":" + std::to_string(ne) +
+                         ",\"SW\":" + std::to_string(sw) +
+                         ",\"SE\":" + std::to_string(se) + "}}";
+    }
+    const std::string body =
+        R"({"format":"tro-tileset","version":2,"texture":"textures/floor.png",)"
+        R"("tile_width":16,"tile_height":16,"columns":4,"rows":4,)"
+        R"("dual_grid":{"mode":"corners","terrains":["lower","upper"],"tile_count":16},)"
+        R"("tiles":[)" + tiles + "]}";
+    const std::string rel = write_tileset(body);
+    auto table = tg::load_dual_grid_table(rel);
+    remove_tileset(rel);
+    REQUIRE(table.has_value());
+    if (!table) return false;
+    CHECK(table->terrain_count == 2);
+    CHECK(static_cast<int>(table->tiles.size()) == 16);
+    for (int c = 0; c < 16; ++c) {
+        const std::array<int, 4> pattern = {
+            (c & 8) ? 1 : 0, (c & 4) ? 1 : 0,
+            (c & 1) ? 1 : 0, (c & 2) ? 1 : 0};
+        auto id = tg::pick_dual_grid_tile(*table, pattern);
+        CHECK(id.has_value() && *id == c);
+    }
+    auto invalid = tg::pick_dual_grid_tile(*table, {0, 0, 0, 2});
+    CHECK(!invalid.has_value() && invalid.error().code == tg::ErrorCode::kInvalidArgument);
+    tg::DualGridTable partial;
+    partial.terrain_count = 2;
+    partial.tiles.push_back(tg::DualGridTileEntry{{0, 0, 0, 0}, 0});
+    auto missing = tg::pick_dual_grid_tile(partial, {0, 0, 0, 1});
+    CHECK(!missing.has_value() && missing.error().code == tg::ErrorCode::kNotFound);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -477,6 +524,7 @@ int main() {
     test_load_rejections();
     test_partial_annotation();
     test_corners_mode();
+    test_dual_grid_exact();
     std::printf("[terrain test] checks=%d failures=%d\n", ::tg_test::g_checks,
                 ::tg_test::g_failures);
     return ::tg_test::g_failures == 0 ? 0 : 1;
