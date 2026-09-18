@@ -2,6 +2,10 @@
 build/
 build-release/
 
+# Agent / IDE 本地缓存
+.claude/
+.cache/
+
 # 运行期生成的截图
 screenshot_*.png
 

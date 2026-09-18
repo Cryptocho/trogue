@@ -163,7 +163,7 @@ struct Demo {
     bool has_anim = false;             // 已绑定可播放动画集
     int bound_anim_set = -1;           // 当前绑定动画集序号（归属校验）
 
-    int window_w = 1920, window_h = 1080;
+    int window_w = 1024, window_h = 728;
     bool fullscreen = false;
     tg::Vec2 cam{0, 0};
     bool quit = false;
