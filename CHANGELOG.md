@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### 资产定位：tro-* JSON 改为编辑器/PixelLab 导出格式，Agent 不再要求手写
+
+- 影响的文件: `AGENTS.md`、`engine/include/trogue/scene.hpp`、`template/AGENTS.md`、`template/engine/include/trogue/scene.hpp`
+
+#### Architecture
+- **tro-* JSON 重新定位为编辑器（Godot `scene_exporter`）与 PixelLab MCP 的导出格式**，不再是 Agent 手写输入。Agent 表达场景的入口改为：`tg::SceneSpec` / `SceneAsset::create` 内存拼装、`tools/scene_gen` / `tools/dual_grid_scene_gen` / `placeholder_tileset.py` 等离线烘焙脚本；运行时统一经 `SceneAsset::load` / `load_json` 消费。
+- `tg::SceneSpec` / `tg::SceneLayerSpec` / `tg::TilesetRef` + `SceneAsset::create(spec)` 定位为程序生成场景的 C++ 入口（程序生成、内存拼装、原型设计）——**不替代 JSON，也不是 JSON 的手写替代品**：JSON 是编辑器导出格式，代码是 Agent 的真实输入。`scene_spec_to_json(spec)` 仍供需要落盘的消费方（离线工具）使用。
+- `assets/scenes/*.json` 中的历史示例资产（`demo.json` / `forest.json` / `goblin_test.json` / `soldier_animated_sprite_2d.json` / `pixellab_grass_water_test.json`）保留并保持 `tro-scene v2` 格式——它们现在被正名为「v1→v2 迁移历史记录 + PixelLab 编辑器导出产物」，下游消费者无需变更。
+
+#### Documentation
+- `AGENTS.md`：顶层「schema-first」句去掉「Agent 也可以直接生成运行时资产」；「资产（scene.hpp）」段改写为「两条加载路径同源（load / load_json）」+「程序生成场景的 C++ 入口」二分；「权威性与依赖方向」明示 JSON = 编辑器/PixelLab 导出产物、Agent 不手写 JSON；「Agent-first 开发闭环」步骤 2/3/4 改为代码 / SceneSpec 内存拼装 / 离线烘焙 / Godot headless 四路径并列；目录结构 `scenes/` 注释、v1→v2 迁移段、`## 资产规范` 末段「双路径不变」同步改写。
+- `engine/include/trogue/scene.hpp`：`SceneSpec` 块上方注释从「未列出的 schema 字段请直接手写 tro-scene JSON」改为「用 `scene_spec_to_json` + 手动 JSON 合并补齐——`SceneSpec` 不是 JSON 的手写替代品，tro-* JSON 始终是编辑器/PixelLab 导出格式」。
+- `template/AGENTS.md`：`## 2. 到可玩闭环` 步骤 2 与 `## 4. 资产` 段去掉「手写 tro-* JSON」表述，与主仓口径一致。
+- `template/engine/include/trogue/scene.hpp`：通过 `cd template && ./scripts/sync_from_source.sh` 维护者模式从主仓同步。
+
 ### 视口裁剪（render）
 
 - 影响的文件: `engine/include/trogue/render.hpp`、`engine/include/trogue/scene.hpp`、`engine/src/render.cpp`、`tools/tests/render_test.cpp`、`template/game/examples/swarm/main.cpp`、`template/engine/{include/trogue/render.hpp,include/trogue/scene.hpp,src/render.cpp}`、`AGENTS.md`、`docs/BACKLOG.md`

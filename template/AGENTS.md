@@ -16,7 +16,7 @@
 ## 2. 到可玩闭环
 
 1. 写设计与验收标准，确定最小可玩闭环。
-2. 在 `game/` 实现最小闭环（手写 tro-* JSON 或生成测试资产均可，Godot 只是可选标注工具）。
+2. 在 `game/` 实现最小闭环（用 `tg::SceneSpec` / `SceneAsset::create` 内存拼装，或写 `tools/` 离线烘焙脚本输出 `tro-*` JSON；tro-* JSON 不要求手写，Godot 只是可选标注工具）。
 3. 构建运行：先 IPC/日志数值验证，再读截图检查表现。
 4. 试玩是必选步骤：真人或视觉子代理实际玩几轮，按设计目标评价；不满足回设计，不要用工程代码掩盖体验问题。
 5. 迭代直到达标。ctest 只证明逻辑没坏，替代不了试玩。
@@ -30,7 +30,7 @@
 
 ## 4. 资产
 
-资产来源按项目设计自选（手写 tro-* JSON、离线生成、PixelLab MCP、用户提供的工具）。模板不把 PixelLab 作为运行时依赖；生成后的权威输入仍是 `assets/` 下的 tro-* JSON + PNG。CJK 字体优先独立 `.ttf`/`.otf` 直载；`.ttc`/超大字符集才用 `tools/gen_font.py` 烘焙（`game/src/ui_font.*` 是可选参考）。
+资产来源按项目设计自选（`tg::SceneSpec` / `SceneAsset::create` 内存拼装、`tools/` 离线烘焙脚本、PixelLab MCP、用户提供的工具）。**`tro-*` JSON 不要求手写**——是编辑器/PixelLab 导出与离线工具烘焙的产物，运行时通过 `SceneAsset::load` 统一消费。模板不把 PixelLab 作为运行时依赖；生成后的权威输入仍是 `assets/` 下的 tro-* JSON + PNG。CJK 字体优先独立 `.ttf`/`.otf` 直载；`.ttc`/超大字符集才用 `tools/gen_font.py` 烘焙（`game/src/ui_font.*` 是可选参考）。
 
 模板自带 `assets/textures/pixellab/` 下的离线 PixelLab 贴图（PNG + `assets/pixellab_manifest.json` 记录来源 ID 与 sha256），供两个范式范例使用。**不需要 PixelLab 服务或网络即可构建和运行**；要换美术，删掉对应 PNG 并替换即可。
 

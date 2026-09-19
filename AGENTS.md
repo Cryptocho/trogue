@@ -6,7 +6,7 @@
 
 **trogue** 是一个基于 raylib 的轻量、通用游戏引擎库（C++20），服务三个支撑目标：
 
-1. **schema-first**：资产是固定格式的 JSON（`tro-*`）。Godot 只是可替换的视觉数据生产前端，Agent 也可以直接生成运行时资产；游戏运行时不依赖 Godot。
+1. **schema-first**：资产是固定格式的 JSON（`tro-*`）。**`tro-*` JSON 是编辑器（Godot `scene_exporter`）与 PixelLab MCP 的导出格式**，不是 Agent 手写输入——Agent 写代码（`tg::SceneSpec` / `SceneAsset::create`）或在 `tools/` 下写离线烘焙脚本，再走 `SceneAsset::load` / `load_json` 加载。游戏运行时不依赖 Godot。
 2. **Agent-first**：Agent 负责把游戏实现、构建、生成场景、导出资产、运行验证和迭代调试串成闭环；人主要负责讨论游戏设计，以及在需要视觉判断时使用 Godot 做标注。
 3. **轻量与可扩展**：引擎公共 API 为**纯 C++**（namespace + 不透明类型 + RAII）；运行时只依赖 raylib + nlohmann/json；渲染层薄，未来接入 Live2D/Rive2D 等外部 API 时不与引擎核心耦合。
 
@@ -67,7 +67,7 @@
 
 符号名以 `engine/include/trogue/*.hpp` 为准。
 
-- **资产（`scene.hpp`）**：`tg::SceneAsset` 是**不可变/只读资产对象**（RAII），拥有 tile 层、tileset、背景、descriptor 与（若资产内嵌）动画帧表；公共头不暴露 tiles 缓冲区、GPU 对象或可写指针。层与 tileset 不作为公共类型暴露；实体与层信息通过**值类型快照**（`tg::SceneEntity`、`tg::LayerInfo`）返回，内部字符串引用只在 asset 存活期间有效。`SceneAsset::load_json(text, name)` 与 `load(path)` 同一解析/校验路径（程序生成场景的一等公民入口）。**程序生成场景的类型化写路径**：`tg::SceneSpec`/`tg::SceneLayerSpec`/`TilesetRef`（值类型，schema 构造子集镜像）+ `SceneAsset::create(spec)`（序列化后仍走 `load_json`，校验单一来源）+ `scene_spec_to_json(spec)` 供需要落盘的消费方。实体在 `SceneSpec` 中**原样携带 JSON**而非镜像我读路径快照——`SceneEntity` 不含 `animations`，镜像会静默丢字段。缺省字段按 schema 缺省省略（bare 不写 tile 尺寸，故 bare 资产 `tile_width()==0` 不变）。`tg::Json` 别名亦在本头（`ipc.hpp` 各自声明同名同型别名，避免包含耦合）。受限写入：`update_layer_tiles`（整层）、`set_tile_at`（单格，层局部 tile 坐标）。**solid 层索引查询**：`solid_layer_indices()` 返回值快照，取代「层 1 是 solid」这类散落在 game/tool 里的约定。
+- **资产（`scene.hpp`）**：`tg::SceneAsset` 是**不可变/只读资产对象**（RAII），拥有 tile 层、tileset、背景、descriptor 与（若资产内嵌）动画帧表；公共头不暴露 tiles 缓冲区、GPU 对象或可写指针。层与 tileset 不作为公共类型暴露；实体与层信息通过**值类型快照**（`tg::SceneEntity`、`tg::LayerInfo`）返回，内部字符串引用只在 asset 存活期间有效。**两条加载路径同源**：`SceneAsset::load(path)` 与 `load_json(text, name)` 走同一解析/校验路径——前者读 `assets/scenes/*.json`（编辑器/PixelLab 导出产物 + 离线工具烘焙产物），后者接受内存 JSON 文本。**程序生成场景的 C++ 入口**：`tg::SceneSpec` / `tg::SceneLayerSpec` / `TilesetRef`（值类型，schema 构造子集镜像）+ `SceneAsset::create(spec)`（内部序列化后仍走 `load_json`，校验单一来源）+ `scene_spec_to_json(spec)` 供需要落盘的消费方。`SceneSpec` 是 game 在 C++ 里直接表达场景（程序生成、内存拼装、原型设计）的入口——**不替代 JSON，也不是 JSON 的手写替代品**：JSON 是编辑器导出格式，代码是 Agent 的真实输入。实体在 `SceneSpec` 中**原样携带 JSON**而非镜像我读路径快照——`SceneEntity` 不含 `animations`，镜像会静默丢字段。缺省字段按 schema 缺省省略（bare 不写 tile 尺寸，故 bare 资产 `tile_width()==0` 不变）。`tg::Json` 别名亦在本头（`ipc.hpp` 各自声明同名同型别名，避免包含耦合）。受限写入：`update_layer_tiles`（整层）、`set_tile_at`（单格，层局部 tile 坐标）。**solid 层索引查询**：`solid_layer_indices()` 返回值快照，取代「层 1 是 solid」这类散落在 game/tool 里的约定。
 - **descriptor**：`tg::SceneEntity` 是 schema 的通用值快照，不是运行时实体；引擎不提供按 id 改位置、spawn、despawn 或按 `type` 分支的运行时 API。`props`（实体）与 `meta_props()`（场景级）为自由透传，引擎只校验形状、不解释任何键。
 - **tile 查询**：`is_solid_at`/`rect_hits_solid`/`tile_at` 只查显式标记 solid 的 tile 层，返回可区分的错误/清除/实体；descriptor 的 `solid` 只作 game 导入提示，不自动加入引擎碰撞集合。层矩形之外 = 无数据 = 不阻挡。批量查询：`tile_grid`（某层一块 tile 值，tile 坐标）/ `solid_mask`（全部 solid 层可走性合成掩码）。
 - **渲染（`render.hpp`）**：`render_scene` 只绘制 tile 层；sprite/色块由 game 显式调用绘制原语（`render_sprite` 支持 scale/旋转/flip/tint，scale 须为有限正数，翻转只走显式 flip 字段）。`render_scene(asset)` 绘制资产全部 tile；新 overload `render_scene(asset, std::optional<Rect> viewport)` 接受可选世界坐标矩形裁剪每层 tile 范围（按各层 origin/tile_w/tile_h 换算后 floor/ceil + clamp，半开区间），`std::nullopt` = 不裁剪（与无 viewport overload 等价）。**视口裁剪无相机变换**：viewport 是世界坐标，调用方从自己的 Camera2D 自己换算后再传入；engine 不调用 BeginMode2D/EndMode2D、不接收 camera，全部变换由 game 在 `BeginMode2D()...EndMode2D` 区间内设置。`render_scene_to_png` 把 tile 层渲染到离屏 FBO 并导出 PNG（不含实体/HUD；走无 viewport overload）。`RenderStats`/`render_stats()`/`render_reset_stats()` 提供渲染可观测计数（`culled_tiles` 字段仅由视口路径在段② 之前累加，CPU-only，无窗口单测可稳定断言）。`reload_texture(path)` 使进程级独立贴图缓存的失效、下次绘制重读盘（图集贴图随 asset RAII，不在此列）。对象排序、相机与 UI 属 game。
@@ -100,7 +100,7 @@
 **权威性与依赖方向**：
 
 - **游戏设计意图**来自人与 Agent 的讨论；可执行规则的唯一实现位置是 `game/` 与必要的 `engine/` 代码，不从 Godot 节点树或 Godot 脚本推导玩法。
-- **运行时资产契约**是 `tro-*` schema 及其 JSON 产物。`assets/` 中的 JSON 是引擎消费的直接输入，也是 Agent 自动化验证的对象。
+- **运行时资产契约**是 `tro-*` schema 及其 JSON 产物。`assets/` 中的 JSON 是**编辑器（Godot `scene_exporter`）与 PixelLab MCP 的导出产物**——引擎运行时直接消费，也是 Agent 自动化验证（schema 校验、构建/启动观测、round-trip 烘焙）的对象。Agent 不手写 JSON；Agent 用 C++（`tg::SceneSpec` / `SceneAsset::create`）或离线烘焙脚本（`tools/scene_gen` 等）表达场景意图。
 - **Godot 源文件**（`.tscn`、`.tres`、导入资源）只是可选的上游创作输入，不能成为运行时依赖，也不自动等价于 ECS 实体、组件、系统或状态机。
 - **`tro-scene.entities` 是通用 spawn descriptor**：描述场景中放置对象的初始数据、空间属性和视觉资源，不是 ECS 专属定义，也不是 engine 的运行时实体池。engine 只把它作为只读描述暴露；game 可导入 OOP 对象、ECS 组件，也可完全忽略。无论最终由哪种模型接管，都用同一种 `entities[]` 描述格式。
 - **`solid` 是通用导入提示，不是 engine 运行时策略**：它不等价于添加碰撞组件，也不自动进入 engine 的实体碰撞集合；game 完全决定是否导入、如何导入。
@@ -111,9 +111,9 @@
 **Agent-first 开发闭环**：
 
 1. 人描述游戏目标、机制或视觉需求，Agent 澄清约束和验收标准。
-2. Agent 判断需求应由代码、直接 JSON、Godot headless 导出，还是一次必要的人工视觉标注完成；**不得默认把人或 Godot 放进链路**。
-3. Agent 实现引擎/游戏代码，或生成最小可运行的场景与测试资产。
-4. 需要 Godot 数据时，Agent 调用 `scene_exporter` 导出；不需要时直接使用 `tro-*` JSON。
+2. Agent 判断需求应由代码、`SceneSpec`/`SceneAsset::create` 内存拼装、`tools/scene_gen` 等离线烘焙、Godot headless 导出，还是一次必要的人工视觉标注完成；**不得默认把人或 Godot 放进链路**。
+3. Agent 实现引擎/游戏代码，必要时写离线烘焙脚本（输出 `tro-*` JSON）；不再要求手写 JSON 资产。
+4. 需要 Godot 数据时，Agent 调用 `scene_exporter` 导出；不需要时 game 直接用 C++（`tg::SceneSpec` / `SceneAsset::create`）表达场景，或调离线工具烘焙为 JSON 后 `load`/`load_json`。
 5. Agent 启动游戏，通过 IPC、日志、结构化查询和截图观察结果，必要时修改代码或资产并热重载。
 6. Agent 完成回归验证；只有遇到未决的设计选择或视觉判断时才请求人确认，然后继续完成剩余工作。
 
@@ -143,7 +143,7 @@ trogue/
 │   ├── CMakeLists.txt     # 可执行 trogue + anim_viewer（输出到 build/bin/）
 │   └── src/               # main.cpp + anim_viewer.cpp + 游戏自有模块（引擎能力验证台，非交付物）
 ├── assets/                # 游戏资产（引擎按 CWD assets/ 约定读取）
-│   ├── scenes/            # 手写示例 + 占位生成场景（tools/scene_gen 产物）
+│   ├── scenes/            # tro-scene JSON：编辑器/PixelLab 导出 + tools/ 烘焙产物；不要求 Agent 手写
 │   ├── animations/        # tro-animations v1 独立动画资产（导出产物）
 │   ├── tilesets/          # tro-tileset 产物（PixelLab / Godot 导出 / 占位生成）
 │   └── textures/          # 贴图（导出时自动拷贝 / 占位生成）
@@ -309,7 +309,7 @@ python3 tools/ipc_smoke.py
 
 ### v1 → v2 迁移（破坏性）
 
-- 手写场景：`version` 改 2；用了 v1.1 tileset 单字段的改写为 `tilesets` 数组 + 层引用；palette 场景仅改 version。
+- v1 遗留示例资产（`assets/scenes/demo.json` / `forest.json` 等）：`version` 改 2；用了 v1.1 tileset 单字段的改写为 `tilesets` 数组 + 层引用；palette 场景仅改 version。这些是历史迁移记录，**新场景不再要求手写 tro-scene JSON**——用 `tg::SceneSpec` / `SceneAsset::create` 或 `tools/` 烘焙。
 - Godot 导出场景：全部由 scene_exporter v3+ 重导出，无需手改。
 - **v2 → v2.1/v2.2 零迁移**：只增可选字段与 bare 形态，`version` 仍为 2，旧资产原样可读。
 
@@ -325,7 +325,7 @@ python3 tools/ipc_smoke.py
 - **明确损失**：spritesheet 边 > 4096px、图像尺寸 <8px → 拒绝导入并报错，不静默伪造兼容。
 - **导入验收**：`python3 pixellab/pxlab.py check-grid --image <png>`（只在检测到整数倍块放大时降采样）、`python3 pixellab/pxlab.py verify`（校验 manifest 中每个产物的 sha256）。
 - **独立 tro-animations 有运行时加载器**：`tg::AnimationAsset::load/load_json` 消费 `tro-animations` v1；实体内嵌 `animations` 仍由 `SceneAsset::animation_set` 提供。
-- **双路径不变**：规则明确的资产仍直接手写 tro-*；PixelLab 路径只在需要美术生成力时使用。
+- **双路径不变**：JSON 不再要求手写——程序生成场景走 `tg::SceneSpec` / `SceneAsset::create` 或离线烘焙脚本（`tools/scene_gen` / `tools/dual_grid_scene_gen`），美术生成走 PixelLab MCP；两路产物都是 `tro-*` JSON，运行时通过 `SceneAsset::load` 统一消费。
 
 ## 占位资产工具（tools/）
 

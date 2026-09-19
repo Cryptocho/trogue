@@ -123,7 +123,8 @@ struct SceneLayerSpec {
     std::vector<int> tiles;          // 行主序；长度与值域由 load_json 校验
 };
 
-// 场景构造描述（构造子集镜像；未列出的 schema 字段请直接手写 tro-scene JSON）。
+// 场景构造描述（构造子集镜像；未列出的 schema 字段请用 `scene_spec_to_json` + 手动 JSON 合并补齐——
+// SceneSpec 不是 JSON 的手写替代品，tro-* JSON 始终是编辑器/PixelLab 导出格式）。
 // 注意 SceneEntity 的 w/h == 0 语义是「取缺省（= 场景 tile 尺寸）」，不是尺寸 0。
 struct SceneSpec {
     int tile_width = 16, tile_height = 16;  // 有地形数据时写出；三者皆空（bare）时不写
