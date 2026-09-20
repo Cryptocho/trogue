@@ -456,54 +456,53 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY, fogOfWar)
     for y = startY, endY do
         for x = startX, endX do
             local tileIndex = self.tiles[y][x]
-            if tileIndex ~= TILE_TREE and tileIndex ~= TILE_BUSH then
-                local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
-                    screenWidth, screenHeight, Config.SCALE)
-                screenX = math.floor(screenX)
-                screenY = math.floor(screenY)
+            local screenX, screenY = Coordinates.tileToScreen(x, y, cameraX, cameraY,
+                screenWidth, screenHeight, Config.SCALE)
+            screenX = math.floor(screenX)
+            screenY = math.floor(screenY)
 
-                -- Always draw floor autotile for floor and grass tiles
-                if tileIndex == TILE_FLOOR or tileIndex == TILE_GRASS then
-                    local bm = self.floorBitmasks[y] and self.floorBitmasks[y][x]
-                    local floorQuad = bm and self.floorQuads[bm]
-                    if floorQuad then
-                        love.graphics.draw(self.floorTilesetImage, floorQuad, screenX, screenY)
-                    end
+            -- Always draw floor autotile for floor, grass, tree, and bush tiles
+            if tileIndex == TILE_FLOOR or tileIndex == TILE_GRASS or tileIndex == TILE_TREE or tileIndex == TILE_BUSH then
+                local bm = self.floorBitmasks[y] and self.floorBitmasks[y][x]
+                local floorQuad = bm and self.floorQuads[bm]
+                if floorQuad then
+                    love.graphics.draw(self.floorTilesetImage, floorQuad, screenX, screenY)
+                end
 
-                    -- Draw grass/mushroom decoration on top of floor
-                    if tileIndex == TILE_GRASS then
-                        local fogAlpha = fogOfWar and fogOfWar:getFogAlpha(x, y) or 0
-                        if fogAlpha >= 1.0 then
-                            -- Unexplored: tile-sized black fog covers floor
-                            love.graphics.setColor(0, 0, 0, 1.0)
-                            love.graphics.rectangle("fill", screenX, screenY, Config.TILE_SIZE, Config.TILE_SIZE)
-                            love.graphics.setColor(1, 1, 1, 1)
-                        else
-                            -- Visible or partially explored: draw grass sprite
-                            local vi = (self.grassVariantMap[y] and self.grassVariantMap[y][x]) or 0
-                            if vi > 0 then
-                                local v = self.grassVariants[vi]
-                                if v then
-                                    local drawX = screenX + Config.TILE_SIZE / 2 - v.regionW / 2 + v.offsetX
-                                    local drawY = screenY + Config.TILE_SIZE / 2 - v.regionH / 2 + v.offsetY
-                                    love.graphics.draw(v.image, v.quad, drawX, drawY)
+                -- Draw grass/mushroom decoration on top of floor
+                if tileIndex == TILE_GRASS then
+                    local fogAlpha = fogOfWar and fogOfWar:getFogAlpha(x, y) or 0
+                    if fogAlpha >= 0.85 then
+                        -- Mostly unexplored: tile-sized black fog covers floor
+                        love.graphics.setColor(0, 0, 0, 1.0)
+                        love.graphics.rectangle("fill", screenX, screenY, Config.TILE_SIZE, Config.TILE_SIZE)
+                        love.graphics.setColor(1, 1, 1, 1)
+                    else
+                        -- Visible or partially explored: draw grass sprite
+                        local vi = (self.grassVariantMap[y] and self.grassVariantMap[y][x]) or 0
+                        if vi > 0 then
+                            local v = self.grassVariants[vi]
+                            if v then
+                                local drawX = screenX + Config.TILE_SIZE / 2 - v.regionW / 2 + v.offsetX
+                                local drawY = screenY + Config.TILE_SIZE / 2 - v.regionH / 2 + v.offsetY
+                                love.graphics.draw(v.image, v.quad, drawX, drawY)
 
-                                    -- Fog covers the full sprite area (extends beyond tile)
-                                    if fogAlpha > 0 then
-                                        love.graphics.setColor(0, 0, 0, fogAlpha)
-                                        love.graphics.rectangle("fill", drawX, drawY, v.regionW, v.regionH)
-                                        love.graphics.setColor(1, 1, 1, 1)
-                                    end
+                                -- Fog covers the full tile area (entire terrain block)
+                                if fogAlpha > 0 then
+                                    love.graphics.setColor(0, 0, 0, fogAlpha)
+                                    love.graphics.rectangle("fill", screenX, screenY, Config.TILE_SIZE, Config.TILE_SIZE)
+                                    love.graphics.setColor(1, 1, 1, 1)
                                 end
                             end
                         end
                     end
-                else
-                    local quad = self.quads[tileIndex]
-                    if quad then
-                        love.graphics.draw(self.tileset, quad, screenX, screenY)
-                    end
                 end
+            else
+                local quad = self.quads[tileIndex]
+                if quad then
+                    love.graphics.draw(self.tileset, quad, screenX, screenY)
+                end
+            end
 
                 -- Fog overlay for non-grass tiles (grass handles its own fog via sprite area)
                 if fogOfWar and tileIndex ~= TILE_GRASS then
@@ -520,7 +519,6 @@ function MapRenderer:draw(cameraX, cameraY, offsetX, offsetY, fogOfWar)
                     love.graphics.setColor(0.9, 0.7, 0.2, 0.7)
                     love.graphics.rectangle("fill", screenX, screenY, Config.TILE_SIZE, Config.TILE_SIZE)
                     love.graphics.setColor(1, 1, 1, 1)
-                end
             end
         end
     end
