@@ -22,8 +22,8 @@ return {
     },
     ["columns"] = 16,
     ["rows"] = 16,
-    ["texture_path"] = "Tile Set.png",
-    ["texture_res_path"] = "res://assets/Tile Set.png",
+    ["texture_path"] = "TopDownFantasy-Forest/Tiles/Tileset.png",
+    ["texture_res_path"] = "res://assets/TopDownFantasy-Forest/Tiles/Tileset.png",
     ["tiles"] = {
         {
             ["col"] = 1,
@@ -252,22 +252,25 @@ return {
     ["bitmask_map"] = {
         [0] = {
             [0] = {
-                [3] = { 1, 3 },
-                [11] = { 1, 4 },
-                [9] = { 1, 5 },
-                [1] = { 1, 6 },
-                [7] = { 2, 3 },
-                [15] = { 2, 4 },
-                [13] = { 2, 5 },
-                [5] = { 2, 6 },
-                [6] = { 3, 3 },
-                [14] = { 3, 4 },
-                [12] = { 3, 5 },
-                [4] = { 3, 6 },
-                [2] = { 4, 3 },
-                [10] = { 4, 4 },
-                [8] = { 4, 5 },
-                [0] = { 4, 6 },
+                -- Forest grass tiles from TopDownFantasy-Forest/Tiles/Tileset.png (128x240, 8x15)
+                -- Bright GRASS (163,179,21): [0,0],[1,0],[3,0],[4,0],[5,0],[1,1],[2,1],[3,1],[4,1],[5,1],[1,2],[3,2],[4,2]
+                -- Dark grass (112,128,26): [0,1],[0,2],[2,2],[5,2]
+                [15] = { 1, 1 },  -- all connected: bright GRASS center
+                [0]  = { 0, 2 },  -- isolated: dark grass
+                [1]  = { 1, 2 },  -- right: bright GRASS
+                [2]  = { 2, 2 },  -- bottom: dark grass
+                [3]  = { 3, 2 },  -- right+bottom: bright GRASS
+                [4]  = { 0, 1 },  -- left: dark grass
+                [5]  = { 1, 0 },  -- left+right: bright GRASS
+                [6]  = { 2, 1 },  -- left+bottom: bright GRASS
+                [7]  = { 3, 1 },  -- left+right+bottom: bright GRASS
+                [8]  = { 0, 0 },  -- top: bright GRASS
+                [9]  = { 3, 0 },  -- right+top: bright GRASS
+                [10] = { 4, 1 },  -- top+bottom: bright GRASS
+                [11] = { 5, 1 },  -- right+top+bottom: bright GRASS
+                [12] = { 4, 0 },  -- left+top: bright GRASS
+                [13] = { 4, 2 },  -- left+right+top: bright GRASS
+                [14] = { 5, 2 },  -- left+top+bottom: dark grass
             },
         },
     },

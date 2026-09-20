@@ -711,3 +711,4 @@ MapGenerator.generateMap("forest", 60, 60, {
 9. **Component 添加**: `addComponent("Position")` 自动注册 SpatialHash；`removeComponent("Position")` 自动注销
 10. **System enable/disable**: 设置 `system.enabled = false` 可跳过该系统的 update 调用
 11. **中文 IME 兼容**: 中文输入法可能拦截字母键（如 `i`/`p`），导致 `love.keypressed` 和 `love.keyboard.isDown` 无法检测。背包开关（Tab）/拾取（P）在 `love.update` 中使用 `love.keyboard.isDown` 轮询，英文键盘模式下可正常工作
+12. **pixellab 使用说明**： 当询问使用pixellab时，应当访问 "https://api.pixellab.ai/mcp/docs" 知晓pixellab工具如何使用

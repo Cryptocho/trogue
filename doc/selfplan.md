@@ -1,188 +1,96 @@
-# 大背包（Grid Inventory）实现计划
+# 教堂场景集成计划
 
-## 概述
+## 设计决策
 
-实现 Diablo 风格的网格背包系统：10×8 网格，物品按像素尺寸占用格子（武器可占多格），不可堆叠，支持使用/装备/丢弃，鼠标+键盘双操作。
+- **入口**: 走到主地图特定格子自动进入教堂
+- **敌人**: 教堂内部无敌人
+- **出口**: 回到主地图原来的位置
 
-## 用户需求总结
+---
 
-| 需求 | 答案 |
-|------|------|
-| 物品占格 | 武器/装备占多格，消耗品占 1 格 |
-| 获取方式 | 击杀掉落 |
-| 背包操作 | 使用 + 装备 + 丢弃 |
-| 时间机制 | 回合制，打开背包不消耗回合 |
-| UI交互 | 鼠标 + 键盘双支持 |
-| 物品堆叠 | 全部不可堆叠 |
+## 当前进度
 
-## 架构决策（对齐项目规范）
+### 已完成
 
-### 组件：纯数据，无逻辑
+#### Step 1: map_generator.lua — 教堂布局 ✅
+- 添加 `type == "church"` 分支
+- 预制 32x30 字符数组布局
+- 返回 mapData, nil, nil
 
-```
-Inventory 组件:
-{
-    gridCols  = 10,       -- 背包列数
-    gridRows  = 8,        -- 背包行数
-    slots     = {},       -- slots[row] = {[col] = itemKey}  二维网格占用表
-    items     = {},       -- {[itemKey] = {itemId, row, col}}
-    nextKey   = 1,        -- 自增 key 生成器
-}
+#### Step 2: map_renderer.lua — 教堂瓦片 + 物体渲染 ✅
+- 加载教堂 tileset (`assets/church/tileset/tileset.png`)
+- 加载教堂物体精灵 (`assets/church/objects/*.png`)
+- Wang tile 角落匹配渲染（4-bit corner key）
+- 新增字符映射：`#` → TILE_CHURCH_WALL, `.` → TILE_CHURCH_FLOOR
+- 物体字符（A/P/C/S/L/T/O）渲染为 scene tiles
+- `isExitTile()` 方法检测出口格子
+- 入口/出口视觉标记（金色/绿色方块）
 
-Equipment 组件:
-{
-    slots = {             -- 装备槽映射
-        main_hand = nil,  -- itemKey or nil
-        off_hand  = nil,
-        armor     = nil,
-        helmet    = nil,
-    }
-}
-```
+#### Step 3: main.lua — 地图切换逻辑 ✅
+- 主地图自动找空地放置教堂入口（`E` 字符）
+- `loadChurchMap()` — 切换到教堂内部，玩家传送到出口上方
+- `returnFromChurch()` — 恢复主地图，玩家回到原位
+- 出口格子检测：玩家踩到 `E` 触发返回
+- 切换时清理/重建敌人和 FogOfWar
 
-### 定义：工厂函数 + builtin 注册表
+### 待处理
 
-```
-ItemDefinition = {
-    id, name, type,              -- "weapon" | "consumable" | "equipment"
-    gridWidth, gridHeight,       -- 物品在背包中的占用尺寸
-    weaponId,                    -- 指向 weapon.lua 定义的 ID（仅武器类）
-    equipSlot,                   -- "main_hand" | "off_hand" | "armor" | "helmet"
-    effectId,                    -- 使用时触发的效果 ID（仅消耗品类）
-    rarity, description, icon,
-}
-```
+#### 布局问题（用户反馈）
+- 柱子像边框，缺乏内部结构感
+- 彩窗直接贴地，没有靠墙逻辑
+- 中央灰色方块突兀
+- 祭坛/蜡烛位置散乱，缺乏仪式感焦点
 
-### 系统：纯表 + init/update 模式
+---
 
-```
-InventorySystem (priority=2, ECS 系统):
-  - 网格操作：canPlace(), findFreeSlot(), placeItem(), removeItem()
-  - 拾取：监听 PickupRequest（替代现有 PickupSystem）
-  - 丢弃：监听 InventoryDropItem（物品→地面实体）
-  - 使用：监听 InventoryUseItem（消耗品→触发效果）
-  - 装备/卸下：监听 InventoryEquipItem / InventoryUnequipItem
-  - 掉落：监听 EntityDied → 随机战利品表 → spawn 地面物品
+## 教堂重做计划
 
-InventoryUI (独立模块，非 ECS 系统):
-  - 渲染 10×8 网格 + 装备槽 + tooltip
-  - 鼠标：悬停预览尺寸/高亮、拖拽拾放、右键丢弃
-  - 键盘：方向键导航、Enter 拿起/放下、E 装备、D 丢弃、U 使用
-  - 持有物品=鼠标跟随渲染
-```
+### Phase 1: 资源生成 (Pixellab)
 
-### 事件流（对齐 Request → Process 模式）
+游戏现有规格：tile_size=16x16，view=high top-down，角落匹配 Wang tile（4-bit corner key）。
+
+#### 1.1 Tileset：木地板（standalone，无墙壁过渡）✅
+
+- **Pixellab ID**: `18a9b304-4911-40fb-ad8a-b86c085bcd57`
+- **base_tile_ids**:
+  - lower: `028c3d75-8d29-468d-9ae6-21b73e405c04`
+  - upper: `4d2eb971-c3cc-4325-b879-660a1746495a`
+- **文件**: 已下载替换到 `assets/church/tileset/` (旧文件已备份为 `*_old.*`)
+- **参数**: tile_size=16, view="high top-down", transition_size=0, outline=lineless, detail=highly detailed
+
+### Phase 2: 布局重设计 + map_renderer 适配
+
+> 待 Phase 1 资源就绪后进行
+
+- [ ] 将新木地板 tileset 替换现有石地板 tileset（替换 `assets/church/tileset/` 下的 PNG 和 metadata）
+- [ ] 重新设计 32x30 字符数组布局：柱子改为内部双列对称，彩窗靠墙，祭坛居中
+- [ ] 墙壁/地毯等后续再替换（本次只改地板）
+
+---
+
+## 字符定义
 
 ```
-InputSystem(按 I 键) → ToggleInventoryUI
-InputSystem(按 P 键) → PickupRequest → InventorySystem._handlePickup()
-EntityDied → InventorySystem._handleDeathDrop() → spawn ground items
-InventoryUI(鼠标/键盘) → InventoryEquipItem / InventoryUnequipItem / InventoryDropItem / InventoryUseItem
+#  = 墙壁（不可通行）
+.  = 木地板（可通行）
+A  = 祭坛（不可通行，物体精灵）
+P  = 长椅（不可通行，物体精灵）
+C  = 十字架（不可通行，物体精灵）
+S  = 彩色玻璃窗（不可通行，物体精灵）
+L  = 烛台（不可通行，物体精灵）
+T  = 讲台（物体精灵）
+O  = 石柱（不可通行，物体精灵）
+E  = 出口（可通行，触发返回主地图）
 ```
 
-## 实现步骤
+## 技术细节
 
-### Step 1: 物品定义层
+### Wang Tile 渲染
+- 使用角落匹配而非边缘匹配
+- 4-bit key: NW + NE*2 + SW*4 + SE*8（1=wall, 0=floor）
+- 从 metadata.json 解析 bounding_box 构建 quads
 
-**文件**: `src/data/definitions/item.lua` (新建)
-
-- `createItemDef(config)` 工厂函数
-- `builtin` 注册表，MCP 期包含：
-  - 武器类（引用已有 weaponId）：greatsword(2×1), shortsword(1×2), battle_axe(2×1), dagger(1×1), spear(1×2), mace(1×1), longbow(1×3), fire_wand(1×1)
-  - 消耗品类（新建 effectId + consumable effect 定义）：health_potion(1×1), energy_potion(1×1)
-  - 装备类（预留占位）：leather_armor(2×2), iron_helmet(2×2)
-
-### Step 2: 组件重构
-
-**文件**: `src/components/inventory.lua` (重写)
-- 纯数据：gridCols, gridRows, slots, items, nextKey
-- 移除旧的 `capacity`/`items` 简单结构
-
-**文件**: `src/components/equipment.lua` (新建)
-- 纯数据：装备槽 {main_hand, off_hand, armor, helmet}
-
-**文件**: `src/data/prototypes/entities.lua` (修改)
-- Player 原型更新 Inventory 为网格结构
-- Player 原型添加 Equipment 组件
-
-### Step 3: InventorySystem（核心）
-
-**文件**: `src/systems/inventory_system.lua` (新建)
-
-- `canPlace(invComp, row, col, w, h)` — 检查物品能否放入指定位置
-- `findFreeSlot(invComp, w, h)` — 扫描找第一个可用位置
-- `placeItem(invComp, itemId, row, col, w, h)` — 占用格子返回 itemKey
-- `removeItem(invComp, itemKey)` — 释放格子
-- 事件监听：
-  - `PickupRequest` → 拾取地面物品（替代 PickupSystem）
-  - `EntityDied` → 战利品生成（先简单实现：随机从物品池掉落 0-2 件）
-  - `InventoryEquipItem` → 从背包装备到指定槽
-  - `InventoryUnequipItem` → 卸下到背包
-  - `InventoryDropItem` → 背包物品→地面实体
-  - `InventoryUseItem` → 消耗品使用，触发效果
-
-### Step 4: InventoryUI
-
-**文件**: `src/systems/inventory_ui.lua` (重写)
-
-- 渲染：
-  - 背包面板（半透明深色背景，6×10 格子）
-  - 每个物品用彩色矩形 + 名称缩写显示
-  - 多格物品占据对应矩形区域
-  - 持有物品跟随鼠标渲染
-  - 右侧装备槽面板
-  - 鼠标悬停 tooltip（物品名、类型、描述、武器属性）
-  - 底部容量显示（已用/总共）
-
-- 键盘：
-  - 方向键移动高亮光标
-  - Enter：拿起物品（如果光标在物品上）或放下物品（如果持有物品）
-  - E：装备（光标处物品可装备时）
-  - D：丢弃（光标处物品→地面）
-  - U：使用（消耗品→触发效果）
-  - I / ESC：关闭
-
-- 鼠标：
-  - 左键：拿起/放下（拖拽）
-  - 右键：丢弃（物品→地面）
-  - 悬停：显示 tooltip，高亮占用区域
-  - 拖拽中显示物品预览
-  - 点击装备槽：装备/卸下
-
-### Step 5: 集成到 main.lua
-
-**修改**: `src/main.lua`
-
-- 注册 `InventorySystem`（替代 PickupSystem）
-- Player 原型添加 Equipment
-- 背包 UI 的 `love.draw` 调用保持现有结构
-- 背包打开时：
-  - `love.keypressed` → 优先发给 InventoryUI 处理键盘
-  - `love.mousepressed` → 优先发给 InventoryUI 处理鼠标
-  - 不消耗回合（`isInputAllowed` 不受影响）
-
-### Step 6: 清理旧代码
-
-- 移除 `src/systems/pickup_system.lua`（逻辑合并到 InventorySystem）
-- 清理 main.lua 中旧的 PickupSystem 引用
-
-## 文件变更清单
-
-| 操作 | 文件 |
-|------|------|
-| 新建 | `src/data/definitions/item.lua` |
-| 新建 | `src/systems/inventory_system.lua` |
-| 新建 | `src/components/equipment.lua` |
-| 重写 | `src/components/inventory.lua` |
-| 重写 | `src/systems/inventory_ui.lua` |
-| 修改 | `src/data/prototypes/entities.lua` |
-| 修改 | `src/main.lua` |
-| 删除 | `src/systems/pickup_system.lua` |
-
-## 不做（本次）
-
-- 物品在 tileset 中的图标（用纯色矩形替代）
-- 装备对 Stats computed 的实际修改（预留管道）
-- 战利品表系统（先用随机函数代替）
-- 物品排序/整理
-- 背包扩容机制
+### 物体渲染
+- 64x64 物体居中在16x16 瓦片上绘制
+- 类似树木的 scene tile 方式
+- 物体格子不可通行（出口除外）
