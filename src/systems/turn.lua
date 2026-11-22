@@ -31,6 +31,11 @@ function TurnSystem:init(world)
         self.events:on("CollisionDetected", function(data)
             if data.isPlayer then
                 self.inputAllowed = true
+                -- 碰撞时停止自动移动
+                local inputSystem = self.world:getSystem("InputSystem")
+                if inputSystem then
+                    inputSystem:stopAutoMove()
+                end
             end
         end, 0)
 

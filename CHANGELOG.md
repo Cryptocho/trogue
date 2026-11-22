@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 多树变体渲染系统
+
+- 影响的文件: `src/assets/tileset.lua`, `src/systems/map_renderer.lua`, `src/main.lua`
+- `tileset.lua` 新增第二棵 scene_tile (38x74 松树)，与原 70x98 大树共存
+- `MapRenderer` 从单树 sprite 重构为多变体系统：`treeVariants` 数组存储所有变体数据
+- `init()` 遍历所有 `scene_tile` 条目加载 quad，共享同一纹理时用 `imageCache` 避免重复加载
+- `loadMap()` 为每棵树 tile 随机分配变体索引（`treeVariantMap[y][x]`）
+- `getTreePositions()` 返回的树数据新增 `variant` 字段
+- `drawSingleTree()` 根据 `tree.variant` 选择对应 image/quad/offset 绘制
+- `main.lua` 透视效果和鼠标悬停检测从旧的全局 `treeRegionW/H` 改为按变体查找
+
+### 自动寻路移动与敌人检测中断
+
+- 影响的文件: `src/systems/input.lua`, `src/systems/turn.lua`
+- 点击远处格子时自动寻路并逐步移动到目标位置
+- 每步移动消耗一个回合，敌人回合后等待移动动画完成再继续下一步
+- 移动过程中检测视野内敌人（13x13 区域，切比雪夫距离 ≤ 6）
+- 检测到敌人时立即停止自动移动，改为单步移动
+- 视野内有敌人时，点击远处位置只移动一格（单步移动）
+- 视野内无敌人时，点击远处位置开始自动移动（一回合一格连续移动）
+- 按键或点击新位置时取消当前自动移动
+- 碰撞时自动停止移动
+- `InputSystem` 新增 `TurnEnd` 事件监听，实现事件驱动的自动移动流程
+- 新增方法：`startAutoMove`、`autoMoveStep`、`hasEnemyInSight`、`stopAutoMove`
+- 寻路不再被敌人实体阻挡，只检查地图障碍物
+
 ### 战争迷雾系统
 
 - 影响的文件: `src/systems/fog_of_war.lua` (新建), `src/systems/map_renderer.lua`, `src/systems/render.lua`, `src/main.lua`

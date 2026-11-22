@@ -182,7 +182,7 @@ love src
 ```
 
 ### 运行测试
-对于需要启动love进行的测试必需给出详细步骤指导用户进行而不是自己运行love src
+禁止自己运行 `love src`。游戏测试由用户自行执行，不要尝试启动游戏。
 
 ### 开发流程
 1. 给出计划等待批准 (当前处于unreleased阶段所以可以大胆地进行计划,包括架构上的更改建议等)
@@ -711,3 +711,4 @@ MapGenerator.generateMap("forest", 60, 60, {
 9. **Component 添加**: `addComponent("Position")` 自动注册 SpatialHash；`removeComponent("Position")` 自动注销
 10. **System enable/disable**: 设置 `system.enabled = false` 可跳过该系统的 update 调用
 11. **中文 IME 兼容**: 中文输入法可能拦截字母键（如 `i`/`p`），导致 `love.keypressed` 和 `love.keyboard.isDown` 无法检测。背包开关（Tab）/拾取（P）在 `love.update` 中使用 `love.keyboard.isDown` 轮询，英文键盘模式下可正常工作
+12. **pixellab 使用说明**： 当询问使用pixellab时，应当访问 "https://api.pixellab.ai/mcp/docs" 知晓pixellab工具如何使用

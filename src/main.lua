@@ -17,6 +17,8 @@ local TweenSystem = require("src.systems.tween_system")
 local InventoryUI = require("src.systems.inventory_ui")
 local FogOfWar = require("src.systems.fog_of_war")
 
+local TILE_BUSH = 10
+
 -- Load configuration
 local Config = require("src.config")
 local Coordinates = require("src.core.coordinates")
@@ -29,6 +31,12 @@ local game = {
     ruleEngine = nil,
     selectedAbility = nil,
     inventoryVisible = false,
+    -- Map switching state
+    currentMapType = "forest",
+    churchEntrancePos = {x = 25, y = 25},  -- church entrance in forest map
+    playerReturnPos = nil,  -- saved position when entering church
+    lastMapData = nil,      -- saved forest map data
+    lastEnemySpawns = nil,
 }
 
 function love.load()
@@ -127,7 +135,122 @@ function love.update(dt)
     if game.world then
         game.world:update(dt)
         game.world:processDespawns()
+
+        -- Check map transition tiles
+        local mapRenderer = game:getSystem("MapRenderer")
+        local players = game.world:query({"Player", "Position"})
+        if #players > 0 and mapRenderer then
+            local pos = players[1].components.Position
+
+            -- Forest: check church entrance
+            if game.currentMapType == "forest" then
+                if mapRenderer.entrancePos and pos.x == mapRenderer.entrancePos.x and pos.y == mapRenderer.entrancePos.y then
+                    game:loadChurchMap()
+                end
+            -- Church: check exit
+            elseif game.currentMapType == "church" then
+                if mapRenderer:isExitTile(pos.x, pos.y) then
+                    game:returnFromChurch()
+                end
+            end
+        end
     end
+end
+
+function game:loadChurchMap()
+    -- Save player position
+    local players = self.world:query({"Player", "Position"})
+    if #players == 0 then return end
+    local playerPos = players[1].components.Position
+    self.playerReturnPos = {x = playerPos.x, y = playerPos.y}
+
+    -- Save current forest map data
+    local mapRenderer = self:getSystem("MapRenderer")
+    self.lastMapData = mapRenderer.savedMapData  -- we'll save this in initGameWorld
+
+    -- Generate church map
+    local mapData = MapGenerator.generateMap("church", 30, 32)
+
+    -- Find exit tile 'E' to place player nearby
+    local spawnX, spawnY = 15, 28  -- default near bottom center
+    for y, row in ipairs(mapData) do
+        for x = 1, #row do
+            if row:sub(x, x) == "E" then
+                spawnX = x
+                spawnY = y - 1  -- one tile above exit
+                break
+            end
+        end
+    end
+
+    -- Reload map renderer with church data
+    mapRenderer:loadMap(mapData)
+
+    -- Move player to church entrance
+    self.world:setComponent(players[1].id, "Position", {x = spawnX, y = spawnY})
+
+    -- Despawn all enemies
+    local actors = self.world:query({"Actor", "Position"})
+    for _, actor in ipairs(actors) do
+        if not actor.components.Player then
+            self.world:despawn(actor.id, "map_switch")
+        end
+    end
+    self.world:processDespawns()
+
+    -- Update FogOfWar
+    local fogOfWar = self:getSystem("FogOfWar")
+    if fogOfWar then
+        fogOfWar:loadMap(mapRenderer.width, mapRenderer.height)
+    end
+
+    self.currentMapType = "church"
+    print("Entered church")
+end
+
+function game:returnFromChurch()
+    if not self.playerReturnPos then return end
+
+    -- Generate fresh forest map (or restore saved one)
+    local mapData, enemySpawns = MapGenerator.generateMap("forest", 60, 60, {
+        treeMinDist = 2.0,
+        densityThreshold = 0.56,
+        fbmOctaves = 6,
+        fbmPersistence = 0.5,
+        fbmScale = 4.0,
+        poissonMaxAttempts = 5,
+        poissonSeed = nil,
+    })
+
+    local mapRenderer = self:getSystem("MapRenderer")
+    mapRenderer:loadMap(mapData)
+    mapRenderer.savedMapData = mapData
+
+    -- Restore player position
+    local players = self.world:query({"Player", "Position"})
+    if #players > 0 then
+        self.world:setComponent(players[1].id, "Position", {
+            x = self.playerReturnPos.x,
+            y = self.playerReturnPos.y
+        })
+    end
+
+    -- Respawn enemies
+    if enemySpawns then
+        for _, spawn in ipairs(enemySpawns) do
+            self.prototypes:spawn(spawn.type, {Position = {x = spawn.x, y = spawn.y}})
+        end
+    end
+
+    -- Update FogOfWar
+    local fogOfWar = self:getSystem("FogOfWar")
+    if fogOfWar then
+        fogOfWar:loadMap(mapRenderer.width, mapRenderer.height)
+    end
+
+    self.currentMapType = "forest"
+    self.playerReturnPos = nil
+    print("Returned to forest")
 end
 
 function love.draw()
@@ -227,10 +350,16 @@ function love.draw()
                                     local playerScreenX = playerWx + offsetX
                                     local playerScreenY = playerWy + offsetY
                                     
+                                    local tv
+                                    if tree.tileType == TILE_BUSH then
+                                        tv = mapRenderer.bushVariants[tree.variant] or mapRenderer.bushVariants[1]
+                                    else
+                                        tv = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
+                                    end
                                     if playerScreenX + Config.TILE_SIZE > treeScreenX and
-                                       playerScreenX < treeScreenX + mapRenderer.treeRegionW and
+                                       playerScreenX < treeScreenX + tv.regionW and
                                        playerScreenY + Config.TILE_SIZE > treeScreenY and
-                                       playerScreenY < treeScreenY + mapRenderer.treeRegionH then
+                                       playerScreenY < treeScreenY + tv.regionH then
                                             if entity.logicY < y then
                                                 alpha = 0.3
                                                 break
@@ -240,8 +369,14 @@ function love.draw()
                             end
                             
                             -- Mouse hover transparency (check entire tree draw area)
-                            if mx >= tree.drawX and mx <= tree.drawX + mapRenderer.treeRegionW and
-                               my >= tree.drawY and my <= tree.drawY + mapRenderer.treeRegionH then
+                            local tvh
+                            if tree.tileType == TILE_BUSH then
+                                tvh = mapRenderer.bushVariants[tree.variant] or mapRenderer.bushVariants[1]
+                            else
+                                tvh = mapRenderer.treeVariants[tree.variant] or mapRenderer.treeVariants[1]
+                            end
+                            if mx >= tree.drawX and mx <= tree.drawX + tvh.regionW and
+                               my >= tree.drawY and my <= tree.drawY + tvh.regionH then
                                 alpha = 0.3
                             end
 
@@ -428,7 +563,7 @@ end
 
 function initGameWorld()
     local mapData, enemySpawns = MapGenerator.generateMap("forest", 60, 60, {
-        treeMinDist = 2.0,
+        treeMinDist = 2.24,
         densityThreshold = 0.5,
         fbmOctaves = 6,
         fbmPersistence = 0.5,
@@ -436,6 +571,23 @@ function initGameWorld()
         poissonMaxAttempts = 5,
         poissonSeed = nil,
     })
+
+    -- Place church entrance on a floor tile
+    local entranceX, entranceY = nil, nil
+    for y = 20, 40 do
+        for x = 20, 40 do
+            if mapData[y]:sub(x, x) == "." then
+                entranceX, entranceY = x, y
+                break
+            end
+        end
+        if entranceX then break end
+    end
+    if entranceX then
+        game.churchEntrancePos = {x = entranceX, y = entranceY}
+        -- Mark entrance on map (use 'E' character)
+        mapData[entranceY] = mapData[entranceY]:sub(1, entranceX - 1) .. "E" .. mapData[entranceY]:sub(entranceX + 1)
+    end
     
     -- Find nearest floor tile to center and spawn player
     local centerX, centerY = 30, 30
@@ -483,6 +635,7 @@ function initGameWorld()
     local mapRenderer = game:getSystem("MapRenderer")
     if mapRenderer then
         mapRenderer:loadMap(mapData)
+        mapRenderer.savedMapData = mapData  -- save for map switching
     end
 
     -- Initialize FogOfWar with map dimensions
