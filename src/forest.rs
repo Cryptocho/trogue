@@ -31,7 +31,7 @@ impl MaterialExtension for SpriteRelief {
 
 #[derive(Clone, Copy)]
 #[repr(usize)]
-enum Species {
+pub(crate) enum Species {
     Traveler,
     Oak,
     Fir,
@@ -41,13 +41,13 @@ enum Species {
     Birch,
 }
 use Species::*;
-const NAMES: [&str; 7] = [
+pub(crate) const NAMES: [&str; 7] = [
     "traveler", "oak", "fir", "snag", "rock", "waystone", "birch",
 ];
 
 // (sprite, root x, root z, visible height, width multiplier). A negative
 // width mirrors UVs, never the world transform or the shadow winding.
-const CLEARING: &[(Species, f32, f32, f32, f32)] = &[
+pub(crate) const CLEARING: &[(Species, f32, f32, f32, f32)] = &[
     (Traveler, 0.55, 0.55, 1.58, 1.),
     // An old boundary stone with a fallen fragment and a pocket of granite.
     (Waystone, WAYSTONE_ROOT.x, WAYSTONE_ROOT.z, 1.82, 1.05),
@@ -107,13 +107,15 @@ struct SpriteEntry<'a> {
     name: &'a str,
     image: &'a str,
     normal: &'a str,
+    visible_size_px: [u32; 2],
     ground_anchor_uv_top_left: [f32; 2],
 }
 
-struct SpriteMaps {
-    color: Handle<Image>,
-    normal: Handle<Image>,
-    anchor: Vec2,
+pub(crate) struct SpriteMaps {
+    pub color: Handle<Image>,
+    pub normal: Handle<Image>,
+    pub anchor: Vec2,
+    pub aspect: f32,
 }
 
 #[derive(Resource)]
@@ -123,11 +125,11 @@ pub struct Loading {
     sky: EnvironmentMapLight,
 }
 
-pub fn load(mut commands: Commands, server: Res<AssetServer>) {
+pub(crate) fn load_sprite_maps(server: &AssetServer) -> [SpriteMaps; NAMES.len()] {
     let manifest: Manifest<'static> =
         serde_json::from_str(include_str!("../assets/gloam/sprites/manifest.json"))
             .expect("invalid sprite export manifest");
-    let sprites = NAMES.map(|name| {
+    NAMES.map(|name| {
         let entry = manifest
             .sprites
             .iter()
@@ -143,8 +145,13 @@ pub fn load(mut commands: Commands, server: Res<AssetServer>) {
             color: image(entry.image, true),
             normal: image(entry.normal, false),
             anchor: entry.ground_anchor_uv_top_left.into(),
+            aspect: entry.visible_size_px[0] as f32 / entry.visible_size_px[1] as f32,
         }
-    });
+    })
+}
+
+pub fn load(mut commands: Commands, server: Res<AssetServer>) {
+    let sprites = load_sprite_maps(&server);
     let scenes = ["gloam/terrain/floor.glb", "gloam/waylight.glb"]
         .map(|file| server.load(GltfAssetLabel::Scene(0).from_asset(file)));
     commands.spawn((Name::new("苔土与林下植被"), SceneRoot(scenes[0].clone())));
@@ -188,7 +195,6 @@ pub fn plant_when_loaded(
     scenes: Query<&SceneInstance, With<SceneRoot>>,
     spawner: Res<SceneSpawner>,
     camera: Single<Entity, With<Camera3d>>,
-    images: Res<Assets<Image>>,
     fog: Single<&crate::haze::GroundMist>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<LitSprite>>,
@@ -231,7 +237,6 @@ pub fn plant_when_loaded(
     let prototypes: [_; NAMES.len()] = std::array::from_fn(|i| {
         let s = &pending.sprites[i];
         let stone = i == Rock as usize || i == Waystone as usize;
-        let size = images.get(&s.color).unwrap().size();
         let mat = materials.add(LitSprite {
             base: StandardMaterial {
                 base_color_texture: Some(s.color.clone()),
@@ -254,7 +259,7 @@ pub fn plant_when_loaded(
                 ),
             },
         });
-        (size.x as f32 / size.y as f32, mat, s.anchor)
+        (s.aspect, mat, s.anchor)
     });
     let tilt = Quat::from_rotation_x(-CARD_PITCH);
     for &(kind, x, z, h, width) in CLEARING {
@@ -281,10 +286,11 @@ pub fn plant_when_loaded(
     }
     commands.entity(*camera).insert(pending.sky.clone());
     commands.remove_resource::<Loading>();
+    commands.insert_resource(crate::desktop::SceneReady);
     info!("苔径留灯：地表、灯具、精灵及探针已就绪。");
 }
 
-fn ready(
+pub(crate) fn ready(
     server: &AssetServer,
     id: UntypedAssetId,
 ) -> Result<bool, std::sync::Arc<bevy::asset::AssetLoadError>> {

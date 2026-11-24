@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>苔径留灯 · 纯 2D / HD-2D 对照</title>
+<style>
+:root { color-scheme: dark; background: #141819; color: #eee8dc; font: 16px/1.55 system-ui,sans-serif; }
+body { max-width: 1800px; margin: auto; padding: .9rem; }
+header, nav { display:flex; align-items:center; flex-wrap:wrap; gap: .5rem 1.2rem; }
+header { justify-content:space-between; } h1 { font-size:1.35rem; margin:0; } select { font:inherit; }
+main { display:grid; gap:.75rem; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:.85rem; }
+main.solo { grid-template-columns:1fr; } figure { margin:0; } img { width:100%; height:auto; display:block; aspect-ratio:16 / 9; }
+figcaption { margin-bottom:.25rem; color:#e4c597; font-weight:600; } p { color:#c0c4c3; margin:.7rem 0; }
+a { color:#b7d5e4; } @media(max-width:760px){ main { grid-template-columns:1fr; } }
+</style>
+<header>
+  <h1>苔径留灯 · 两种画法</h1>
+  <nav aria-label="比较方式">
+    <label>取景 <select id="pair"><option>夜林全景</option><option>旅人与界石近景</option><option>纯 2D：同一盏白灯换边</option></select></label>
+    <label>显示 <select id="layout"><option>并排</option><option>只看图 A</option><option>只看图 B</option></select></label>
+  </nav>
+</header>
+<main>
+  <figure><figcaption>A · 纯 2D</figcaption><a href="2d.png"><img src="2d.png" alt="纯 2D 夜林全景"></a></figure>
+  <figure><figcaption>B · HD-2D</figcaption><a href="hd2d.png"><img src="hd2d.png" alt="HD-2D 夜林全景"></a></figure>
+</main>
+<p>点击画面打开 2560×1440 原图。全景和近景保持主角附近的比例；纯 2D 为正交画布，远树不会像透视镜头那样缩小。换灯时只改变验光灯方向。</p>
+<p><a href="study.md">光影做法、采样条件与资料</a></p>
+<script>
+const pairs = [
+    [['纯 2D · 全景', '2d.png'], ['HD-2D · 全景', 'hd2d.png']],
+    [['纯 2D · 近景', '2d-detail.png'], ['HD-2D · 近景', 'hd2d-detail.png']],
+    [['纯 2D · 左灯', '2d-key-left.png'], ['纯 2D · 右灯', '2d-key-right.png']],
+];
+const pair = document.querySelector('#pair'), layout = document.querySelector('#layout');
+function update() {
+    document.querySelector('main').classList.toggle('solo', layout.selectedIndex !== 0);
+    document.querySelectorAll('figure').forEach((figure, i) => {
+        const [label, file] = pairs[pair.selectedIndex][i];
+        figure.hidden = layout.selectedIndex !== 0 && layout.selectedIndex !== i + 1;
+        figure.querySelector('figcaption').textContent = `${i === 0 ? 'A' : 'B'} · ${label}`;
+        const link = figure.querySelector('a'), image = figure.querySelector('img');
+        if (image.getAttribute('src') !== file) { link.href = file; image.src = file; }
+        image.alt = label;
+    });
+}
+pair.addEventListener('change', update); layout.addEventListener('change', update);
+</script>
+</html>

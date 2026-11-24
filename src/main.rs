@@ -2,6 +2,7 @@ mod desktop;
 mod forest;
 mod haze;
 mod lens;
+mod paper;
 
 use bevy::{
     core_pipeline::{
@@ -25,6 +26,9 @@ const CANOPY_TO: Vec3 = Vec3::new(-2.6, 0.0, -2.2);
 const NORMAL_FOV: f32 = 32.0;
 const DETAIL_FOV: f32 = 19.0;
 
+#[derive(Component)]
+struct SceneCamera;
+
 fn main() -> AppExit {
     let options = match ViewOptions::parse() {
         Ok(options) => options,
@@ -33,13 +37,14 @@ fn main() -> AppExit {
             return AppExit::error();
         }
     };
-    App::new()
-        .insert_resource(options)
+    let pure_2d = options.pure_2d;
+    let mut app = App::new();
+    app.insert_resource(options)
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: "Wanderstead · 苔径留灯".into(),
+                        title: if pure_2d { "苔径留灯 · 纯 2D" } else { "苔径留灯 · HD-2D" }.into(),
                         resolution: WindowResolution::new(2560., 1440.),
                         mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
                         present_mode: PresentMode::AutoVsync, // Selected against the native surface at startup.
@@ -52,8 +57,18 @@ fn main() -> AppExit {
                     ..default()
                 }),
         )
-        .add_plugins(lens::LensPlugin)
         .add_plugins(desktop::DesktopView)
+        .add_systems(Update, framing_controls);
+    if pure_2d {
+        app.add_plugins(paper::PaperPlugin);
+    } else {
+        install_hd_scene(&mut app);
+    }
+    app.run()
+}
+
+fn install_hd_scene(app: &mut App) {
+    app.add_plugins(lens::LensPlugin)
         .insert_resource(bevy::pbr::DefaultOpaqueRendererMethod::deferred())
         .add_plugins(MaterialPlugin::<forest::LitSprite>::default())
         .add_plugins(MaterialPlugin::<haze::MistMaterial> {
@@ -74,16 +89,16 @@ fn main() -> AppExit {
             Update,
             (
                 forest::plant_when_loaded.run_if(resource_exists::<forest::Loading>),
-                camera_controls,
+                forest_atmosphere_controls,
             ),
-        )
-        .run()
+        );
 }
 
 fn stage_lights(mut commands: Commands, options: Res<ViewOptions>) {
     let cast = !options.no_shadows;
     let mut camera = commands.spawn((
         Name::new("林间镜头"),
+        SceneCamera,
         Camera3d::default(),
         Camera {
             hdr: true,
@@ -249,22 +264,37 @@ fn lantern_bloom() -> Bloom {
     }
 }
 
-fn camera_controls(
+fn forest_atmosphere_controls(
+    mut commands: Commands,
+    keys: Res<ButtonInput<KeyCode>>,
+    camera: Single<(Entity, Has<lens::TiltFocus>), With<Camera3d>>,
+    mut mist: Single<&mut Visibility, With<haze::GroundMist>>,
+) {
+    let (entity, focused) = *camera;
+    if keys.just_pressed(KeyCode::KeyD) {
+        if focused {
+            commands.entity(entity).remove::<lens::TiltFocus>();
+        } else {
+            commands.entity(entity).insert(lens::TiltFocus::default());
+        }
+    }
+    if keys.just_pressed(KeyCode::KeyF) {
+        **mist = if **mist == Visibility::Hidden {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+}
+
+fn framing_controls(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     mut wheel: EventReader<MouseWheel>,
-    mut camera: Single<(Entity, &mut Projection, Has<lens::TiltFocus>, Has<Bloom>), With<Camera3d>>,
-    mut mist: Single<&mut Visibility, With<haze::GroundMist>>,
+    mut camera: Single<(Entity, &mut Projection, Has<Bloom>), With<SceneCamera>>,
     mut exit: EventWriter<AppExit>,
 ) {
-    let (entity, projection, focused, glowing) = &mut *camera;
-    if keys.just_pressed(KeyCode::KeyD) {
-        if *focused {
-            commands.entity(*entity).remove::<lens::TiltFocus>();
-        } else {
-            commands.entity(*entity).insert(lens::TiltFocus::default());
-        }
-    }
+    let (entity, projection, glowing) = &mut *camera;
     if keys.just_pressed(KeyCode::KeyB) {
         if *glowing {
             commands.entity(*entity).remove::<Bloom>();
@@ -275,13 +305,6 @@ fn camera_controls(
     if keys.just_pressed(KeyCode::Escape) {
         exit.write(AppExit::Success);
     }
-    if keys.just_pressed(KeyCode::KeyF) {
-        **mist = if **mist == Visibility::Hidden {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
     let steps: f32 = wheel
         .read()
         .map(|e| match e.unit {
@@ -289,9 +312,17 @@ fn camera_controls(
             MouseScrollUnit::Pixel => e.y / 48.,
         })
         .sum();
-    if steps != 0.
-        && let Projection::Perspective(p) = &mut **projection
-    {
-        p.fov = (p.fov * (-0.11 * steps).exp()).clamp(DETAIL_FOV.to_radians(), 36_f32.to_radians());
+    if steps == 0. {
+        return;
+    }
+    let factor = (-0.11 * steps).exp();
+    match &mut **projection {
+        Projection::Perspective(p) => {
+            p.fov = (p.fov * factor).clamp(DETAIL_FOV.to_radians(), 36_f32.to_radians());
+        }
+        Projection::Orthographic(p) => {
+            p.scale = (p.scale * factor).clamp(paper::DETAIL_SCALE, paper::WIDE_SCALE);
+        }
+        Projection::Custom(_) => (),
     }
 }

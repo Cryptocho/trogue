@@ -14,7 +14,7 @@ dev-dylib = ["bevy/dynamic_linking"]
 bevy = { version = "=0.16.1", default-features = false, features = [
     "std", "async_executor", "multi_threaded", "bevy_log", "bevy_asset", "bevy_gltf",
     "bevy_window", "bevy_winit", "wayland", "bevy_render", "bevy_core_pipeline",
-    "bevy_pbr", "experimental_pbr_pcss", "bevy_scene", "png", "dds",
+    "bevy_sprite", "bevy_pbr", "experimental_pbr_pcss", "bevy_scene", "png", "dds",
 ] }
 raw-window-handle = "0.6"
 wgpu-types = "24"

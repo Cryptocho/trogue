@@ -14,10 +14,13 @@ use bevy::{
     winit::WinitWindows,
 };
 
-use crate::forest::Loading;
+/// Present only after the active renderer has placed the scene and loaded its assets.
+#[derive(Resource)]
+pub struct SceneReady;
 
 #[derive(Resource, Default)]
 pub struct ViewOptions {
+    pub pure_2d: bool,
     pub detail: bool,
     pub clear_air: bool,
     pub deep_focus: bool,
@@ -39,7 +42,9 @@ impl ViewOptions {
         let mut options = Self::default();
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
-            if arg == "--detail" {
+            if arg == "--2d" {
+                options.pure_2d = true;
+            } else if arg == "--detail" {
                 options.detail = true;
             } else if arg == "--clear-air" {
                 options.clear_air = true;
@@ -68,9 +73,12 @@ impl ViewOptions {
                 options.capture = Some(path);
             } else {
                 return Err(format!(
-                    "未知参数 {arg:?}；支持 --detail、--clear-air、--deep-focus、--no-bloom、--no-shadows、--flat-sprites、--stone-key left|right、--capture 路径.png"
+                    "未知参数 {arg:?}；支持 --2d、--detail、--clear-air、--deep-focus、--no-bloom、--no-shadows、--flat-sprites、--stone-key left|right、--capture 路径.png"
                 ));
             }
+        }
+        if options.pure_2d && options.deep_focus {
+            return Err("纯 2D 使用清晰的正交画布；--deep-focus 仅用于关闭 HD-2D 的镜头景深".into());
         }
         Ok(options)
     }
@@ -97,12 +105,12 @@ impl Plugin for DesktopView {
             app.add_systems(
                 Update,
                 sample_and_capture
-                    .run_if(resource_exists::<CaptureRun>.and(not(resource_exists::<Loading>))),
+                    .run_if(resource_exists::<CaptureRun>.and(resource_exists::<SceneReady>)),
             );
         } else {
             app.add_systems(
                 Update,
-                manual_capture.run_if(not(resource_exists::<Loading>)),
+                manual_capture.run_if(resource_exists::<SceneReady>),
             );
         }
     }
@@ -186,7 +194,7 @@ fn sample_and_capture(
     time: Res<Time<Real>>,
     mut run: ResMut<CaptureRun>,
     window: Single<(Entity, &Window), With<PrimaryWindow>>,
-    camera: Single<&Camera, With<Camera3d>>,
+    camera: Single<&Camera, With<crate::SceneCamera>>,
     native: NonSend<WinitWindows>,
 ) {
     let dt = time.delta_secs_f64();
