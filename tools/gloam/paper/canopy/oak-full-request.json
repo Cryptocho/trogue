@@ -1,0 +1,4 @@
+{
+ "description":"A whole SINGLE BIG LEAFY OAK TREE sprite for an overhead SNES pixel RPG. Include the entire broad leafy crown, trunk and three short roots. A simple inventory-style isolated cutout, completely surrounded by transparent air on all four sides, 12 pixels of padding, foot touching nothing. Broad dense rounded scalloped canopy occupies top two thirds, branching short twisted trunk bottom one third. Emerald, blue-green and medium sage connected leaf clusters, mossy umber bark. Intentional 16-bit pixel clusters in a limited palette. Eye sees the canopy from above and the front of the trunk. NO diamond tile, ground plane, turf, grass, mound, shadow, frame, text, sky, scenery. ONE tree, absolutely not a landscape or tree close-up.",
+ "width":160,"height":160,"no_background":true,"view":"low top-down","outline":"selective outline","detail":"medium detail","seed":841765
+}

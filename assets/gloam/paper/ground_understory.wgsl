@@ -13,20 +13,18 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     let uv = atlas.xy + mesh.uv*atlas.z;
     let leaf = textureSample(albedo_map, albedo_sampler, uv);
     let data = textureSample(data_map, data_sampler, uv);
-    // Recover this instance's metre scale without per-plant material uniforms.
-    // The camera is orthographic, all cards are axis-aligned with positive scale.
-    let scale = abs(dpdx(mesh.world_position.x)/dpdx(mesh.uv.x))/1.6;
-    if leaf.a < 0.025 {
+    if leaf.a < 0.5 {
         discard;
     }
-    let height = data.a*atlas.w*scale;
+    // Native 32px plants are placed at scale 1; data A is authored light height.
+    let height = data.a*atlas.w;
     let p = vec3<f32>(mesh.world_position.x, height,
         -(mesh.world_position.y-height*0.823)/0.568-0.3);
     let painted_normal = normalize(data.rgb*2.0-1.0);
     let n = normalize(mix(painted_normal, vec3<f32>(0.0, 1.0, 0.0), lighting.z));
-    // Root/litter occlusion is intrinsic material AO, not a substitute for the
-    // ActorPlugin's map-plane silhouette shadows (those render at world Z=1).
-    let root_ao = mix(0.82, 1.0, smoothstep(0.0, 0.11, height));
+    // The single painted root fold is intrinsic material occlusion. The clear
+    // silhouette and 1px leaf steps remain intact in the 512px camera canvas.
+    let root_ao = select(1.0, 0.86, height < 0.08);
     let color = illuminate(leaf.rgb*root_ao, n, p, 0.80, 0.035, lighting.y);
     return vec4<f32>(air(color, p, lighting.x), leaf.a);
 }

@@ -6,17 +6,15 @@ use bevy::{
 };
 
 use super::{GROUND_SCALE, PaperAssets, PaperSettings, on_map, sort_key};
-use crate::forest::{CLEARING, NAMES, Species, SpriteMaps, load_sprite_maps};
+use crate::forest::{CLEARING, NAMES, Species, SpriteMaps};
 
-// The art's normal basis is the original 35-degree view. Its virtual surface
-// leans 0.35 radians, as in the reference; neither is actual 3D geometry.
-const PITCH: f32 = 0.35;
-const SCREEN_HEIGHT: f32 = 0.966_42;
+// Native pixel cards are upright. Only their face-normal basis uses the
+// 35-degree picture view; no HD-2D sprite or photograph is loaded here.
 const LANTERN_ROOT: Vec2 = Vec2::new(crate::LAMP.x, crate::LAMP.z);
 const LANTERN_HEIGHT: f32 = 2.10;
 const LANTERN_WIDTH: f32 = 1.575;
-const LANTERN_ANCHOR: Vec2 = Vec2::new(0.30, 0.97);
-const LANTERN_FOOT_U: f32 = 0.70;
+const LANTERN_ANCHOR: Vec2 = Vec2::new(12. / 42., 55. / 56.);
+const LANTERN_FOOT_U: f32 = 31. / 42.;
 const MOON_SLOPE: Vec2 = Vec2::new(10. / 12., 5. / 12.);
 const LAMP_HEIGHT: f32 = 1.48;
 
@@ -138,6 +136,48 @@ fn surface_options(settings: &PaperSettings) -> Vec4 {
     )
 }
 
+#[derive(serde::Deserialize)]
+struct CastManifest<'a> {
+    #[serde(borrow)]
+    sprites: [CastEntry<'a>; NAMES.len()],
+    #[serde(borrow)]
+    near_trees: [CastEntry<'a>; 2],
+}
+
+#[derive(serde::Deserialize)]
+struct CastEntry<'a> {
+    name: &'a str,
+    image: &'a str,
+    normal: &'a str,
+    size_px: [u32; 2],
+    ground_anchor_uv: [f32; 2],
+}
+
+fn pixel_image(server: &AssetServer, path: &'static str, srgb: bool) -> Handle<Image> {
+    server.load_with_settings(path, move |s: &mut ImageLoaderSettings| {
+        s.sampler = ImageSampler::nearest();
+        s.is_srgb = srgb;
+    })
+}
+
+fn load_cast(server: &AssetServer) -> ([SpriteMaps; NAMES.len()], [SpriteMaps; 2]) {
+    let manifest: CastManifest<'static> =
+        serde_json::from_str(include_str!("../../assets/gloam/paper/cast/manifest.json"))
+            .expect("invalid native pixel cast manifest");
+    let load = |entry: &CastEntry<'static>| SpriteMaps {
+        color: pixel_image(server, entry.image, true),
+        normal: pixel_image(server, entry.normal, false),
+        anchor: entry.ground_anchor_uv.into(),
+        aspect: entry.size_px[0] as f32 / entry.size_px[1] as f32,
+    };
+    let cast = NAMES.map(|name| {
+        let entry = manifest.sprites.iter().find(|entry| entry.name == name)
+            .expect("missing native pixel actor");
+        load(entry)
+    });
+    (cast, manifest.near_trees.each_ref().map(load))
+}
+
 fn plant(
     mut commands: Commands,
     server: Res<AssetServer>,
@@ -147,75 +187,65 @@ fn plant(
     mut surfaces: ResMut<Assets<ActorMaterial>>,
     mut shadows: ResMut<Assets<ShadowMaterial>>,
 ) {
-    let maps = load_sprite_maps(&server);
-    for sprite in &maps {
+    let (maps, near_trees) = load_cast(&server);
+    for sprite in maps.iter().chain(&near_trees) {
         pending.0.extend([
             sprite.color.id().untyped(),
             sprite.normal.id().untyped(),
         ]);
     }
-    let load_lantern = |path: &'static str, srgb| {
-        server.load_with_settings(path, move |s: &mut ImageLoaderSettings| {
-            s.sampler = ImageSampler::nearest();
-            s.is_srgb = srgb;
-        })
-    };
     let lantern = SpriteMaps {
-        color: load_lantern("gloam/paper/lantern.png", true),
-        normal: load_lantern("gloam/paper/lantern_normal.png", false),
+        color: pixel_image(&server, "gloam/paper/lantern.png", true),
+        normal: pixel_image(&server, "gloam/paper/lantern_normal.png", false),
         anchor: LANTERN_ANCHOR,
         aspect: LANTERN_WIDTH / LANTERN_HEIGHT,
     };
-    let emission = load_lantern("gloam/paper/lantern_emission.png", false);
+    let emission = pixel_image(&server, "gloam/paper/lantern_emission.png", false);
+    let deadfall = SpriteMaps {
+        color: pixel_image(&server, "gloam/paper/deadfall.png", true),
+        normal: pixel_image(&server, "gloam/paper/deadfall_normal.png", false),
+        anchor: Vec2::new(31. / 61., 26. / 29.),
+        aspect: 61. / 29.,
+    };
     pending.0.extend([
         lantern.color.id().untyped(),
         lantern.normal.id().untyped(),
         emission.id().untyped(),
+        deadfall.color.id().untyped(),
+        deadfall.normal.id().untyped(),
     ]);
 
     let quad = meshes.add(Rectangle::new(1., 1.));
     let mut handles = ActorHandles::default();
     for &(species, x, z, height, width_multiplier) in CLEARING {
-        let maps = &maps[species as usize];
+        let maps = match species {
+            Species::Oak if z >= -6. => &near_trees[0],
+            Species::Fir if z >= -6. => &near_trees[1],
+            _ => &maps[species as usize],
+        };
         let width = height * maps.aspect * width_multiplier.abs();
         let mirror = width_multiplier.signum();
         let root = Vec2::new(x, z);
         let embedded = match species {
-            Species::Rock => 0.09 * height,
-            Species::Waystone => 0.035 * height,
+            Species::Rock => 0.025 * height,
+            Species::Waystone => 0.015 * height,
             _ => 0.,
         };
         let stone = matches!(species, Species::Rock | Species::Waystone);
-        let material = surfaces.add(ActorMaterial {
-            actor: ActorUniform {
+        handles.surfaces.push(place(
+            &mut commands, &quad, &mut surfaces, NAMES[species as usize], maps, None,
+            ActorUniform {
                 root: Vec4::new(x, z, width, height),
                 anchor: Vec4::new(maps.anchor.x, maps.anchor.y, mirror, embedded),
                 surface: Vec4::new(
-                    if stone { 0.58 } else { 0.92 },
-                    if stone { 0.44 } else { 0.24 },
+                    if stone { 0.64 } else { 0.94 },
+                    if stone { 0.28 } else { 0.16 },
                     0.,
-                    PITCH,
+                    0.,
                 ),
                 options: surface_options(&settings),
             },
-            color: maps.color.clone(),
-            normal: maps.normal.clone(),
-            emission: None,
-        });
-        commands.spawn((
-            Name::new(format!("二维·{}", NAMES[species as usize])),
-            Mesh2d(quad.clone()),
-            MeshMaterial2d(material.clone()),
-            actor_transform(
-                root,
-                maps.anchor,
-                width,
-                height * SCREEN_HEIGHT,
-                mirror,
-                embedded,
-            ),
         ));
-        handles.surfaces.push(material);
 
         // These are support widths, not crown widths: a tree's contact shadow
         // belongs to its trunk/root plate, and the traveler's to the two boots.
@@ -243,8 +273,9 @@ fn plant(
         );
     }
 
-    let material = surfaces.add(ActorMaterial {
-        actor: ActorUniform {
+    handles.surfaces.push(place(
+        &mut commands, &quad, &mut surfaces, "旧道提灯", &lantern, Some(emission),
+        ActorUniform {
             root: Vec4::new(
                 LANTERN_ROOT.x,
                 LANTERN_ROOT.y,
@@ -257,24 +288,7 @@ fn plant(
             surface: Vec4::new(0.72, 0.32, 1., 0.),
             options: surface_options(&settings),
         },
-        color: lantern.color.clone(),
-        normal: lantern.normal.clone(),
-        emission: Some(emission),
-    });
-    commands.spawn((
-        Name::new("二维·旧道提灯"),
-        Mesh2d(quad.clone()),
-        MeshMaterial2d(material.clone()),
-        actor_transform(
-            LANTERN_ROOT,
-            LANTERN_ANCHOR,
-            LANTERN_WIDTH,
-            LANTERN_HEIGHT,
-            1.,
-            0.,
-        ),
     ));
-    handles.surfaces.push(material);
 
     // The map light position is below the hanging glass, NOT below the pole.
     // Moving the shadow caster's UV anchor preserves the complete silhouette
@@ -298,7 +312,50 @@ fn plant(
         1.,
         Vec2::new(0.24, 0.19),
     );
+    // The fallen trunk occupies ground depth: its twigs are not a standing
+    // 1.16 m wall merely because its picture is 29 pixels tall.
+    let root = Vec2::new(-4.4, 4.9);
+    let width = 61. / 25.;
+    let height = 29. / 25.;
+    let pitch = 1.12_f32;
+    handles.surfaces.push(place(
+        &mut commands, &quad, &mut surfaces, "层菌朽木", &deadfall, None,
+        ActorUniform {
+            root: Vec4::new(root.x, root.y, width, height),
+            anchor: Vec4::new(deadfall.anchor.x, deadfall.anchor.y, 1., 0.),
+            surface: Vec4::new(0.91, 0.16, 0., pitch),
+            options: surface_options(&settings),
+        },
+    ));
+    plant_shadows(
+        &mut commands, &quad, &mut shadows, &mut handles, &settings, &deadfall,
+        root, width, height * pitch.cos(), 1., Vec2::new(0.94, 0.25),
+    );
     commands.insert_resource(handles);
+}
+
+fn place(
+    commands: &mut Commands,
+    quad: &Handle<Mesh>,
+    surfaces: &mut Assets<ActorMaterial>,
+    name: &'static str,
+    maps: &SpriteMaps,
+    emission: Option<Handle<Image>>,
+    actor: ActorUniform,
+) -> Handle<ActorMaterial> {
+    let material = surfaces.add(ActorMaterial {
+        actor, color: maps.color.clone(), normal: maps.normal.clone(), emission,
+    });
+    commands.spawn((
+        Name::new(name),
+        Mesh2d(quad.clone()),
+        MeshMaterial2d(material.clone()),
+        actor_transform(
+            Vec2::new(actor.root.x, actor.root.y), maps.anchor, actor.root.z, actor.root.w,
+            actor.anchor.z, actor.anchor.w,
+        ),
+    ));
+    material
 }
 
 fn actor_transform(
@@ -343,7 +400,7 @@ fn plant_shadows(
         options: Vec4::new(
             if settings.shadows { 1. } else { 0. },
             if settings.fog { 1. } else { 0. },
-            0.54,
+            0.64,
             0.,
         ),
     };
@@ -365,7 +422,7 @@ fn plant_shadows(
     let moon_length = (height * maps.anchor.y * MOON_SLOPE.length()).min(8.);
     shadow.anchor.w = 1.;
     shadow.projection = Vec4::new(moon_direction.x, moon_direction.y, 0., moon_length);
-    shadow.options.z = 0.22;
+    shadow.options.z = 0.32;
     let (min, max) = projection_bounds(
         root,
         maps.anchor.x,
@@ -383,7 +440,7 @@ fn plant_shadows(
         let direction = delta / distance;
         let caster_height = (height * maps.anchor.y).min(LAMP_HEIGHT * 0.88);
         let length = (distance * caster_height / (LAMP_HEIGHT - caster_height)).min(5.5);
-        let strength = 0.48 / (1. + 0.12 * distance * distance)
+        let strength = 0.64 / (1. + 0.12 * distance * distance)
             * (1. - ((distance - 5.5) / 3.).clamp(0., 1.));
         shadow.anchor.w = 2.;
         shadow.projection = Vec4::new(direction.x, direction.y, distance, length);

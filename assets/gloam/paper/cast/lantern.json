@@ -1,0 +1,24 @@
+{
+  "name": "lantern",
+  "image": "gloam/paper/lantern.png",
+  "normal": "gloam/paper/lantern_normal.png",
+  "emission": "gloam/paper/lantern_emission.png",
+  "size_px": [
+    42,
+    56
+  ],
+  "ground_anchor_px": [
+    12,
+    55
+  ],
+  "pole_foot_px": [
+    31,
+    55
+  ],
+  "glass_center_px": [
+    12,
+    16
+  ],
+  "source": "tools/gloam/paper/lantern.py",
+  "source_policy_zh": "原创逐像素多边形、四阶木纹，无摄影素材；仅独立六角玻璃遮罩发光。"
+}

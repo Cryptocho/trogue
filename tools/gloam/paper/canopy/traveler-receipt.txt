@@ -1,0 +1,14 @@
+id: 0bad6957-8336-402c-96c6-7bfce0464055
+job_id: 0bad6957-8336-402c-96c6-7bfce0464055
+model: pixen
+description: One single full-body idle adult young forest traveler game sprite, native 16-bit 2D pixel RPG art for a forest scene. Compact but normally proportioned with expressive readable face (head about a quarter of whole body, not chibi). Three-quarter front view, angled toward screen right, both boots grounded, relaxed weight on one leg, no weapon, no staff. Messy chestnut curls, face warm ochre; short dark peacock-teal traveling cloak draped asymmetrically down the left, short ochre jerkin, rust-orange scarf on the neck and one loose end, brown leather belt pouch, dark reddish trousers and boots. Charming strong silhouette and small clusters of pixels, separated arm and scarf and bright cheek. Crisp limited ink palette, deep navy outlines, light blue-grey skyward fold and cream cuff, deliberate 1-3 pixel facial clusters. Relaxed, a person pausing by a roadside lantern, no lantern or props in picture. Neutral base colors for relighting in the game. Entire body isolated and upright on transparent pixels; no backdrop, cast shadow, floor or UI.
+size: 36x48px
+transparent: True
+asset_id: 4f2c8051-b4f5-5fc6-8869-84df1232f2e9
+asset_status: pending (saved when generation completes)
+seed: 75321
+cost: 1 generation
+status: processing (~10-40s)
+
+hint: get_image(job_id="0bad6957-8336-402c-96c6-7bfce0464055")
+without get_image: GET https://api.pixellab.ai/mcp/images/0bad6957-8336-402c-96c6-7bfce0464055/download (423 + Retry-After until ready; ?index=N for the Nth of several images)

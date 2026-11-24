@@ -1,0 +1,14 @@
+id: 801a678e-278d-45ac-b021-bd8b22fa1c89
+job_id: 801a678e-278d-45ac-b021-bd8b22fa1c89
+source: 36x48px
+convention: opengl (green up)
+kind: character
+look: strength 0.72, part_shapes 0.77, surface_detail 0.23; the rest where the kind puts them
+asset_id: ba5d6d2e-9f11-5086-9c8e-439149e6c3bf
+asset_status: pending (saved to the gallery when it completes)
+mode: lite
+cost: 0.1 generations
+status: processing (~15-60s)
+
+hint: get_image(job_id="801a678e-278d-45ac-b021-bd8b22fa1c89")
+without get_image: GET https://api.pixellab.ai/mcp/images/801a678e-278d-45ac-b021-bd8b22fa1c89/download (423 + Retry-After until ready; ?index=N for the Nth of several images)

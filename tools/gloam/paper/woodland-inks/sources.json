@@ -1,0 +1,6 @@
+{
+  "用途": "两张原创的原生像素笔触样本，不是背景图、更不是 3D 渲染截图。只取局部颜料与线条形状。",
+  "turf": {"tool":"PixelLab create_image_pixen","request":"turf-request.json","raw":"turf-original.png","job":"95301d88-9d6f-45ee-99cf-b37e77c56180","asset":"67a2357c-91ef-5370-82ca-ef3154afb061","decision":"原图是浓密的苔石形，不能直接平铺。缩成小地被聚块，去掉原高对比黑边；田野底色、局部笔簇、法线和不规则排布由 ground_inks.py 重画。"},
+  "trail": {"tool":"PixelLab create_image_pixen","request":"soil-request.json","raw":"soil-original.png","job":"0177f8c9-b4af-4e70-bf05-da3e10dfb992","asset":"15f308de-f6e7-5a04-86b6-ad0020f30081","decision":"只取无红花和路边杂物的 x=30…65 中央泥土、石粒笔触。降低色差，保留脚下留白和少数独立破石。"},
+  "rebuild":"uv run --project tools/gloam/terrain tools/gloam/paper/ground_art.py"
+}

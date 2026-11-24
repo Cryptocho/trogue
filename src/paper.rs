@@ -1,14 +1,15 @@
 //! The same clearing on a 2D canvas. Map depth affects sorting, never size.
 mod actors;
+mod canvas;
 mod ground;
 
-use bevy::{asset::UntypedAssetId, core_pipeline::tonemapping::Tonemapping, prelude::*, render::camera::ScalingMode};
+use bevy::{asset::UntypedAssetId, prelude::*};
 
-use crate::{SceneCamera, desktop::{KeySide, SceneReady, ViewOptions}, forest, lantern_bloom};
+use crate::{desktop::{KeySide, SceneReady, ViewOptions}, forest};
 
-const VIEW_HEIGHT: f32 = 11.70;
-pub(super) const DETAIL_SCALE: f32 = 6.84 / VIEW_HEIGHT;
-pub(super) const WIDE_SCALE: f32 = 13.25 / VIEW_HEIGHT;
+const VIEW_HEIGHT: f32 = canvas::SIZE.y as f32 / 25.;
+pub(super) const DETAIL_SCALE: f32 = 25. / 42.;
+pub(super) const WIDE_SCALE: f32 = 25. / 22.;
 const GROUND_SCALE: f32 = 0.568;
 
 fn on_map(x: f32, z: f32) -> Vec2 {
@@ -47,28 +48,8 @@ impl Plugin for PaperPlugin {
         };
         app.insert_resource(settings)
             .init_resource::<PaperAssets>()
-            .add_plugins((ground::GroundPlugin, actors::ActorPlugin))
-            .add_systems(Startup, camera)
+            .add_plugins((canvas::PixelCanvas, ground::GroundPlugin, actors::ActorPlugin))
             .add_systems(Update, (controls, finish_loading.run_if(resource_exists::<PaperAssets>)));
-    }
-}
-
-fn camera(mut commands: Commands, opts: Res<ViewOptions>) {
-    let mut entity = commands.spawn((
-        Name::new("苔径留灯 · 正交画布"),
-        SceneCamera,
-        Camera2d,
-        Camera { hdr: true, clear_color: ClearColorConfig::Custom(Color::BLACK), ..default() },
-        Projection::Orthographic(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical { viewport_height: VIEW_HEIGHT },
-            scale: if opts.detail { DETAIL_SCALE } else { 1.0 },
-            ..OrthographicProjection::default_2d()
-        }),
-        Tonemapping::AcesFitted,
-        Msaa::Off,
-    ));
-    if !opts.no_bloom {
-        entity.insert(lantern_bloom());
     }
 }
 
@@ -91,7 +72,7 @@ fn finish_loading(
             }
         }
     }
-    info!("苔径留灯 · 纯 2D 已就绪：Mesh2d={}，Mesh3d={}。", flat.iter().len(), solid.iter().len());
+    info!("苔径留灯 · 像素夜林已就绪：画布 {}×{}，Mesh2d={}，Mesh3d={}。", canvas::SIZE.x, canvas::SIZE.y, flat.iter().len(), solid.iter().len());
     commands.insert_resource(SceneReady);
     commands.remove_resource::<PaperAssets>();
 }

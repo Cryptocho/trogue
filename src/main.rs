@@ -44,7 +44,7 @@ fn main() -> AppExit {
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: if pure_2d { "苔径留灯 · 纯 2D" } else { "苔径留灯 · HD-2D" }.into(),
+                        title: if pure_2d { "苔径留灯 · 像素夜林" } else { "苔径留灯 · HD-2D" }.into(),
                         resolution: WindowResolution::new(2560., 1440.),
                         mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
                         present_mode: PresentMode::AutoVsync, // Selected against the native surface at startup.

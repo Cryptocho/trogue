@@ -1,0 +1,14 @@
+id: ff2075d4-f123-42cf-9daa-9636965d6594
+job_id: ff2075d4-f123-42cf-9daa-9636965d6594
+model: pixen
+description: A whole SINGLE BIG LEAFY OAK TREE sprite for an overhead SNES pixel RPG. Include the entire broad leafy crown, trunk and three short roots. A simple inventory-style isolated cutout, completely surrounded by transparent air on all four sides, 12 pixels of padding, foot touching nothing. Broad dense rounded scalloped canopy occupies top two thirds, branching short twisted trunk bottom one third. Emerald, blue-green and medium sage connected leaf clusters, mossy umber bark. Intentional 16-bit pixel clusters in a limited palette. Eye sees the canopy from above and the front of the trunk. NO diamond tile, ground plane, turf, grass, mound, shadow, frame, text, sky, scenery. ONE tree, absolutely not a landscape or tree close-up.
+size: 160x160px
+transparent: True
+asset_id: 7a2d41b2-5b3e-5d6b-a585-972f8c2e7adb
+asset_status: pending (saved when generation completes)
+seed: 841765
+cost: 1 generation
+status: processing (~10-40s)
+
+hint: get_image(job_id="ff2075d4-f123-42cf-9daa-9636965d6594")
+without get_image: GET https://api.pixellab.ai/mcp/images/ff2075d4-f123-42cf-9daa-9636965d6594/download (423 + Retry-After until ready; ?index=N for the Nth of several images)

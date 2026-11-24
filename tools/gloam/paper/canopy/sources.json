@@ -1,0 +1,9 @@
+{
+  "用途": "近、中景树冠和主角。generate_image 未参与这些图；原图是 PixelLab Pixen 原生像素，法线来自 PixelLab Lite / OpenGL。paint.py 保留原网格、移除透明边距、统一色阶，按作画面向量重新离散法线。由 ../cast_art.py 写出裁切后的图、脚点和清单。",
+  "选择": [
+    {"subject":"橡树初稿（保留研究用，不进入游戏）","request":"oak-request.json","job":"ca777ceb-8f28-4aa6-aa03-e6dbe0d2896d","gallery":"49692ef5-fea8-5ab5-a109-82349a642ee3","raw":"oak-original.png","decision":"带等距菱形草台，且树冠截断，所以弃用。缩短描述并要求整树四周留透明边。"},
+    {"subject":"近景整冠橡树","request":"oak-full-request.json","job":"ff2075d4-f123-42cf-9daa-9636965d6594","gallery":"7a2d41b2-5b3e-5d6b-a585-972f8c2e7adb","raw":"oak-full-original.png","normal_job":"5a4b9460-2016-4c1b-85f5-0fe1148bb971","normal_gallery":"e62244f0-7e7b-5b29-9d83-6005b0807418","normal_raw":"oak-normal-original.png","decision":"完整透明轮廓和裸露根部；用青绿阶替换原黄绿色，保留原生叶簇。"},
+    {"subject":"近景垂枝云杉","request":"fir-request.json","job":"e0c8e475-e4d6-4302-b746-f496cdc58e4b","gallery":"cb1fc01d-697b-51e2-8bfa-13e62d87f5f4","raw":"fir-original.png","normal_job":"9f9d8fc4-da53-42b7-a818-2f06a812ae68","normal_gallery":"f4d8e11d-a234-55ab-8017-0069787bd31e","normal_raw":"fir-normal-original.png","decision":"枝叶交叠、露出根脚，适合用在近树；远景保留更稀疏的手绘轮廓。"},
+    {"subject":"旅人","request":"traveler-request.json","job":"0bad6957-8336-402c-96c6-7bfce0464055","gallery":"4f2c8051-b4f5-5fc6-8869-84df1232f2e9","raw":"traveler-original.png","normal_job":"801a678e-278d-45ac-b021-bd8b22fa1c89","normal_gallery":"ba5d6d2e-9f11-5086-9c8e-439149e6c3bf","normal_raw":"traveler-normal-original.png","decision":"保留三分之四脸、冬青色斗篷和围巾。清除右手下误生成的第二盏灯及其法线，不改变靴子。"}
+  ]
+}

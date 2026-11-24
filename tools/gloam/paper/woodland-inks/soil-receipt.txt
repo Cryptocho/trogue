@@ -1,0 +1,14 @@
+id: 0177f8c9-b4af-4e70-bf05-da3e10dfb992
+job_id: 0177f8c9-b4af-4e70-bf05-da3e10dfb992
+model: pixen
+description: Single 16-bit top-down RPG game ground TERRAIN SWATCH: damp packed woodland path dirt and leaf duff, covers every pixel, no scene composition, no grass edge. Hand-drawn late-console pixel art at native resolution. Muted mauve-brown and tawny earth in 4-6 ink tones, warm tan and lilac-gray intermittent grit, irregular arrangements of shallow 2-6 pixel embedded gravel with little cool undersides, dark short fissures in the mud, warped one or two loose narrow autumn leaves and small connected leaf groups. Low contrast useful under a character. Broad calm gaps between features. Shape the marks with crisp short pixel steps, no photo, no smooth blending, no random speckle, no big paving stones, brick, repeating grid, rocks, trees, grass, big shadows, detailed objects, lettering, UI or border. Entire rectangle is flat even naturally worn overhead dirt terrain art.
+size: 96x80px
+transparent: False
+asset_id: 15f308de-f6e7-5a04-86b6-ad0020f30081
+asset_status: pending (saved when generation completes)
+seed: 517389
+cost: 1 generation
+status: processing (~10-40s)
+
+hint: get_image(job_id="0177f8c9-b4af-4e70-bf05-da3e10dfb992")
+without get_image: GET https://api.pixellab.ai/mcp/images/0177f8c9-b4af-4e70-bf05-da3e10dfb992/download (423 + Retry-After until ready; ?index=N for the Nth of several images)

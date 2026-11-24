@@ -1,0 +1,59 @@
+{
+  "名称": "苔径留灯 · 原创16-bit像素地表",
+  "seed": 868733,
+  "map_native_pixels": [
+    1200,
+    738
+  ],
+  "map_bounds_xz": [
+    [
+      -24.0,
+      24.0
+    ],
+    [
+      -38.0,
+      14.0
+    ]
+  ],
+  "atlas_native_pixels": [
+    128,
+    128
+  ],
+  "palette_srgb": {
+    "ink": "#192236",
+    "deep": "#22434b",
+    "grass": "#326157",
+    "leaf": "#49876a",
+    "leaf_light": "#71a77b",
+    "tip": "#a4c58b",
+    "stone_dark": "#39485e",
+    "stone": "#566984",
+    "stone_light": "#8498a4",
+    "stone_tip": "#b9c5b4",
+    "soil_dark": "#534356",
+    "soil": "#756052",
+    "soil_light": "#998165",
+    "sand": "#b99b71",
+    "rust": "#974f4a",
+    "cap": "#cd7450",
+    "petal": "#e8a25e",
+    "cream": "#ffe7aa",
+    "turf_shade": "#2b5550",
+    "turf_light": "#3c705d",
+    "duff": "#4b5850",
+    "duff_light": "#6a6b53",
+    "soil_worn": "#87715c",
+    "moss": "#5b8b69",
+    "water": "#35646c",
+    "water_light": "#4e8183",
+    "water_deep": "#294857",
+    "water_glint": "#81aaa9",
+    "lilac": "#b0a6c0"
+  },
+  "normal_space": "world XYZ, linear RGB",
+  "plant_count": 95,
+  "plant_scale": "1.0; no filtered resampling",
+  "source": "ground_art.py + ground_inks.py; integer brushwork and two native PixelLab drawings in woodland-inks/",
+  "preview": "ground_preview.png is native 512×288, ground_review.png is exact nearest 4×",
+  "water_data": "linear RGB: binary coverage / isolated sky shards / lamp shard mask"
+}

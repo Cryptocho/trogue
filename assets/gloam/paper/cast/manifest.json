@@ -1,0 +1,216 @@
+{
+  "version": 2,
+  "source_policy_zh": "原创整数像素多边形与本项目的 PixelLab 原生画稿；处理输入和任务单见 tools/gloam/paper/canopy。无照片或游戏截图输入。",
+  "sampling": "nearest, native integer pixels, binary alpha, no antialiasing",
+  "normal_basis": "+X picture-right, +Y picture-up, +Z toward viewer; linear, flat planes",
+  "palette_srgb": {
+    "ink": "#192236",
+    "deep": "#22434b",
+    "leafshade": "#326157",
+    "leaf": "#49876a",
+    "leaflight": "#71a77b",
+    "tip": "#a4c58b",
+    "stoneback": "#39485e",
+    "stone": "#566984",
+    "stoneface": "#8498a4",
+    "stonetop": "#b9c5b4",
+    "barkdark": "#393541",
+    "bark": "#534356",
+    "wood": "#756052",
+    "woodlight": "#998165",
+    "woodtop": "#b99b71",
+    "warmdark": "#974f4a",
+    "warm": "#cd7450",
+    "amber": "#e8a25e",
+    "cream": "#ffe7aa",
+    "blueback": "#2c405b",
+    "blue": "#426b85",
+    "bluelight": "#6b9bac",
+    "skinshade": "#bb8879",
+    "skin": "#e4bd98"
+  },
+  "sprites": [
+    {
+      "name": "traveler",
+      "image": "gloam/paper/cast/traveler.png",
+      "normal": "gloam/paper/cast/traveler_normal.png",
+      "emission": null,
+      "size_px": [
+        33,
+        46
+      ],
+      "ground_anchor_px": [
+        17,
+        45
+      ],
+      "ground_anchor_uv": [
+        0.5151515151515151,
+        0.9782608695652174
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "原创 PixelLab 单帧，保留右向脸和围巾；去掉手中误生成的第二盏灯，用独立法线受光。"
+    },
+    {
+      "name": "oak",
+      "image": "gloam/paper/cast/oak.png",
+      "normal": "gloam/paper/cast/oak_normal.png",
+      "emission": null,
+      "size_px": [
+        150,
+        164
+      ],
+      "ground_anchor_px": [
+        75,
+        159
+      ],
+      "ground_anchor_uv": [
+        0.5,
+        0.9695121951219512
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "单片不对称闭合冠影、无逐簇黑边；交错大小叶面、深色下沿、相连树叉。"
+    },
+    {
+      "name": "fir",
+      "image": "gloam/paper/cast/fir.png",
+      "normal": "gloam/paper/cast/fir_normal.png",
+      "emission": null,
+      "size_px": [
+        108,
+        168
+      ],
+      "ground_anchor_px": [
+        54,
+        165
+      ],
+      "ground_anchor_uv": [
+        0.5,
+        0.9821428571428571
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "交错下垂的针枝、不对称三叉边；中干相连、离散宽叶面法线。"
+    },
+    {
+      "name": "snag",
+      "image": "gloam/paper/cast/snag.png",
+      "normal": "gloam/paper/cast/snag_normal.png",
+      "emission": null,
+      "size_px": [
+        81,
+        118
+      ],
+      "ground_anchor_px": [
+        40,
+        115
+      ],
+      "ground_anchor_uv": [
+        0.49382716049382713,
+        0.9745762711864406
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "断冠枯木；两侧粗枝、树洞、宽树皮面、少量根苔。"
+    },
+    {
+      "name": "rock",
+      "image": "gloam/paper/cast/rock.png",
+      "normal": "gloam/paper/cast/rock_normal.png",
+      "emission": null,
+      "size_px": [
+        36,
+        25
+      ],
+      "ground_anchor_px": [
+        18,
+        23
+      ],
+      "ground_anchor_uv": [
+        0.5,
+        0.92
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "低矮错位石片；苔帽、左右分离切面，允许正确法线镜像。"
+    },
+    {
+      "name": "waystone",
+      "image": "gloam/paper/cast/waystone.png",
+      "normal": "gloam/paper/cast/waystone_normal.png",
+      "emission": null,
+      "size_px": [
+        39,
+        47
+      ],
+      "ground_anchor_px": [
+        20,
+        45
+      ],
+      "ground_anchor_uv": [
+        0.5128205128205128,
+        0.9574468085106383
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "界石39×47；锚点(20,45)；苔帽、斜断层、旧路符和斜切面。"
+    },
+    {
+      "name": "birch",
+      "image": "gloam/paper/cast/birch.png",
+      "normal": "gloam/paper/cast/birch_normal.png",
+      "emission": null,
+      "size_px": [
+        95,
+        150
+      ],
+      "ground_anchor_px": [
+        42,
+        147
+      ],
+      "ground_anchor_uv": [
+        0.4421052631578947,
+        0.98
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "不等长双枝、浅色断纹树干、小簇淡叶，不复用橡树轮廓。"
+    }
+  ],
+  "near_trees": [
+    {
+      "name": "near_oak",
+      "image": "gloam/paper/cast/near_oak.png",
+      "normal": "gloam/paper/cast/near_oak_normal.png",
+      "emission": null,
+      "size_px": [
+        145,
+        138
+      ],
+      "ground_anchor_px": [
+        73,
+        133
+      ],
+      "ground_anchor_uv": [
+        0.503448275862069,
+        0.9637681159420289
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "前、中景原生 PixelLab 树冠，按本场景重新配墨色与离散法线。"
+    },
+    {
+      "name": "near_fir",
+      "image": "gloam/paper/cast/near_fir.png",
+      "normal": "gloam/paper/cast/near_fir_normal.png",
+      "emission": null,
+      "size_px": [
+        88,
+        138
+      ],
+      "ground_anchor_px": [
+        46,
+        133
+      ],
+      "ground_anchor_uv": [
+        0.5227272727272727,
+        0.9637681159420289
+      ],
+      "source": "tools/gloam/paper/cast_art.py",
+      "notes_zh": "前、中景原生 PixelLab 树冠，按本场景重新配墨色与离散法线。"
+    }
+  ]
+}

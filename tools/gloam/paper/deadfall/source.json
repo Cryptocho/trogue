@@ -1,0 +1,12 @@
+{
+  "subject": "左前浅沟边的朽木与层菌，纯像素版独立道具",
+  "source": "generate_image",
+  "model": "openai-codex/gpt-image-2 (gpt-image-2-codex)",
+  "request": "request.json",
+  "original": "original.webp",
+  "original_dimensions": [1536, 1024],
+  "sha256": "045ae5bfbdf0cd23f4a533a6d7083050d61faa10bcea13fa9f4e36330b23f5e1",
+  "processing": "实际结果为透明 RGBA，不按提示中假定的品红背景去色。保留连续不透明主体；按原颜料覆盖率在61×29网格重建，重配木/菌/苔色，补画树皮裂线、空腔和切口，分别画出离散材质法线。无照片或游戏截图输入。",
+  "output": ["assets/gloam/paper/deadfall.png", "assets/gloam/paper/deadfall_normal.png"],
+  "rebuild": "uv run --project tools/gloam/terrain tools/gloam/paper/deadfall/prepare.py"
+}

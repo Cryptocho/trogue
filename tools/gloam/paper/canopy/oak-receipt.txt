@@ -1,0 +1,14 @@
+id: ca777ceb-8f28-4aa6-aa03-e6dbe0d2896d
+job_id: ca777ceb-8f28-4aa6-aa03-e6dbe0d2896d
+model: pixen
+description: One single, beautiful ancient European oak tree asset for a richly crafted 16-bit top-down pixel RPG forest. Completely original sprite viewed from about 35 degrees above, angled view of root flare and crown, no perspective vanishing. Whole tree, bold irregular broad canopy leaning left, branch crooks peeking between overlapping umbrella masses, visible twisted doubled trunk with mossy counter-curves at the feet. Connected cloudlike canopy with 4-6 big deep turquoise shadow masses, angular arching rows of small hooked leaf cluster highlights, sparse small holes. Selective indigo outlines. Handcrafted chunky pixels like an early console RPG: each lit leaf is a small group of pixels, quiet solid negative spaces between, lively complex silhouette. Limited muted pine teal / blue-green / sage leaf ramp, warm smoky plum / ochre-brown bark ramp. Bright readable neutral daylight base color for relighting, no photographic textures; NOT vector triangles, NOT geometric circles, NOT separate floating balls. Transparent outside the foliage, trunk and roots. No ground ellipse, grass pad, pot, props, items, cast shadow, glow, label, lettering or UI. Fill the canvas, do not cut the crown or roots.
+size: 144x152px
+transparent: True
+asset_id: 49692ef5-fea8-5ab5-a109-82349a642ee3
+asset_status: pending (saved when generation completes)
+seed: 517360
+cost: 1 generation
+status: processing (~10-40s)
+
+hint: get_image(job_id="ca777ceb-8f28-4aa6-aa03-e6dbe0d2896d")
+without get_image: GET https://api.pixellab.ai/mcp/images/ca777ceb-8f28-4aa6-aa03-e6dbe0d2896d/download (423 + Retry-After until ready; ?index=N for the Nth of several images)

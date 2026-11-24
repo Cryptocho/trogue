@@ -1,0 +1,14 @@
+id: e0c8e475-e4d6-4302-b746-f496cdc58e4b
+job_id: e0c8e475-e4d6-4302-b746-f496cdc58e4b
+model: pixen
+description: Single old wind-shaped woodland SPRUCE in the elevated three-quarter view of a top-down 16-bit fantasy RPG. One complete isolated pixel art tree. Uneven pointed spire, loose heavy green boughs drape in meandering scalloped tiers. Sprays of needles represented as tapered little 3-6 pixel hooked clusters, readable broad branching silhouette with generous overlapping foliage; trunk peeks between dark interior boughs, gnarled mossy root feet. Slightly stronger growth to the right, asymmetrical, no Christmas-tree decoration or perfectly symmetrical triangles. Hand-pixeled look, pine teal, emerald, dusty sage highlights, indigo-green undersides and desaturated plum-brown bark. Deliberate small limited color ramps, crisp clustered marks and selective outline. Neutral base color for later in-game lighting. No photo, 3D, atmospheric effect, ground tile, background, cast shadow, pot, other items, labels or writing. Entire tree fully visible against transparent pixels, almost filling the tall canvas.
+size: 104x152px
+transparent: True
+asset_id: cb1fc01d-697b-51e2-8bfa-13e62d87f5f4
+asset_status: pending (saved when generation completes)
+seed: 517364
+cost: 1 generation
+status: processing (~10-40s)
+
+hint: get_image(job_id="e0c8e475-e4d6-4302-b746-f496cdc58e4b")
+without get_image: GET https://api.pixellab.ai/mcp/images/e0c8e475-e4d6-4302-b746-f496cdc58e4b/download (423 + Retry-After until ready; ?index=N for the Nth of several images)

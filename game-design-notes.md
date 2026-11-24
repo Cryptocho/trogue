@@ -669,16 +669,16 @@ AI 策略应当能够保存和复用。
 
 美术路线尚未确定。用同一个静态场景比较两种候选：
 
-- **纯 2D**：地面和物件由二维图层与精灵绘制；法线、按光源投影、湿地反光和分层薄雾仍然可以做。
+- **纯 2D 像素游戏**：地表、草木、旅人和石灯都用成簇的像素与有限色阶造型。整幅画面用同一像素网格；法线、接地阴影、湿地反光和薄雾也在该网格内工作。这不是把写实地面铺在二维平面上。
 - **HD-2D**：2D 精灵与受光的 3D 环境结合，环境可使用普通或体素模型。
 
-两条路线都看地面纹理能否读清、角色是否落地、石面亮暗是否随灯换边，以及目标桌面上的帧时间。先看实景，再做选择。
+对照条件是同一条路、同一个人和同一盏灯，不要求画风相同。看地面材质好不好认、角色是否落地、石面亮暗是否随灯换边，以及目标桌面上的帧时间；两条路线仍待选择。
 
 **对照场景「苔径留灯」**：固定方向的斜俯视夜林，旅人在界石和路灯之间停步。两版均无战斗、弹幕或 UI。已有 HD-2D 版使用带法线的精灵和 3D 林道、草蕨、浅水、铜灯；这是技术验证，不是选型结论。
 
-- 实景入口：`tools/gloam/view.sh --2d` 是纯 2D，`tools/gloam/view.sh` 是 HD-2D。两版都支持滚轮缩放、`B` 切换 Bloom、`F` 切换薄雾、`F12` 截图、`Esc` 退出。HD-2D 的 `D` 切换镜头景深；纯 2D 的 `←` / `→` / `0` 左照、右照、移走界石验光灯，`N` 切换精灵法线，`S` 切换地面投影。
+- 实景入口：`tools/gloam/view.sh --2d` 是纯 2D 像素夜林，`tools/gloam/view.sh` 是 HD-2D。两版都支持滚轮缩放、`B` 切换 Bloom、`F` 切换薄雾、`F12` 截图、`Esc` 退出。HD-2D 的 `D` 切换镜头景深；像素夜林的 `←` / `→` / `0` 左照、右照、移走界石验光灯，`N` 切换精灵法线，`S` 切换地面投影。
 - 可重复取景：`tools/gloam/view.sh --capture captures/gloam/forest.png`。加 `--detail` 取近景；`--deep-focus`、`--no-bloom`、`--clear-air`、`--no-shadows`、`--flat-sprites` 可逐项对照。`--detail --stone-key left` 和 `--detail --stone-key right` 为等距白灯验光，常规场景没有这盏灯。素材就绪并预热、采样后才截图退出。取舍、出处与实测见[空间层次研究](reference/hd2d-spatial-depth.md)。
-- 运行资产在 `assets/gloam/`。PixelLab 精灵的原图、脚底锚点与法线对应表见 `assets/gloam/sprites/manifest.json`；地表与木纹的生成参数、Blender 制作脚本和来源保存在 `tools/gloam/`。参考截图不参与渲染。
+- 运行资产在 `assets/gloam/`。HD-2D 用的 PixelLab 精灵见 `assets/gloam/sprites/manifest.json`，写实地表与 Blender 源在 `tools/gloam/`。像素版独立美术与色板在 `assets/gloam/paper/`，制作脚本在 `tools/gloam/paper/`；两版都不把参考截图作为场景背景。
 - [两种画法的实景对照](reference/gloam-comparison/index.html)与[纯 2D 灯光笔记](reference/gloam-comparison/study.md)保存在 `reference/`。核对同一块界石时，先比较相同取景的左右白灯，再比较两条路线的全景。
 
 ### 12.2 摄像机

@@ -219,13 +219,14 @@ fn sample_and_capture(
         .and_then(|m| m.refresh_rate_millihertz());
     let minimized = os_window.and_then(|w| w.is_minimized());
     info!(
-        "稳定采样（截图前） frames={n} seconds={:.3} fps={:.1} median_ms={:.2} p95_ms={:.2} focused_all={} minimized={minimized:?} refresh_mHz={refresh:?} viewport={:?} present={:?}",
+        "稳定采样（截图前） frames={n} seconds={:.3} fps={:.1} median_ms={:.2} p95_ms={:.2} focused_all={} minimized={minimized:?} refresh_mHz={refresh:?} scene_pixels={:?} window_pixels={:?} present={:?}",
         run.seconds,
         n as f64 / run.seconds,
         run.ms[n / 2],
         run.ms[p95],
         run.always_focused,
         camera.physical_viewport_size(),
+        window.physical_size(),
         window.present_mode
     );
     request(&mut commands, std::mem::take(&mut run.path), true);

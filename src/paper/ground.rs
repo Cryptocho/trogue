@@ -84,13 +84,13 @@ struct PlantAtlas {
     card_height: f32,
     root_above_bottom: f32,
     max_light_height: f32,
-    plants: Vec<(f32, f32, f32, usize)>,
+    plants: Vec<(f32, f32, usize)>,
 }
 
 fn load_map(server: &AssetServer, pending: &mut PaperAssets, path: &'static str, srgb: bool) -> Handle<Image> {
     let image = server.load_with_settings(path, move |settings: &mut ImageLoaderSettings| {
         settings.is_srgb = srgb;
-        settings.sampler = ImageSampler::linear();
+        settings.sampler = ImageSampler::nearest();
     });
     pending.0.push(image.id().untyped());
     image
@@ -115,28 +115,29 @@ fn plant_floor(
     mut understory: ResMut<Assets<UnderstoryMaterial>>,
 ) {
     // This rectangle is the entire surface: no scene/GLB, height mesh, or backdrop.
-    // Image row zero is map Z=-38, matching the original non-repeating floor bake.
+    // One native-pixel surface, authored directly for the 25px/metre 2D view.
+    // Row zero is map Z=-38; the HD-2D terrain textures are never loaded here.
     let material = ground.add(GroundMaterial {
         lighting: lighting(&settings),
-        albedo: load_map(&server, &mut pending, "gloam/terrain/forest_albedo.png", true),
-        normal: load_map(&server, &mut pending, "gloam/terrain/forest_normal.png", false),
-        orm: load_map(&server, &mut pending, "gloam/terrain/forest_orm.png", false),
+        albedo: load_map(&server, &mut pending, "gloam/paper/ground_albedo.png", true),
+        normal: load_map(&server, &mut pending, "gloam/paper/ground_normal.png", false),
+        orm: load_map(&server, &mut pending, "gloam/paper/ground_orm.png", false),
         water: load_map(&server, &mut pending, "gloam/paper/ground_water.png", false),
     });
     commands.spawn((
-        Name::new("二维苔径 · 泥路与浅水"),
+        Name::new("像素苔径 · 石阶、鼓苔与折线浅池"),
         Mesh2d(meshes.add(Rectangle::new(48., 52. * GROUND_SCALE))),
         MeshMaterial2d(material.clone()),
         Transform::from_translation(on_map(0., -12.).extend(0.)),
     ));
 
     let atlas: PlantAtlas = serde_json::from_str(include_str!("../../assets/gloam/paper/ground_plants.json"))
-        .expect("invalid original undergrowth atlas manifest");
+        .expect("invalid native-pixel undergrowth atlas manifest");
     let albedo = load_map(&server, &mut pending, "gloam/paper/ground_understory.png", true);
     let normal_height = load_map(&server, &mut pending, "gloam/paper/ground_understory_data.png", false);
     let columns = atlas.atlas_columns as f32;
-    // A material is shared by every instance of a botanical drawing; no per-frame
-    // placement, material creation, or CPU animation. All 1,306 cards share a mesh.
+    // Sixteen native 32px botanical drawings share one mesh. Most creeping
+    // leaves are in the surface; only plants with useful overlap become cards.
     let cards: Vec<_> = (0..atlas.variants).map(|index| {
         understory.add(UnderstoryMaterial {
             lighting: lighting(&settings),
@@ -151,13 +152,19 @@ fn plant_floor(
         })
     }).collect();
     let mesh = meshes.add(Rectangle::new(atlas.card_width, atlas.card_height));
-    for (x, z, scale, variant) in atlas.plants {
-        let center = on_map(x, z) + Vec2::Y * (atlas.card_height * 0.5 - atlas.root_above_bottom) * scale;
+    for (x, z, variant) in atlas.plants {
+        let center = on_map(x, z) + Vec2::Y * (atlas.card_height * 0.5 - atlas.root_above_bottom);
         commands.spawn((
-            Name::new(if variant < 24 { "丝叶草丛" } else if variant < 40 { "林下羽蕨" } else { "卷叶与松针" }),
+            Name::new(match variant {
+                0..=3 => "像素羽蕨",
+                4..=6 => "像素阔叶草",
+                7..=9 => "道旁层菌",
+                10..=12 => "林间月花",
+                _ => "浅池水生植物",
+            }),
             Mesh2d(mesh.clone()),
             MeshMaterial2d(cards[variant].clone()),
-            Transform::from_translation(center.extend(sort_key(z))).with_scale(Vec3::new(scale, scale, 1.)),
+            Transform::from_translation(center.extend(sort_key(z))),
         ));
     }
     commands.insert_resource(FloorMaterials { ground: material, plants: cards });
