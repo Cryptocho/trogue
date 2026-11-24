@@ -14,11 +14,14 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use super::{PaperAssets, DETAIL_SCALE, VIEW_HEIGHT};
-use crate::{SceneCamera, desktop::ViewOptions, lantern_bloom};
+use super::{PaperAssets, VIEW_HEIGHT, WORLD};
+use crate::{Comparison, SceneCamera, SceneMode, lantern_bloom, pixel_scale};
 
 pub(super) const SIZE: UVec2 = UVec2::new(512, 288);
 const PRESENT: RenderLayers = RenderLayers::layer(1);
+
+#[derive(Component)]
+pub(crate) struct PixelOutput;
 
 pub(super) struct PixelCanvas;
 
@@ -46,7 +49,7 @@ impl Material2d for IndexedFrame {
 
 fn open(
     mut commands: Commands,
-    opts: Res<ViewOptions>,
+    comparison: Res<Comparison>,
     server: Res<AssetServer>,
     mut pending: ResMut<PaperAssets>,
     mut images: ResMut<Assets<Image>>,
@@ -64,10 +67,11 @@ fn open(
     let frame = images.add(target);
     let mut world_view = commands.spawn((
         Name::new("苔径留灯 · 原生像素画布"),
-        SceneCamera,
+        SceneCamera(SceneMode::Pixel),
         Camera2d,
         Camera {
             order: -1,
+            is_active: comparison.mode == SceneMode::Pixel,
             target: RenderTarget::Image(frame.clone().into()),
             hdr: true,
             clear_color: ClearColorConfig::Custom(Color::BLACK),
@@ -75,14 +79,15 @@ fn open(
         },
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::FixedVertical { viewport_height: VIEW_HEIGHT },
-            scale: if opts.detail { DETAIL_SCALE } else { 1. },
+            scale: pixel_scale(comparison.zoom),
             ..OrthographicProjection::default_2d()
         }),
         Tonemapping::ReinhardLuminance,
         DebandDither::Disabled,
         Msaa::Off,
+        WORLD,
     ));
-    if !opts.no_bloom {
+    if comparison.bloom {
         world_view.insert(lantern_bloom());
     }
     let colors: Handle<Image> = server.load_with_settings("gloam/paper/palette.png", |s: &mut ImageLoaderSettings| {
@@ -99,7 +104,12 @@ fn open(
     commands.spawn((
         Name::new("主窗口 · 不二次调色"),
         Camera2d,
-        Camera { clear_color: ClearColorConfig::Custom(Color::BLACK), ..default() },
+        PixelOutput,
+        Camera {
+            is_active: comparison.mode == SceneMode::Pixel,
+            clear_color: ClearColorConfig::Custom(Color::BLACK),
+            ..default()
+        },
         Tonemapping::None,
         DebandDither::Disabled,
         Msaa::Off,

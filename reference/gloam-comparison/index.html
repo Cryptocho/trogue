@@ -25,8 +25,8 @@ a { color:#b7d5e4; } @media(max-width:760px){ main { grid-template-columns:1fr; 
   <figure><figcaption>A · 纯 2D 像素</figcaption><a href="2d.png"><img src="2d.png" alt="用原生像素画出的夜林"></a></figure>
   <figure><figcaption>B · HD-2D</figcaption><a href="hd2d.png"><img src="hd2d.png" alt="HD-2D 夜林全景"></a></figure>
 </main>
-<p>点击画面打开游戏主窗口原图。像素版先在 512×288 网格画出地面、精灵、光影，再整幅放大五倍。HD-2D 版保留写实地面和透视镜头。左右验光只改变白灯方向。</p>
-<p><a href="study.md">光影做法、采样条件与资料</a></p>
+<p>游戏里运行 <code>tools/gloam/view.sh</code>，按空格在同一个窗口切换画法。点图可打开主窗口原图。像素版绘制在 512×288，最终整幅放大五倍；HD-2D 保留写实地表和透视镜头。</p>
+<p><a href="art-direction/hd2d-to-pixel.webp">由 HD-2D 实截图生成的像素重绘参考（非实机）</a> · <a href="study.md">实际改动与验收</a></p>
 <script>
 const pairs = [
     [['像素夜林 · 全景', '2d.png'], ['HD-2D · 全景', 'hd2d.png']],

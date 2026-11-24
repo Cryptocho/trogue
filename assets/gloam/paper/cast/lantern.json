@@ -20,5 +20,5 @@
     16
   ],
   "source": "tools/gloam/paper/lantern.py",
-  "source_policy_zh": "原创逐像素多边形、四阶木纹，无摄影素材；仅独立六角玻璃遮罩发光。"
+  "source_policy_zh": "参考已保存的HD引导构图原创逐像素重画，不采样参考像素；单像素木裂、铜罩折面与护线、错位板岩脚。仅独立六角玻璃遮罩发光。"
 }

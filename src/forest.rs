@@ -125,6 +125,9 @@ pub struct Loading {
     sky: EnvironmentMapLight,
 }
 
+#[derive(Resource)]
+pub(crate) struct HdReady;
+
 pub(crate) fn load_sprite_maps(server: &AssetServer) -> [SpriteMaps; NAMES.len()] {
     let manifest: Manifest<'static> =
         serde_json::from_str(include_str!("../assets/gloam/sprites/manifest.json"))
@@ -286,7 +289,7 @@ pub fn plant_when_loaded(
     }
     commands.entity(*camera).insert(pending.sky.clone());
     commands.remove_resource::<Loading>();
-    commands.insert_resource(crate::desktop::SceneReady);
+    commands.insert_resource(HdReady);
     info!("苔径留灯：地表、灯具、精灵及探针已就绪。");
 }
 

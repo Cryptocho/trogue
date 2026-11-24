@@ -1,0 +1,11 @@
+{
+  "role": "用户确认画风用；非实机、非运行资产。来源游戏不详，不随游戏分发。",
+  "tool": "generate_image",
+  "model": "gpt-image-2-codex",
+  "input": {"file": "user-riverside.png", "source": "用户发送的 895×560 附图；从 BMP 无损转 PNG，逐像素相同", "sha256": "9222c98f091fb9b8551b2ecbe99d85f76297e3477fa32364729e573a244dc83f"},
+  "art_direction": "以用户图定镜头、块面比例、边缘和暗部。草地留大面积低纹理色块，树灯粗像素轮廓，亮度由实际灯位组织，岸边有局部青绿亮水和被岸切断的树与灯倒影。HD-2D 截图未作这轮输入。",
+  "candidates": [
+    {"request": "user-style-request.json", "output": "riverside-study-01.webp", "size_px": [1536,1024], "sha256": "7fa1f3959dbc0a8fd338917e8295a83d3c33ddb3e3c8aae2f903f7aad66f6708", "decision": "像素轮廓和暖照基本对，但水几乎只剩深蓝与岸线，缺少原图的局部青绿反光。"},
+    {"request": "user-style-water-request.json", "output": "riverside-study-02.webp", "size_px": [1536,1024], "sha256": "13ad0ca5ef00b3f3381668392299a80c439f36adf6f9817cc748c7c9beccd273", "decision": "选作风格校准。保留近岸和对岸轮廓、暖灯一侧的树冠亮面、青绿水光和剪影倒影。是参考图，不代表游戏已经实现。"}
+  ]
+}

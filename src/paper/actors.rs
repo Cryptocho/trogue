@@ -5,7 +5,7 @@ use bevy::{
     sprite::{AlphaMode2d, Material2d, Material2dPlugin},
 };
 
-use super::{GROUND_SCALE, PaperAssets, PaperSettings, on_map, sort_key};
+use super::{GROUND_SCALE, PaperAssets, PaperSettings, WORLD, on_map, sort_key};
 use crate::forest::{CLEARING, NAMES, Species, SpriteMaps};
 
 // Native pixel cards are upright. Only their face-normal basis uses the
@@ -349,6 +349,7 @@ fn place(
     commands.spawn((
         Name::new(name),
         Mesh2d(quad.clone()),
+        WORLD,
         MeshMaterial2d(material.clone()),
         actor_transform(
             Vec2::new(actor.root.x, actor.root.y), maps.anchor, actor.root.z, actor.root.w,
@@ -510,6 +511,7 @@ fn spawn_shadow(
             _ => "二维·灯光剪影投影",
         }),
         Mesh2d(quad.clone()),
+        WORLD,
         MeshMaterial2d(material.clone()),
         Transform::from_xyz(screen.x, screen.y, 1. + shadow.anchor.w * 0.01)
             .with_scale(Vec3::new(size.x, size.y * GROUND_SCALE, 1.)),

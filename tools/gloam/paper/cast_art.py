@@ -3,7 +3,8 @@
 Run with: uv run --project tools/gloam/terrain python tools/gloam/paper/cast_art.py
 The mid-distance cast is defined by native pixel polygons. The traveler and
 two close canopy variants use the separately saved PixelLab drawings and
-re-inking in canopy/. No photograph, game screenshot or HD-2D sprite input.
+re-inking in canopy/. The focal stones are manually redrawn after the saved
+HD-guided art-direction image; no reference image pixels enter these assets.
 Picture +Y normals point up, +Z toward the viewer.
 """
 from pathlib import Path
@@ -23,6 +24,11 @@ P = {
     'warmdark': '#974f4a', 'warm': '#cd7450', 'amber': '#e8a25e',
     'cream': '#ffe7aa', 'blueback': '#2c405b', 'blue': '#426b85',
     'bluelight': '#6b9bac', 'skinshade': '#bb8879', 'skin': '#e4bd98',
+    'slateedge': '#35374b', 'slateshade': '#45495f', 'slate': '#626a80',
+    'slateface': '#7e8799', 'slatebevel': '#a0a8b3', 'slatetop': '#bdc0b8',
+    'mossdark': '#3c493f', 'moss': '#59684b', 'mosslight': '#7e8d5b',
+    'mosstip': '#a4ac72', 'copperdark': '#543c39', 'coppershade': '#80533f',
+    'copper': '#ac744d', 'copperlight': '#d29b63', 'copperglint': '#edc78a',
 }
 FRONT = (0., .06, 1.)
 TOP = (0., .85, .53)
@@ -88,48 +94,96 @@ def studio_sprite(kind):
 
 def rock():
     a = Art(36, 25)
-    a.poly([(2,12),(6,6),(17,1),(26,3),(31,9),(34,13),(33,20),(25,23),(10,23),(3,20),(1,16)], 'ink')
-    a.poly([(3,12),(8,8),(15,9),(14,18),(9,21),(3,18)], 'stoneback', LEFT)
-    a.poly([(8,7),(17,2),(25,4),(28,8),(22,11),(15,10)], 'stonetop', TOP)
-    a.poly([(15,11),(22,12),(27,9),(31,12),(32,18),(26,21),(16,21),(14,17)], 'stoneface', RIGHT)
-    a.poly([(5,19),(12,20),(17,19),(17,22),(10,22)], 'stone', BOTTOM)
-    a.poly([(18,12),(21,13),(23,17),(21,19),(17,19)], 'stone', FRONT)
-    a.line([(23,12),(26,13),(28,13)], 'stonetop', TOP)
-    a.poly([(7,7),(13,4),(18,3),(19,5),(17,6),(13,6),(11,9),(7,9)], 'leafshade', TOP)
-    a.poly([(9,6),(12,5),(15,5),(14,6),(11,7),(9,8)], 'leaflight', TOP)
-    a.poly([(24,19),(28,18),(31,18),(30,20),(26,21),(23,21)], 'deep', BOTTOM)
+    # Three sheared shale pieces, not a single rounded pebble silhouette.
+    a.poly([(1,17),(4,11),(10,8),(17,1),(25,3),(29,9),(34,13),
+            (33,20),(25,23),(11,23),(3,21)], 'slateedge')
+    a.poly([(4,12),(11,9),(15,10),(12,15),(5,18),(2,17)], 'slate', TOP)
+    a.poly([(3,18),(9,16),(12,16),(10,22),(4,20)], 'slateshade', LEFT)
+    a.line([(4,13),(7,12),(10,12)], 'slatebevel', TOP)
+    a.poly([(11,9),(17,2),(24,4),(27,9),(20,12),(15,11)], 'slatebevel', TOP)
+    a.poly([(14,12),(20,13),(21,19),(17,22),(11,22),(12,17)], 'slate', LEFT)
+    a.poly([(21,13),(28,10),(33,14),(31,18),(25,21),(22,19)], 'slateface', RIGHT)
+    a.poly([(18,22),(23,20),(28,19),(32,19),(30,22),(25,23)], 'slateshade', BOTTOM)
+    a.line([(20,13),(22,14),(23,17)], 'slateedge', LEFT)
+    a.line([(23,13),(25,12),(28,12)], 'slatebevel', TOP)
+    a.line([(13,17),(16,16),(17,14)], 'slateshade', LEFT)
+    # A crescent follows the top fracture; fresh exposed chips stay bare.
+    a.poly([(10,9),(13,6),(17,3),(20,3),(20,5),(18,6),(16,6),
+            (15,8),(12,9),(11,11)], 'mossdark', TOP)
+    a.poly([(12,8),(15,5),(18,4),(19,5),(16,6),(15,7),(13,8)], 'moss', TOP)
+    a.line([(14,6),(16,5),(18,5)], 'mosslight', TOP)
+    a.poly([(27,19),(31,17),(34,18),(32,21),(28,22),(25,22)], 'slate', RIGHT)
+    a.line([(29,19),(31,18),(33,18)], 'slatebevel', TOP)
     return a, (18, 23)
 
 
 def waystone():
     a = Art(39, 47)
-    # Irregular cap, slanting break, broad face and a narrow opposing facet.
-    a.poly([(8,10),(9,5),(17,1),(27,3),(31,8),(29,18),(31,30),(34,41),(31,45),(9,45),(5,41),(7,30),(6,20)], 'ink')
-    a.poly([(10,7),(17,3),(25,4),(28,8),(21,12),(12,11),(8,14)], 'stonetop', TOP)
-    a.poly([(8,15),(13,12),(18,14),(17,27),(14,32),(15,42),(10,43),(7,40),(9,30)], 'stoneback', LEFT)
-    a.poly([(18,13),(23,11),(28,10),(26,20),(28,31),(31,40),(27,43),(17,42),(16,33),(19,27)], 'stoneface', RIGHT)
-    a.poly([(16,14),(18,14),(16,23),(13,26),(13,18)], 'stone', LEFT)
-    a.poly([(21,12),(26,10),(24,14),(23,19),(21,20)], 'stonetop', TOP)
-    a.poly([(15,34),(21,30),(27,32),(29,39),(24,41),(18,40)], 'stone', FRONT)
-    # An offset diagonal cut is a real normal face, not a grey line overlay.
-    a.poly([(9,29),(15,27),(20,23),(27,22),(27,24),(20,26),(14,30),(9,32)], 'stoneback', BOTTOM)
-    a.line([(10,29),(15,27),(20,23),(26,22)], 'stonetop', TOP)
-    # One old waymark, deliberately legible at 44 logical pixels high.
-    a.line([(22,16),(22,20),(19,22)], 'stoneback', LEFT)
-    a.line([(19,17),(25,17)], 'stoneback', LEFT)
-    a.line([(24,18),(24,20)], 'stone', RIGHT)
-    a.line([(21,16),(21,19)], 'stonetop', TOP)
-    # Moss is an intentional cap and two drooping tabs, not scattered speckle.
-    a.poly([(8,9),(10,5),(16,2),(21,3),(24,4),(27,4),(29,7),(26,9),(21,9),(19,11),(14,10),(12,14),(9,13)], 'leafshade', TOP)
-    a.poly([(10,7),(14,4),(17,4),(17,6),(21,6),(22,5),(25,6),(23,8),(18,8),(16,9),(12,9),(11,11),(10,11)], 'leaflight', TOP)
-    a.line([(14,4),(16,3),(19,4)], 'tip', TOP)
-    a.poly([(12,10),(15,10),(14,15),(12,16)], 'deep', LEFT)
-    a.poly([(25,8),(28,8),(27,12),(25,13)], 'leaf', RIGHT)
-    # Broad chips ground the obelisk; their planes keep the material readable.
-    a.poly([(6,40),(12,41),(15,44),(12,46),(5,45),(3,43)], 'stoneback', LEFT)
-    a.poly([(27,42),(32,40),(36,43),(35,45),(29,46),(25,44)], 'stone', RIGHT)
-    a.line([(28,42),(32,41),(34,43)], 'stonetop', TOP)
-    a.poly([(8,42),(11,42),(12,43),(9,44),(6,43)], 'leafshade', TOP)
+    face = (-.38, .12, .92)
+    # Keep the 39×47 card, (20,45) pivot and original x=3..36/y=1..46 span.
+    # Three offset courses share diagonal bedding, with a fine chipped bevel.
+    a.poly([(10,6),(14,1),(23,3),(28,7),(29,19),(29,28),(31,33),
+            (30,36),(34,42),(32,45),(12,45),(7,42),(6,36),(7,31),
+            (6,25),(8,15)], 'slateedge')
+    a.poly([(10,6),(14,2),(23,4),(27,7),(24,10),(15,7),(11,9)], 'slatetop', TOP)
+    a.poly([(10,8),(12,9),(10,18),(9,25),(7,26),(8,16)], 'slate', LEFT)
+    a.poly([(12,8),(23,10),(25,16),(26,29),(23,32),(9,25),(10,17)],
+           'slateface', face)
+    a.poly([(24,10),(27,8),(28,17),(29,28),(26,31),(25,22)], 'slateshade', RIGHT)
+    a.line([(11,9),(10,15),(9,18)], 'slatebevel', LEFT)
+    a.line([(13,8),(17,9),(20,10)], 'slatebevel', TOP)
+    a.line([(27,13),(27,18),(28,20)], 'slate', RIGHT)
+    # Hairline damage is a cut with one light shoulder, never a black splat.
+    a.line([(12,10),(13,13),(12,15),(13,17)], 'slate', LEFT)
+    a.line([(11,11),(12,13)], 'slatetop', TOP)
+    a.line([(26,23),(27,25),(26,27)], 'slateedge', RIGHT)
+    # Interwoven engraved ribbons. The two short interruptions put one ribbon
+    # above the other at each crossing; the one-pixel lower lips catch light.
+    loops = [
+        [(15,12),(20,17),(20,19),(18,21),(13,16),(13,14),(15,12)],
+        [(23,12),(25,14),(25,16),(18,23),(16,23),(14,21),(21,14),(23,12)],
+    ]
+    for points in loops:
+        a.line([(x+1,y+1) for x,y in points], 'slatebevel', BOTTOM)
+        a.line(points, 'slateshade', LEFT)
+    a.line([(16,16),(18,18)], 'slateface', face)
+    a.line([(17,16),(19,18)], 'slateshade', LEFT)
+    a.line([(20,20),(21,19)], 'slateface', face)
+    a.line([(19,20),(21,18)], 'slateshade', LEFT)
+    # The split strata are actual stepped surfaces with opposing side normals.
+    a.poly([(8,26),(13,29),(23,34),(29,30),(30,33),(24,37),(8,29)],
+           'slateshade', BOTTOM)
+    a.line([(8,26),(13,29),(23,34),(28,31)], 'slatebevel', TOP)
+    a.poly([(8,30),(14,33),(24,38),(29,35),(30,38),(24,41),(8,34),(7,32)],
+           'slate', face)
+    a.poly([(25,38),(30,35),(31,38),(28,41),(25,42)], 'slateshade', RIGHT)
+    a.line([(8,31),(14,34),(23,39)], 'slatebevel', TOP)
+    a.poly([(8,35),(14,38),(24,43),(30,40),(32,43),(29,45),(15,44),(8,41)],
+           'slateshade', face)
+    a.poly([(9,36),(14,39),(23,43),(23,44),(14,41),(9,39)], 'slate', LEFT)
+    a.line([(8,35),(13,38),(16,39)], 'slatebevel', TOP)
+    a.poly([(26,43),(30,41),(32,43),(29,45),(25,45)], 'slateedge', RIGHT)
+    a.line([(11,32),(12,33)], 'slatetop', TOP)
+    a.line([(18,39),(20,40)], 'slatebevel', TOP)
+    # An olive crescent hugs the cap and hangs on the right, leaving bare stone
+    # at the highest point and enough open face for the carved knot.
+    a.poly([(15,3),(20,3),(23,4),(26,5),(28,7),(29,10),(28,14),
+            (26,12),(25,9),(22,8),(20,7),(16,6),(14,5)], 'mossdark', TOP)
+    a.poly([(16,4),(20,4),(23,5),(26,6),(27,8),(26,10),(24,8),
+            (21,7),(18,6),(15,5)], 'moss', TOP)
+    a.line([(17,4),(20,5),(22,5)], 'mosslight', TOP)
+    a.line([(24,6),(26,7)], 'mosstip', TOP)
+    a.line([(27,9),(27,12),(28,13)], 'moss', RIGHT)
+    a.line([(23,8),(24,10)], 'mossdark', RIGHT)
+    # Small freshly detached wedges retain the old total ground span.
+    a.poly([(3,43),(6,40),(11,41),(14,44),(11,46),(5,45)], 'slateshade', LEFT)
+    a.poly([(4,43),(7,41),(10,42),(8,44)], 'slatebevel', TOP)
+    a.poly([(9,44),(12,43),(13,44),(11,46),(8,45)], 'slate', RIGHT)
+    a.line([(5,44),(7,44)], 'slate', LEFT)
+    a.poly([(26,44),(30,41),(33,41),(36,43),(35,45),(29,46)], 'slateshade', RIGHT)
+    a.poly([(28,43),(31,42),(33,42),(34,43),(31,44)], 'slatebevel', TOP)
+    a.poly([(32,44),(35,44),(34,45),(30,45)], 'slate', RIGHT)
+    a.poly([(8,41),(10,41),(11,42),(10,43),(8,42)], 'mossdark', TOP)
     return a, (20, 45)
 
 
@@ -447,8 +501,8 @@ def main():
         'oak': '单片不对称闭合冠影、无逐簇黑边；交错大小叶面、深色下沿、相连树叉。',
         'fir': '交错下垂的针枝、不对称三叉边；中干相连、离散宽叶面法线。',
         'snag': '断冠枯木；两侧粗枝、树洞、宽树皮面、少量根苔。',
-        'rock': '低矮错位石片；苔帽、左右分离切面，允许正确法线镜像。',
-        'waystone': '界石39×47；锚点(20,45)；苔帽、斜断层、旧路符和斜切面。',
+        'rock': '低矮片岩碎块；锐角新断口、顶沿苔月、左右分离切面，锚点与画幅不变。',
+        'waystone': '界石39×47；锚点(20,45)与可见范围不变；交织凹刻路符、三层斜断阶、苔月帽和独立左右法线。',
         'birch': '不等长双枝、浅色断纹树干、小簇淡叶，不复用橡树轮廓。',
     }
     entries, arts = [], []
@@ -463,7 +517,7 @@ def main():
         near.append(art.save(name, anchor, '前、中景原生 PixelLab 树冠，按本场景重新配墨色与离散法线。'))
         arts.append((name, art, anchor))
     manifest = {
-        'version': 2, 'source_policy_zh': '原创整数像素多边形与本项目的 PixelLab 原生画稿；处理输入和任务单见 tools/gloam/paper/canopy。无照片或游戏截图输入。',
+        'version': 2, 'source_policy_zh': '原创整数像素多边形与本项目的 PixelLab 原生画稿；处理输入和任务单见 tools/gloam/paper/canopy。界石与碎岩参考已保存的HD引导构图逐像素重画，不采样参考像素、不把截图用作纹理。',
         'sampling': 'nearest, native integer pixels, binary alpha, no antialiasing',
         'normal_basis': '+X picture-right, +Y picture-up, +Z toward viewer; linear, flat planes',
         'palette_srgb': P, 'sprites': entries, 'near_trees': near,

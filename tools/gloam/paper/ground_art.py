@@ -3,9 +3,9 @@
 Rebuild from the repository root with the existing uv-managed environment:
   uv run --project tools/gloam/terrain --no-sync python tools/gloam/paper/ground_art.py
 
-No photograph, HD-2D material or screenshot enters the drawing. The only
-texture inputs are the native PixelLab moss and dirt swatches in woodland-inks/.
-Path control points and three wetland locations come from the shared map.
+The HD-guided composition study is a visual reference only, never texture input.
+Only small native PixelLab moss and dirt brush marks from woodland-inks/ transfer.
+Path control points and three shallow drainage locations come from the shared map.
 Every preview is exported at its native size or enlarged by nearest neighbour.
 """
 from __future__ import annotations
@@ -36,16 +36,23 @@ CELL, COLS, VARIANTS = 32, 4, 16
 CARD, ROOT_PIXELS, MAX_HEIGHT = CELL / PPM, 5, 0.8
 
 PALETTE = {
-    "ink": "#192236", "deep": "#22434b", "grass": "#326157",
-    "leaf": "#49876a", "leaf_light": "#71a77b", "tip": "#a4c58b",
-    "stone_dark": "#39485e", "stone": "#566984", "stone_light": "#8498a4",
-    "stone_tip": "#b9c5b4", "soil_dark": "#534356", "soil": "#756052",
-    "soil_light": "#998165", "sand": "#b99b71", "rust": "#974f4a",
+    "ink": "#192236", "deep": "#253b3c", "grass": "#344b42",
+    "leaf": "#568367", "leaf_light": "#83a57b", "tip": "#bac38e",
+    "stone_dark": "#454754", "stone": "#626673", "stone_light": "#878a91",
+    "stone_tip": "#b0b4a4", "soil_dark": "#3e3541", "soil": "#62535a",
+    "soil_light": "#92776a", "sand": "#b99b71", "rust": "#974f4a",
     "cap": "#cd7450", "petal": "#e8a25e", "cream": "#ffe7aa",
-    "turf_shade": "#2b5550", "turf_light": "#3c705d",
-    "duff": "#4b5850", "duff_light": "#6a6b53", "soil_worn": "#87715c",
-    "moss": "#5b8b69", "water": "#35646c", "water_light": "#4e8183",
-    "water_deep": "#294857", "water_glint": "#81aaa9", "lilac": "#b0a6c0",
+    "turf_shade": "#293d38", "turf_light": "#405849",
+    "duff": "#4b443e", "duff_light": "#625044", "soil_worn": "#716163",
+    "moss": "#647e50", "water": "#273642", "water_light": "#455766",
+    "water_deep": "#202c37", "water_glint": "#697a86", "lilac": "#b0a6c0",
+    "sedge": "#738b61", "sedge_light": "#a7b889", "sedge_shade": "#465d46",
+    "dry_grass": "#858360", "dry_tip": "#b1ad7c", "leaf_rust": "#855d49",
+    "leaf_ochre": "#a18057", "leaf_dark": "#5a433b", "wet_bank": "#30363a",
+    "wet_mud": "#424147", "wet_shallow": "#303d47", "amber_water": "#8e754c",
+    "moss_dark": "#30433b", "moss_pad": "#3d5143", "moss_tip": "#53684a",
+    "olive_dark": "#3b4536", "olive_pad": "#4c5841", "olive_tip": "#64704d",
+    "dry_moss": "#5b523e", "dry_moss_tip": "#756746",
 }
 
 
@@ -121,28 +128,61 @@ def island(cx, cy, width, height, color, variant=0, n=(0, 1, 0)):
     return points
 
 
-# The centres do not sit on rows. Irregular adjoining mats are each <100px wide;
-# their quiet shared base is more important than covering every pixel in marks.
+# Large low-contrast mats establish dark turf, olive moss and rusty leaf duff.
+# They are separated by unmarked humus rather than tiled texture or terrazzo.
 mat_centres = []
-for _ in range(150):
+for _ in range(210):
     cx, cy = RNG.randint(-20, MAP_W + 20), RNG.randint(-20, MAP_H + 20)
-    if any(math.hypot(cx - x, cy - y) < 47 for x, y in mat_centres):
+    x, z = world(cx, cy)
+    if path_distance(x, z) < 1.65:
+        continue
+    if any(math.hypot(cx - px, cy - py) < 42 for px, py in mat_centres):
         continue
     mat_centres.append((cx, cy))
-    width, height = RNG.randint(44, 94), RNG.randint(30, 63)
+    width, height = RNG.randint(35, 82), RNG.randint(20, 47)
     variant = len(mat_centres)
-    color = ("turf_shade", "turf_light", "turf_shade", "duff")[variant % 4]
-    points = island(cx, cy, width, height, color, variant)
-    if variant % 3 == 0:
-        # Only a short local edge is layered; there is no raised turf platform.
-        floor.line(points[9:12], "grass" if color == "turf_shade" else "moss", width=2)
-    if variant % 4 == 3:
-        island(cx - width * .12, cy + height * .08, width * .5, height * .5,
+    color = ("turf_shade", "turf_light", "grass", "duff", "turf_shade")[variant % 5]
+    island(cx, cy, width, height, color, variant)
+    if variant % 5 == 1:
+        island(cx - width * .18, cy + height * .10, width * .47, height * .48,
+               "moss", variant + 1)
+    elif color == "duff":
+        island(cx + width * .12, cy - height * .08, width * .48, height * .44,
                "duff_light", variant + 1)
-        for dx, dy in ((-7, 2), (1, -5), (9, 4)):
-            floor.poly([(cx + dx - 2, cy + dy), (cx + dx, cy + dy - 2),
-                        (cx + dx + 4, cy + dy - 1), (cx + dx + 2, cy + dy + 1)],
-                       "soil_light", (.1, 1, .1))
+
+
+def moss_bed(u, v, variant, brush):
+    """A colony of overlapping low cushions, with quiet soil between colonies."""
+    palettes = (("moss_dark", "moss_pad", "moss_tip"),
+                ("olive_dark", "olive_pad", "olive_tip"),
+                ("duff", "dry_moss", "dry_moss_tip"))
+    dark, mid, light = palettes[variant % 3]
+    rx, ry = brush.randint(10, 24), brush.randint(5, 11)
+    for j in range(brush.randint(8, 18)):
+        x = u + round(brush.gauss(0, rx * .43))
+        y = v + round(brush.gauss(0, ry * .43))
+        w, h = brush.randint(2, 4), brush.randint(1, 2)
+        points = [(x - w, y), (x - w + 1, y - h), (x, y - h),
+                  (x + 1, y - h - 1), (x + w, y), (x + w - 1, y + 1),
+                  (x, y + 1), (x - 1, y + 2)]
+        floor.poly(points, dark if j % 4 == 0 else mid, (.1, 1, -.12))
+        if j % 3 == 0:
+            # A small broken face, never an outline or a lone bright grain.
+            floor.line([(x - 1, y - h + 1), (x, y - h), (x + 1, y - h)], light,
+                       (-.15, 1, -.18))
+
+
+# Low moss belongs to chosen damp meadows; rusty and dry-moss beds gather on
+# the opposite side. The shared clearing and walking strip remain unpainted.
+bed_rng = random.Random(SEED + 53)
+for index in range(470):
+    z = bed_rng.uniform(-37.5, 13.5)
+    side = bed_rng.choice((-1, 1))
+    x = path_x(z) + side * bed_rng.uniform(2.1, 11.0)
+    if not vegetation_clearance(x, z):
+        continue
+    u, v = at(x, z)
+    moss_bed(u, v, (index % 2) if side > 0 else (1 if index % 3 else 2), bed_rng)
 
 
 def leaf_cluster(cx, cy, direction=1, light=False):
@@ -159,17 +199,19 @@ def leaf_cluster(cx, cy, direction=1, light=False):
                        "leaf_light" if light else "turf_light")
 
 
-# Creeping leaves are small designed clusters separated by broad undisturbed mats.
-for _ in range(270):
+# Creeping leaves live in local colonies, not a uniform scatter over every mat.
+for _ in range(95):
     u, v = RNG.randrange(MAP_W), RNG.randrange(MAP_H)
     x, z = world(u, v)
-    if path_distance(x, z) > 2.05 and vegetation_clearance(x, z):
-        leaf_cluster(u, v, RNG.choice((-1, 1)), RNG.random() < 0.22)
+    if path_distance(x, z) > 2.5 and vegetation_clearance(x, z):
+        for j in range(RNG.choice((1, 2, 3))):
+            leaf_cluster(u + j * RNG.randint(7, 12), v + RNG.randint(-4, 4),
+                         RNG.choice((-1, 1)), RNG.random() < 0.18)
 
 
 
 
-def trail_edge(side, extra=0):
+def trail_edge(side):
     points = []
     # Two-pixel runs give the road an authored stair-step contour at native size.
     shoulders = (0, 0, 1, 1, 0, -1, -1, 0, 1, 0, 0, -1)
@@ -177,133 +219,237 @@ def trail_edge(side, extra=0):
         _, z = world(0, v)
         half_width = 1.17 + (0.18 if -1.6 < z < 2.1 else 0)
         u, _ = at(path_x(z) + side * half_width, z)
-        points.append((u + side * extra + shoulders[(v // 8 + side) % len(shoulders)], v))
+        points.append((u + shoulders[(v // 8 + side) % len(shoulders)], v))
     return points
 
 
 left, right = trail_edge(-1), trail_edge(1)
-floor.poly(trail_edge(-1, 2) + list(reversed(trail_edge(1, 2))), "turf_shade")
 floor.poly(left + list(reversed(right)), "soil")
+# Broken short soil tongues embed the path in turf without a continuous rim.
+shoulder_rng = random.Random(SEED + 71)
+for side, edge in ((-1, left), (1, right)):
+    for u, v in edge[3::8]:
+        if shoulder_rng.random() < .58:
+            continue
+        spread = shoulder_rng.randint(2, 4)
+        floor.poly([(u - side * 2, v - 1), (u + side * spread, v - 2),
+                    (u + side * (spread + 1), v), (u + side, v + 2)],
+                   "soil" if v % 3 else "soil_dark", (.1, 1, .1))
 
 # Faint, unequally spaced wear leaves long stretches of bare walking surface.
 for i, z in enumerate((-34.5, -28, -21.8, -17, -12.2, -8.1, -2.0, .5, 3.4, 9.3, 12.7)):
     cx, cy = at(path_x(z) + RNG.choice((-.20, .08, .18)), z)
     island(cx, cy, RNG.randint(17, 26), RNG.randint(7, 14), "soil_worn", i)
-for side, edge in ((-1, left), (1, right)):
-    for i in range(0, len(edge) - 7, 5):
-        if RNG.random() < .55:
+
+def fallen_leaf(u, v, variant=0, damp=False):
+    """A folded two-plane leaf, only 3–7 pixels long, with a broken midrib."""
+    shapes = (
+        ((-3, 0), (-2, -1), (0, -1), (2, -2), (3, 0), (1, 2), (-1, 1)),
+        ((-2, 1), (-3, -1), (0, -2), (2, -1), (4, 0), (1, 1), (0, 2)),
+        ((-3, -1), (-1, -2), (1, -1), (3, -1), (2, 1), (0, 2), (-1, 0)),
+    )
+    flip = -1 if variant % 2 else 1
+    points = [(u + x * flip, v + y) for x, y in shapes[variant % 3]]
+    floor.poly(points, "leaf_dark" if damp else ("leaf_rust" if variant % 3 else "duff_light"),
+               (flip * .12, 1, -.12))
+    if variant % 4 == 0:
+        floor.line([(u - flip, v), (u + flip, v - 1)],
+                   "duff_light" if damp else "leaf_ochre", (-.2, 1, -.2))
+    return points
+
+
+def verge_tuft(u, v, variant=0, dry=False):
+    """Thin unequal grass bends; dark roots, no repeated outline or V stamp."""
+    shade, mid, light = (("duff", "dry_grass", "dry_tip") if dry else
+                         ("sedge_shade", "sedge", "sedge_light"))
+    # Each crown has a different missing sector, lean, height and strand count.
+    strands = (
+        ((-6, -4, -8, -2), (-3, -8, -6, -7), (1, -10, 3, -9),
+         (4, -6, 7, -4), (5, -3, 9, -2)),
+        ((-5, -3, -8, -3), (-2, -6, -4, -5), (1, -9, 4, -7),
+         (3, -5, 6, -2)),
+        ((-4, -5, -7, -4), (-1, -11, -3, -10), (2, -7, 5, -7),
+         (5, -4, 8, -1), (0, -4, -1, -3)),
+        ((-6, -2, -9, -1), (-3, -7, -5, -6), (2, -8, 2, -5)),
+    )
+    flip = -1 if variant % 3 == 1 else 1
+    roots = [(u - 4, v + 1), (u, v), (u + 4, v + 1)]
+    floor.line(roots, "turf_shade")
+    floor.wd.line(roots, fill=(0, 0, 0))
+    for j, (bx, by, tx, ty) in enumerate(strands[variant % 4]):
+        root = (u + (j % 3 - 1) * 2, v + j % 2)
+        bend = (u + bx * flip, v + by + (variant % 3 - 1))
+        tip = (u + tx * flip, v + ty + (variant % 3 - 1))
+        floor.line([root, bend, tip], shade, (flip * .35, .85, .30))
+        floor.wd.line([root, bend, tip], fill=(0, 0, 0))
+        # Not every strand receives a highlight, and roots remain quiet.
+        if (variant + j) % 4 != 0:
+            points = [(round((root[0] + bend[0]) / 2),
+                       round((root[1] + bend[1]) / 2)), bend, tip]
+            floor.line(points, light if j == variant % len(strands[variant % 4]) else mid,
+                       (-flip * .4, .85, -.25))
+            floor.wd.line(points, fill=(0, 0, 0))
+
+
+# Planted verge comes in broken banks, not a continuous decorative path outline.
+# The broad clearing around the traveller stays bare; the taller crowns gather
+# beside, behind and in front of it instead of competing with its silhouette.
+verge_rng = random.Random(SEED + 29)
+for side in (-1, 1):
+    z = -37.0
+    while z < 13.5:
+        z += verge_rng.uniform(.65, 1.8)
+        if verge_rng.random() < .24:
             continue
-        run = edge[i:i + RNG.choice((3, 4, 6))]
-        floor.line([(x + side, y - 1) for x, y in run],
-                   "moss" if i % 3 == 0 else "leaf", (side * -.3, 1, .15), width=2)
+        x = path_x(z) + side * verge_rng.uniform(1.45, 2.05)
+        if not vegetation_clearance(x, z):
+            continue
+        for j in range(verge_rng.choice((2, 3, 4))):
+            px, pz = x + side * verge_rng.uniform(-.08, .48), z + verge_rng.uniform(-.20, .35)
+            if not vegetation_clearance(px, pz) or (-1.0 < px < 2.5 and -.8 < pz < 1.9):
+                continue
+            u, v = at(px, pz)
+            variant = verge_rng.randrange(12)
+            verge_tuft(u, v, variant, dry=side < 0 and variant % 4 == 0)
+
+# Outer moss meadows and dry leaf beds have different shapes and density.
+for index in range(105):
+    u, v = verge_rng.randrange(12, MAP_W - 12), verge_rng.randrange(14, MAP_H - 12)
+    x, z = world(u, v)
+    if path_distance(x, z) < 2.6 or not vegetation_clearance(x, z):
+        continue
+    for j in range(verge_rng.choice((1, 2, 3))):
+        verge_tuft(u + j * 9, v + verge_rng.randint(-3, 4), index + j,
+                   dry=(index % 5 == 0))
+
+# Rusty duff collects in asymmetric coves beside the route and around roots.
+for index in range(155):
+    z = RNG.uniform(-37, 13)
+    x = path_x(z) + RNG.choice((-1, 1)) * RNG.uniform(1.65, 4.9)
+    if not vegetation_clearance(x, z):
+        continue
+    u, v = at(x, z)
+    for j in range(RNG.randint(3, 7)):
+        fallen_leaf(u + RNG.randint(-12, 12), v + RNG.randint(-6, 6), index + j)
+    if index % 8 == 0:
+        floor.line([(u - 7, v + 4), (u + 2, v + 1), (u + 8, v + 1)], "leaf_dark")
+        floor.line([(u + 2, v + 1), (u + 4, v - 2)], "duff_light")
 
 
-def slate(u, v, width, height, variant=0):
-    """Chipped shale: three planes, one broken seam, no bevel gradients."""
-    w, h = width // 2, height // 2
-    points = [(u - w + 2, v - h), (u + w - 3, v - h),
-              (u + w, v - h + 2), (u + w - 1, v + h - 1),
-              (u + w - 4, v + h + 1), (u - w, v + h), (u - w, v - h + 2)]
-    floor.poly([(x, y + 2) for x, y in points], "soil_dark", (0, .5, 1))
-    floor.poly(points, "stone", rough=205)
-    floor.poly([points[0], points[1], (u + w - 5, v), (u - w + 4, v + 1)],
-               "stone_light", (-.12, 1, -.25), rough=205)
-    floor.line(points[3:6], "stone_dark", (.15, .6, .8))
-    if variant % 3 == 0:
-        floor.line([(u - 1, v - h), (u - 2, v), (u + 1, v + 1)], "stone_dark")
-    elif variant % 3 == 1:
-        floor.line([(u - w + 4, v - h), (u - w + 8, v - h)], "stone_tip")
+def pebble(u, v, width, height, variant=0):
+    """Small chipped planes partly swallowed by soil, never a raised paver."""
+    shapes = (
+        ((-4, 0), (-2, -3), (1, -2), (4, -1), (3, 2), (0, 3), (-3, 2)),
+        ((-4, -1), (-1, -2), (2, -3), (4, 0), (1, 2), (-2, 1)),
+        ((-3, -2), (0, -3), (3, -1), (4, 1), (1, 3), (-2, 2), (-4, 0)),
+        ((-4, 0), (-2, -2), (2, -2), (3, 1), (0, 2), (-2, 1)),
+    )
+    points = [(round(u + x * width / 8), round(v + y * height / 6))
+              for x, y in shapes[variant % 4]]
+    floor.poly(points, "stone_dark", (.15, .95, .16), rough=218)
+    floor.poly([points[0], points[1], points[2], (u + 1, v), (u - 2, v + 1)],
+               "stone" if variant % 3 else "stone_light", (-.25, 1, -.18), rough=212)
+    # Soil clips a different corner on each chip; no full dark cast-shadow rim.
+    floor.line(points[-2:], "soil_dark" if variant % 2 else "soil", (0, 1, 0))
+    if variant % 5 == 1:
+        floor.line([(u - 1, v - 1), (u + 1, v - 1)], "stone_light", (-.2, 1, -.3))
 
 
-# Just three broken remnants on the whole map, two within the ordinary frame.
-# No aligned rows or repeated paving intervals: the traveller stands on earth.
+# Fractured local chip families replace the previous oversized rectangular slabs.
 for group, (z, pieces) in enumerate((
-    (-18.2, ((-.42, -.18, 23, 7), (.40, .17, 15, 6))),
-    (-4.5, ((-.35, -.20, 24, 7), (.38, .28, 16, 6), (-.13, .64, 9, 5))),
-    (5.7, ((-.40, -.08, 18, 6), (.37, .38, 23, 7))),
+    (-18.2, ((-.47, -.18, 8, 4), (-.12, -.08, 6, 3), (.26, .20, 9, 5), (.49, .37, 5, 3))),
+    (-4.5, ((-.52, -.22, 9, 5), (-.12, -.05, 6, 4), (.36, .22, 8, 4), (-.27, .57, 5, 3))),
+    (5.7, ((-.42, -.08, 7, 4), (-.10, .22, 5, 3), (.38, .38, 9, 4))),
 )):
     for piece, (dx, dz, width, height) in enumerate(pieces):
         u, v = at(path_x(z + dz) + dx, z + dz)
-        slate(u, v, width, height, group + piece)
-    u, v = at(path_x(z) - .6, z)
-    floor.line([(u, v + 3), (u + 4, v + 3)], "moss")
+        pebble(u, v, width, height, group * 3 + piece)
 
-# A few pebble families give the eye scale. Each family has clear shared space.
-for index in range(48):
+# A few tiny half-buried pebbles favor the verge; the central path stays open.
+for index in range(42):
     z = RNG.uniform(-37, 13)
-    x = path_x(z) + RNG.choice((-1, 1)) * RNG.uniform(.82, 1.48)
+    x = path_x(z) + RNG.choice((-1, 1)) * RNG.uniform(.90, 1.58)
     u, v = at(x, z)
-    for j in range(RNG.choice((1, 2, 3))):
-        px, py = u + j * 5 + RNG.randint(-1, 1), v + RNG.randint(-2, 2)
-        floor.poly([(px, py), (px + 3, py - 1), (px + 5, py + 1), (px + 3, py + 2), (px, py + 1)],
-                   "stone_dark" if j else "stone", (.15, 1, .2))
-        if j == 0:
-            floor.line([(px + 1, py), (px + 3, py)], "stone_light")
+    for j in range(RNG.choice((1, 1, 2))):
+        pebble(u + j * 6, v + RNG.randint(-2, 2), RNG.randint(3, 5), 3, index + j)
 
 
 PONDS = (
-    ((-4.42, 3.1), (-4.2, 2.86), (-3.65, 2.72), (-3.22, 2.55),
-     (-2.82, 2.62), (-2.45, 2.75), (-1.94, 2.55), (-1.52, 2.2),
-     (-1.12, 2.38), (-1.37, 2.92), (-1.9, 3.28), (-2.36, 3.78),
-     (-2.96, 3.76), (-3.20, 3.56), (-3.79, 3.85), (-4.20, 3.61)),
-    ((.67, 2.60), (.95, 2.28), (1.47, 2.09), (1.9, 1.96),
-     (2.35, 2.12), (2.67, 2.04), (2.97, 1.87), (3.34, 2.15),
-     (3.30, 2.62), (2.91, 2.88), (2.61, 3.13), (2.15, 3.15),
-     (1.77, 2.97), (1.19, 3.18), (.86, 3.02)),
+    # Crooked shallow runnels follow the existing channels. Narrow throats,
+    # mud fingers and uneven margins replace the broad concentric platforms.
+    ((-4.42, 3.35), (-4.10, 3.13), (-3.84, 3.17), (-3.51, 2.94),
+     (-3.17, 3.04), (-2.91, 2.89), (-2.57, 2.96), (-2.29, 2.77),
+     (-1.95, 2.74), (-1.58, 2.37), (-1.19, 2.38), (-1.42, 2.73),
+     (-1.81, 2.98), (-2.18, 3.09), (-2.45, 3.39), (-2.76, 3.32),
+     (-3.04, 3.54), (-3.37, 3.37), (-3.72, 3.64), (-4.08, 3.56)),
+    ((.77, 2.70), (.99, 2.46), (1.26, 2.50), (1.55, 2.27),
+     (1.87, 2.29), (2.14, 2.18), (2.39, 2.31), (2.66, 2.20),
+     (2.95, 2.03), (3.28, 2.16), (3.14, 2.42), (2.83, 2.47),
+     (2.62, 2.75), (2.34, 2.69), (2.10, 2.86), (1.78, 2.70),
+     (1.48, 2.87), (1.18, 2.79), (.96, 2.92)),
     ((-6.77, -5.75), (-6.49, -5.98), (-6.01, -5.68), (-5.72, -5.61),
-     (-5.25, -5.80), (-4.76, -5.75), (-4.61, -5.48), (-5.10, -5.29),
-     (-5.49, -5.32), (-5.84, -5.11), (-6.23, -5.27), (-6.59, -5.45)),
+     (-5.25, -5.80), (-4.76, -5.75), (-4.61, -5.48), (-5.10, -5.40),
+     (-5.49, -5.49), (-5.84, -5.30), (-6.23, -5.45), (-6.59, -5.45)),
 )
-
-
-def inset(points, amount):
-    cx = sum(p[0] for p in points) / len(points)
-    cy = sum(p[1] for p in points) / len(points)
-    return [(round(cx + (x - cx) * amount), round(cy + (y - cy) * amount)) for x, y in points]
 
 
 for pond_index, pond in enumerate(PONDS):
     points = [at(x, z) for x, z in pond]
-    floor.poly([(x, y + 2) for x, y in points], "soil_dark", (0, .4, 1))
-    floor.poly(points, "deep", rough=170)
-    inner = inset(points, .90)
-    floor.poly(inner, "water", rough=178)
-    floor.wd.polygon(inner, fill=(255, 0, 0))
-    floor.poly(inset(points, .58), "water_deep", rough=178)
-    # Only some shore runs catch light; the top contour is not a closed outline.
-    for start, end in ((1, 4), (8, 11)):
-        floor.line(points[start:end], "leaf", (0, 1, .2))
-    min_x, max_x = min(p[0] for p in inner), max(p[0] for p in inner)
-    min_y, max_y = min(p[1] for p in inner), max(p[1] for p in inner)
-    # Deliberate horizontal shallow-water brushwork, with only two tiny cold
-    # mirror shards. Choose actual interior spans so narrow pools cannot lose
-    # every reflection to rejected random samples or surrounding reeds.
-    strokes = ((.19, .24, 11), (.30, .68, 9), (.40, .40, 16),
-               (.53, .77, 8), (.61, .20, 13), (.72, .52, 12),
-               (.82, .70, 8), (.46, .18, 5), (.67, .76, 5))
+    # Only the rear cut gets a recessed dark wall, not a bright closed rim.
+    floor.poly([(x, y - 1) for x, y in points], "wet_mud", (0, .8, .35), rough=196)
+    floor.poly(points, "water_deep", rough=176)
+    floor.wd.polygon(points, fill=(255, 0, 0))
+    for start in (1, 6, 13):
+        floor.line(points[start:start + 2], "wet_bank", (0, .8, .4), rough=187)
+        floor.wd.line(points[start:start + 2], fill=(0, 0, 0))
+    # A bank notch is soil, not a raised lily pad or turquoise shelf.
+    for index in (4, 11, 16) if pond_index < 2 else (3, 8):
+        u, v = points[index]
+        notch = [(u - 3, v - 1), (u + 2, v), (u + 4, v + 2), (u - 2, v + 1)]
+        floor.poly(notch, "wet_mud", (.1, .95, .1), rough=191)
+        floor.wd.polygon(notch, fill=(0, 0, 0))
+
+    min_x, max_x = min(p[0] for p in points), max(p[0] for p in points)
+    min_y, max_y = min(p[1] for p in points), max(p[1] for p in points)
+    # These native one-pixel horizontal glints are disconnected. Two tiny
+    # broken amber strokes in the right channel carry B, still attenuated by
+    # the real lamp in the shader; no warm color is spread over the whole pool.
+    strokes = ((.19, .68, 4), (.34, .40, 8), (.48, .76, 3),
+               (.62, .22, 5), (.74, .54, 6), (.86, .72, 3))
     for j, (fy, fx, length) in enumerate(strokes):
         v = round(min_y + (max_y - min_y) * fy)
-        xs = [u for u in range(min_x + 1, max_x)
-              if floor.water.getpixel((u, v))[0]]
-        if len(xs) < length + 3:
+        spans, run = [], []
+        for u in range(min_x + 1, max_x):
+            if floor.water.getpixel((u, v))[0]:
+                run.append(u)
+            elif run:
+                spans.append(run)
+                run = []
+        if run:
+            spans.append(run)
+        spans = [span for span in spans if len(span) >= length + 2]
+        if not spans:
             continue
-        u = min(xs[-1] - length, xs[round((len(xs) - 1) * fx)])
-        if all(floor.water.getpixel((px, v))[0] for px in range(u, u + length)):
-            cold = j >= 7
-            floor.line([(u, v), (u + length - 1, v)],
-                       "water_glint" if cold else "water_light", rough=178)
-            floor.wd.line([(u, v), (u + length - 1, v)],
-                          fill=(255, 128 if cold else 32, 255 if pond_index == 1 and j in (2, 5) else 0))
-    # Single-notched lily pads are flat map pixels, not extra sorted draw calls.
-    for offset in ((.30, .42), (.71, .61)) if pond_index < 2 else ((.45, .5),):
-        u = round(min_x + (max_x - min_x) * offset[0])
-        v = round(min_y + (max_y - min_y) * offset[1])
-        if floor.water.getpixel((u, v))[0]:
-            floor.poly([(u - 4, v), (u - 2, v - 2), (u + 3, v - 2),
-                        (u + 5, v), (u + 3, v + 2), (u, v + 2),
-                        (u, v), (u - 2, v + 2), (u - 4, v + 1)], "leaf")
-            floor.line([(u - 1, v - 1), (u + 2, v - 1)], "leaf_light")
-            floor.wd.polygon([(u - 4, v - 2), (u + 5, v - 2), (u + 5, v + 2), (u - 4, v + 2)], fill=(0, 0, 0))
+        span = max(spans, key=len)
+        u = min(span[-1] - length, span[round((len(span) - 1) * fx)])
+        lamp = pond_index == 1 and j in (1, 4)
+        for k in range(length):
+            if length > 5 and k == 3:
+                continue
+            floor.line([(u + k, v), (u + k, v)],
+                       "amber_water" if lamp else ("water_glint" if j == 0 else "water_light"),
+                       rough=176)
+            floor.wd.point((u + k, v), fill=(255, 40 if lamp else 96, 224 if lamp else 0))
+
+    # Damp leaf litter and a few bent grasses sit on the bank, leaving the
+    # central dark water and narrow lamp reflections readable.
+    for index in (0, 3, 9, 14) if pond_index < 2 else (0, 5, 9):
+        u, v = points[index]
+        leaf = fallen_leaf(u + (2 if index % 2 else -3), v + 2, index + pond_index, damp=True)
+        floor.wd.polygon(leaf, fill=(0, 0, 0))
+    for index in (1, 12) if pond_index < 2 else (1,):
+        u, v = points[index]
+        verge_tuft(u - 3, v + 2, index + pond_index)
 
 
 class Plant:
@@ -404,18 +550,25 @@ def flowers(index):
 
 def reeds(index):
     plant = Plant()
-    # Broad broken leaves and two blunt cattail heads, never uniform V glyphs.
-    for j, (tx, ty) in enumerate(((6, 17 + index), (10, 9), (17, 6 - index), (23 + index, 12), (28, 20))):
-        bx = 15 + j % 3
-        plant.poly([(bx, 27), (tx - 1, ty + 4), (tx, ty), (tx + 1, ty + 3), (bx + 1, 25)],
-                   "moss" if j % 2 else "leaf", ((j - 2) * .22, .9, .15), .48)
-        if j == 2:
-            plant.line([(bx, 24), (tx, ty + 2)], "leaf_light", height=.6)
-    for x, y in ((12, 11), (22, 15)):
+    # Fine bent sedge and one/two small seed heads. Open gaps let the recessed
+    # bank show through instead of making a fence of broad green spearheads.
+    for j, (tx, ty) in enumerate(((4, 19), (7, 13 + index), (14, 7 + index),
+                                (20, 10), (26, 17 - index), (29, 22))):
+        root = (14 + j % 4, 27)
+        bend = ((root[0] + tx) // 2, ty - 1)
+        plant.line([root, bend, (tx, ty)], "sedge_shade", ((j - 2) * .16, .9, .2), .42)
+        if (j + index) % 3:
+            plant.line([((root[0] + bend[0]) // 2, (root[1] + bend[1]) // 2),
+                        bend, (tx, ty)], "sedge_light" if j == 2 else "sedge",
+                       (-.3, .9, -.2), .46)
+    for j, (x, y) in enumerate(((12, 12), (23, 17))):
+        if index == 1 and j:
+            continue
         x += index % 2
-        plant.line([(x, 27), (x, y)], "moss", height=.45)
-        plant.poly([(x - 1, y - 4), (x + 1, y - 4), (x + 1, y), (x - 1, y)], "soil", (.3, .8, .2), .65)
-        plant.line([(x - 1, y - 4), (x - 1, y - 2)], "sand", (-.5, .8, 0), .67)
+        plant.line([(x - 1, 27), (x, y)], "sedge", height=.43)
+        plant.poly([(x - 1, y - 3), (x, y - 4), (x + 1, y - 2),
+                    (x + 1, y), (x - 1, y)], "leaf_dark", (.3, .8, .2), .58)
+        plant.line([(x - 1, y - 2), (x - 1, y - 1)], "leaf_ochre", (-.5, .8, 0), .60)
     return plant
 
 
@@ -467,9 +620,9 @@ for x, z, variant in (
     (-4.9, -2.9, 9), (-5.4, -2.55, 4),
     (3.3, .85, 10), (3.88, 1.10, 11), (4.32, 1.45, 0),
     (3.7, -.25, 4), (4.3, -.75, 12),
-    (-4.55, 3.30, 13), (-1.25, 2.37, 15),
-    (.52, 2.6, 14), (3.72, 3.10, 13), (3.45, 2.05, 15),
-    (-6.70, -5.94, 14), (-4.48, -5.40, 15),
+    (-4.43, 3.51, 13), (-1.26, 2.39, 15),
+    (.78, 2.87, 14), (3.27, 2.52, 13), (2.94, 2.04, 15),
+    (-6.70, -5.90, 14), (-4.62, -5.40, 15),
     (-5.5, 5.35, 7), (-6.2, 5.35, 0), (4.85, 4.55, 11),
     (-.9, -7.8, 12), (-1.45, -8.0, 10), (4.95, -9.4, 8),
 ):
@@ -504,6 +657,8 @@ cx, cy = at(.25, -1.1)
 crop = review.crop((cx - 256, cy - 144, cx + 256, cy + 144)).convert("RGB")
 crop.save(HERE / "ground_preview.png", compress_level=9)
 crop.resize((2048, 1152), Image.Resampling.NEAREST).save(HERE / "ground_review.png", compress_level=9)
+floor.water.crop((cx - 256, cy - 144, cx + 256, cy + 144)).resize(
+    (2048, 1152), Image.Resampling.NEAREST).save(HERE / "ground_water_review.png", compress_level=9)
 sheet = Image.new("RGBA", atlas.size, (*rgb("deep"), 255))
 sheet.alpha_composite(atlas)
 sheet.convert("RGB").resize((512, 512), Image.Resampling.NEAREST).save(HERE / "ground_plants_review.png", compress_level=9)
@@ -513,9 +668,10 @@ metadata = {
     "map_bounds_xz": [[X0, X1], [Z0, Z1]], "atlas_native_pixels": list(atlas.size),
     "palette_srgb": PALETTE, "normal_space": "world XYZ, linear RGB",
     "plant_count": len(plants), "plant_scale": "1.0; no filtered resampling",
-    "source": "ground_art.py + ground_inks.py; integer brushwork and two native PixelLab drawings in woodland-inks/",
+    "source": "ground_art.py + ground_inks.py; original clustered ink, planted verge and broken drainage; two native PixelLab brushes in woodland-inks/",
     "preview": "ground_preview.png is native 512×288, ground_review.png is exact nearest 4×",
     "water_data": "linear RGB: binary coverage / isolated sky shards / lamp shard mask",
+    "art_direction": "HD-guided composition study viewed only: reference/gloam-comparison/art-direction/hd2d-to-pixel.webp; never sampled or used as a runtime texture",
 }
 (HERE / "ground_art.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
 print(json.dumps({"map": [MAP_W, MAP_H], "atlas": list(atlas.size),

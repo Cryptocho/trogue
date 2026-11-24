@@ -41,6 +41,13 @@ def planes(kind):
         distances=np.sum((rgb[:,:,None,:]-inks[None,None,:,:])**2*np.array((.80,1.30,.76)),axis=3)
         # Keep the iris/facial contour and the two boots dark, not beige.
         rgba[:,:,:3]=inks[distances.argmin(axis=2)]
+        # Keep the cloak a cool blue cloth, not a near-black silhouette.
+        # Edit connected folds only, leaving edging, cuffs and belt untouched.
+        yy, xx = np.indices(mask.shape)
+        cloth = mask & (xx < 17) & (yy >= 18) & (yy < 38) & (rgb[:,:,1] > rgb[:,:,0] * 1.36)
+        cloth_inks = colors('243d52 325771 43728b 588fa5 78acb4')
+        shade = np.digitize(rgb[:,:,1], (43, 69, 94, 130))
+        rgba[cloth,:3] = cloth_inks[shade[cloth]]
     else:
         yy=np.arange(mask.shape[0])[:,None]
         low=(yy-y0)/(y1-y0)
@@ -53,6 +60,10 @@ def planes(kind):
     # Turn continuous generated normals into a restrained set of leaf/cloth
     # planes; dark opacity from the original is never used as a height field.
     n=shape[:,:,:3].astype(float)/127.5-1
+    if kind == 'traveler':
+        # The generated normal rounds the whole cape together with the left
+        # side of the body. Give its upper folds a little upward-facing cloth.
+        n[cloth & (yy < 26),1] += .24
     n=np.rint(n*6)/6
     n/=np.maximum(np.linalg.norm(n,axis=2,keepdims=True),.001)
     shape[:,:,:3]=np.rint((n*.5+.5)*255).astype(np.uint8)

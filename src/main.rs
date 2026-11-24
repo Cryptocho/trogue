@@ -16,9 +16,9 @@ use bevy::{
     },
     prelude::*,
     render::{RenderPlugin, camera::Exposure},
-    window::{MonitorSelection, PresentMode, WindowMode, WindowResolution},
+    window::{MonitorSelection, PresentMode, PrimaryWindow, WindowMode, WindowResolution},
 };
-use desktop::ViewOptions;
+use desktop::{SceneReady, ViewOptions};
 
 const LAMP: Vec3 = Vec3::new(1.5, 0.0, 0.83);
 const CANOPY_FROM: Vec3 = Vec3::new(-9.5, 12.0, -6.0);
@@ -26,8 +26,47 @@ const CANOPY_TO: Vec3 = Vec3::new(-2.6, 0.0, -2.2);
 const NORMAL_FOV: f32 = 32.0;
 const DETAIL_FOV: f32 = 19.0;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SceneMode {
+    Hd,
+    Pixel,
+}
+
+impl SceneMode {
+    fn title(self) -> &'static str {
+        match self {
+            Self::Hd => "苔径留灯 · HD-2D",
+            Self::Pixel => "苔径留灯 · 纯 2D 像素",
+        }
+    }
+}
+
 #[derive(Component)]
-struct SceneCamera;
+struct SceneCamera(SceneMode);
+
+#[derive(Resource)]
+struct Comparison {
+    mode: SceneMode,
+    // Share half-frustum height rather than field of view (perspective) or
+    // scale (orthographic). Match the three authored zoom anchors.
+    zoom: f32,
+    bloom: bool,
+}
+
+fn frustum(fov: f32) -> f32 {
+    (0.5 * fov.to_radians()).tan()
+}
+
+fn pixel_scale(zoom: f32) -> f32 {
+    let normal = frustum(NORMAL_FOV);
+    if zoom <= normal {
+        let t = (zoom - frustum(DETAIL_FOV)) / (normal - frustum(DETAIL_FOV));
+        paper::DETAIL_SCALE + t * (1. - paper::DETAIL_SCALE)
+    } else {
+        let t = (zoom - normal) / (frustum(36.) - normal);
+        1. + t * (paper::WIDE_SCALE - 1.)
+    }
+}
 
 fn main() -> AppExit {
     let options = match ViewOptions::parse() {
@@ -37,14 +76,21 @@ fn main() -> AppExit {
             return AppExit::error();
         }
     };
-    let pure_2d = options.pure_2d;
+    let mode = if options.pure_2d { SceneMode::Pixel } else { SceneMode::Hd };
+    let comparison = Comparison {
+        mode,
+        zoom: frustum(if options.detail { DETAIL_FOV } else { NORMAL_FOV }),
+        bloom: !options.no_bloom,
+    };
     let mut app = App::new();
     app.insert_resource(options)
+        .insert_resource(comparison)
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: if pure_2d { "苔径留灯 · 像素夜林" } else { "苔径留灯 · HD-2D" }.into(),
+                        title: mode.title().into(),
+                        name: Some("wanderstead.gloam".into()),
                         resolution: WindowResolution::new(2560., 1440.),
                         mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
                         present_mode: PresentMode::AutoVsync, // Selected against the native surface at startup.
@@ -57,13 +103,16 @@ fn main() -> AppExit {
                     ..default()
                 }),
         )
-        .add_plugins(desktop::DesktopView)
-        .add_systems(Update, framing_controls);
-    if pure_2d {
-        app.add_plugins(paper::PaperPlugin);
-    } else {
-        install_hd_scene(&mut app);
-    }
+        .add_plugins((desktop::DesktopView, paper::PaperPlugin))
+        .add_systems(
+            Update,
+            (
+                comparison_ready.run_if(not(resource_exists::<SceneReady>)),
+                framing_controls.run_if(resource_exists::<SceneReady>),
+                close_on_escape,
+            ),
+        );
+    install_hd_scene(&mut app);
     app.run()
 }
 
@@ -94,23 +143,19 @@ fn install_hd_scene(app: &mut App) {
         );
 }
 
-fn stage_lights(mut commands: Commands, options: Res<ViewOptions>) {
+fn stage_lights(mut commands: Commands, options: Res<ViewOptions>, comparison: Res<Comparison>) {
     let cast = !options.no_shadows;
     let mut camera = commands.spawn((
         Name::new("林间镜头"),
-        SceneCamera,
+        SceneCamera(SceneMode::Hd),
         Camera3d::default(),
         Camera {
             hdr: true,
+            is_active: comparison.mode == SceneMode::Hd,
             ..default()
         },
         Projection::Perspective(PerspectiveProjection {
-            fov: if options.detail {
-                DETAIL_FOV
-            } else {
-                NORMAL_FOV
-            }
-            .to_radians(),
+            fov: 2. * comparison.zoom.atan(),
             near: 0.2,
             far: 110.,
             ..default()
@@ -143,7 +188,7 @@ fn stage_lights(mut commands: Commands, options: Res<ViewOptions>) {
     if !options.deep_focus {
         camera.insert(lens::TiltFocus::default());
     }
-    if !options.no_bloom {
+    if comparison.bloom {
         camera.insert(lantern_bloom());
     }
 
@@ -287,23 +332,45 @@ fn forest_atmosphere_controls(
     }
 }
 
+fn comparison_ready(
+    mut commands: Commands,
+    hd: Option<Res<forest::HdReady>>,
+    pixel: Option<Res<paper::PixelReady>>,
+) {
+    if hd.is_some() && pixel.is_some() {
+        commands.insert_resource(SceneReady);
+        info!("两种画法已就绪；空格切换");
+    }
+}
+
+fn close_on_escape(keys: Res<ButtonInput<KeyCode>>, mut exit: EventWriter<AppExit>) {
+    if keys.just_pressed(KeyCode::Escape) {
+        exit.write(AppExit::Success);
+    }
+}
+
 fn framing_controls(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     mut wheel: EventReader<MouseWheel>,
-    mut camera: Single<(Entity, &mut Projection, Has<Bloom>), With<SceneCamera>>,
-    mut exit: EventWriter<AppExit>,
+    mut cameras: Query<(Entity, &SceneCamera, &mut Camera, &mut Projection)>,
+    mut pixel_output: Single<&mut Camera, (With<paper::PixelOutput>, Without<SceneCamera>)>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
+    mut comparison: ResMut<Comparison>,
 ) {
-    let (entity, projection, glowing) = &mut *camera;
-    if keys.just_pressed(KeyCode::KeyB) {
-        if *glowing {
-            commands.entity(*entity).remove::<Bloom>();
-        } else {
-            commands.entity(*entity).insert(lantern_bloom());
-        }
+    let switch = keys.just_pressed(KeyCode::Space);
+    let glow = keys.just_pressed(KeyCode::KeyB);
+    if switch {
+        comparison.mode = match comparison.mode {
+            SceneMode::Hd => SceneMode::Pixel,
+            SceneMode::Pixel => SceneMode::Hd,
+        };
+        pixel_output.is_active = comparison.mode == SceneMode::Pixel;
+        window.title = comparison.mode.title().into();
+        info!("切换画法：{}", comparison.mode.title());
     }
-    if keys.just_pressed(KeyCode::Escape) {
-        exit.write(AppExit::Success);
+    if glow {
+        comparison.bloom = !comparison.bloom;
     }
     let steps: f32 = wheel
         .read()
@@ -312,17 +379,31 @@ fn framing_controls(
             MouseScrollUnit::Pixel => e.y / 48.,
         })
         .sum();
-    if steps == 0. {
+    if steps != 0. {
+        comparison.zoom = (comparison.zoom * (-0.11 * steps).exp())
+            .clamp(frustum(DETAIL_FOV), frustum(36.));
+    }
+    if !switch && !glow && steps == 0. {
         return;
     }
-    let factor = (-0.11 * steps).exp();
-    match &mut **projection {
-        Projection::Perspective(p) => {
-            p.fov = (p.fov * factor).clamp(DETAIL_FOV.to_radians(), 36_f32.to_radians());
+    for (entity, mode, mut camera, mut projection) in &mut cameras {
+        if switch {
+            camera.is_active = mode.0 == comparison.mode;
         }
-        Projection::Orthographic(p) => {
-            p.scale = (p.scale * factor).clamp(paper::DETAIL_SCALE, paper::WIDE_SCALE);
+        if glow {
+            let mut camera = commands.entity(entity);
+            if comparison.bloom {
+                camera.insert(lantern_bloom());
+            } else {
+                camera.remove::<Bloom>();
+            }
         }
-        Projection::Custom(_) => (),
+        if steps != 0. {
+            match &mut *projection {
+                Projection::Perspective(p) => p.fov = 2. * comparison.zoom.atan(),
+                Projection::Orthographic(p) => p.scale = pixel_scale(comparison.zoom),
+                Projection::Custom(_) => (),
+            }
+        }
     }
 }

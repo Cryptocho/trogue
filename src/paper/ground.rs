@@ -5,7 +5,7 @@ use bevy::{
     sprite::{AlphaMode2d, Material2d, Material2dPlugin},
 };
 
-use super::{GROUND_SCALE, PaperAssets, PaperSettings, on_map, sort_key};
+use super::{GROUND_SCALE, PaperAssets, PaperSettings, WORLD, on_map, sort_key};
 
 pub struct GroundPlugin;
 
@@ -128,6 +128,7 @@ fn plant_floor(
         Name::new("像素苔径 · 石阶、鼓苔与折线浅池"),
         Mesh2d(meshes.add(Rectangle::new(48., 52. * GROUND_SCALE))),
         MeshMaterial2d(material.clone()),
+        WORLD,
         Transform::from_translation(on_map(0., -12.).extend(0.)),
     ));
 
@@ -164,6 +165,7 @@ fn plant_floor(
             }),
             Mesh2d(mesh.clone()),
             MeshMaterial2d(cards[variant].clone()),
+            WORLD,
             Transform::from_translation(center.extend(sort_key(z))),
         ));
     }

@@ -26,7 +26,7 @@ fn lobe(n: vec3<f32>, l: vec3<f32>, rough: f32) -> f32 {
 // Flatten a curved normal into a few lit planes without flattening the stone:
 // opposite facets still move onto different steps when the key changes sides.
 fn planes(v: f32) -> f32 {
-    return floor(saturate(v) * 5.0 + 0.5) * 0.2;
+    return floor(saturate(v) * 8.0 + 0.5) * 0.125;
 }
 
 fn illuminate(albedo: vec3<f32>, n: vec3<f32>, p: vec3<f32>, rough: f32, specular: f32, key: f32) -> vec3<f32> {
@@ -37,15 +37,25 @@ fn illuminate(albedo: vec3<f32>, n: vec3<f32>, p: vec3<f32>, rough: f32, specula
     let break_light = exp(-dot(opening, opening));
     // The darks lean into indigo; an opening in the canopy brings the left
     // side of the waystone up into a different blue-green ink ramp.
-    let sky = vec3(0.15, 0.24, 0.45) * (0.86 + 0.14 * n.y);
-    let moon = vec3(0.26, 0.48, 0.82) * (0.29 + 0.60 * smoothstep(0.24, 0.76, leaf))
-             + vec3(0.46, 0.71, 1.02) * break_light;
+    let sky = vec3(0.146, 0.205, 0.40) * (0.86 + 0.14 * n.y);
+    let moon = vec3(0.31, 0.47, 0.76) * (0.28 + 0.61 * smoothstep(0.20, 0.78, leaf))
+             + vec3(0.53, 0.73, 1.02) * break_light;
     let dl = LAMP - p;
     let d2 = dot(dl, dl);
     let l = dl * inverseSqrt(max(d2, 0.002));
-    let amber = vec3(1.0, 0.57, 0.22) * (10.8 / (d2 + 0.78)) * (1.0 - smoothstep(10.0, 44.0, d2));
+    let spread = (dl.xz + vec2(0.16, 0.38)) / vec2(0.90, 1.4);
+    let below = 1.0 - smoothstep(0.24, 1.40, p.y);
+    let hood = below * exp(-dot(spread, spread)) * 1.26;
+    let falloff = (10.4 / (d2 + 0.88)) * (1.0 - smoothstep(9.0, 43.0, d2));
+    let amber = vec3(1.0, 0.615, 0.275) * (falloff + hood);
     let gloss = clamp(specular, 0.0, 1.0) * (0.018 + 0.27 * (1.0 - rough) * (1.0 - rough));
-    var color = albedo * (sky + moon * planes(dot(n, MOON)) + amber * planes(dot(n, l)));
+    let moon_face = max(dot(n, MOON), 0.0);
+    let lamp_face = max(dot(n, l), 0.0);
+    // Stone and upright cloth retain defined planes. Flat trail and water
+    // don't get a second set of contour rings from the Lambert steps.
+    let level = smoothstep(0.86, 0.97, n.y);
+    var color = albedo * (sky + moon * mix(planes(moon_face), moon_face, level)
+                             + amber * mix(planes(lamp_face), lamp_face, level));
     color += gloss * (moon * lobe(n, MOON, rough) + amber * lobe(n, l, rough));
     if abs(key) > 0.5 {
         let stone_center = vec3(-3.15, 0.90, -1.30);
@@ -61,13 +71,14 @@ fn illuminate(albedo: vec3<f32>, n: vec3<f32>, p: vec3<f32>, rough: f32, specula
 
 fn air(color: vec3<f32>, p: vec3<f32>, fog: f32) -> vec3<f32> {
     if fog < 0.5 { return color; }
-    // A blue rear tree bank and broken low streamers. The near silhouette
-    // stays clear and the lantern does not paint a white veil across the path.
-    let bank = smoothstep(1.4, 12.0, -p.z);
-    let wisp = noise(p.xz * vec2(0.27, 0.74) + vec2(6.1, 3.7));
-    let shelf = exp(-abs(p.z + 4.8 + 0.23 * p.x + 1.7 * (wisp - 0.5)) * 0.80);
-    let ankle = exp(-max(p.y - 0.18, 0.0) * 1.45);
-    let density = bank * (0.28 + 0.16 * wisp) + (0.12 + 0.11 * wisp) * shelf * ankle;
-    let mist = mix(vec3(0.062, 0.114, 0.181), vec3(0.110, 0.176, 0.233), wisp);
-    return mix(color, mist, min(density, 0.55));
+    // A blue rear bank and broken low streamers, with soft edges sampled
+    // on the native pixel grid. The near silhouettes and light pool stay clear.
+    let bank = smoothstep(3.0, 14.0, -p.z);
+    let wisp = noise(p.xz * vec2(0.24, 0.54) + vec2(6.1, 3.7));
+    let drift = p.z + 5.9 + 0.16 * p.x + 2.9 * (wisp - 0.5);
+    let shelf = exp(-abs(drift) * 0.93);
+    let ankle = exp(-max(p.y - 0.18, 0.0) * 1.46);
+    let density = bank * (0.25 + 0.16 * wisp) + (0.067 + 0.085 * wisp) * shelf * ankle;
+    let mist = mix(vec3(0.044, 0.071, 0.135), vec3(0.084, 0.129, 0.209), wisp);
+    return mix(color, mist, min(density, 0.54));
 }

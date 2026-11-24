@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "source_policy_zh": "原创整数像素多边形与本项目的 PixelLab 原生画稿；处理输入和任务单见 tools/gloam/paper/canopy。无照片或游戏截图输入。",
+  "source_policy_zh": "原创整数像素多边形与本项目的 PixelLab 原生画稿；处理输入和任务单见 tools/gloam/paper/canopy。界石与碎岩参考已保存的HD引导构图逐像素重画，不采样参考像素、不把截图用作纹理。",
   "sampling": "nearest, native integer pixels, binary alpha, no antialiasing",
   "normal_basis": "+X picture-right, +Y picture-up, +Z toward viewer; linear, flat planes",
   "palette_srgb": {
@@ -27,7 +27,22 @@
     "blue": "#426b85",
     "bluelight": "#6b9bac",
     "skinshade": "#bb8879",
-    "skin": "#e4bd98"
+    "skin": "#e4bd98",
+    "slateedge": "#35374b",
+    "slateshade": "#45495f",
+    "slate": "#626a80",
+    "slateface": "#7e8799",
+    "slatebevel": "#a0a8b3",
+    "slatetop": "#bdc0b8",
+    "mossdark": "#3c493f",
+    "moss": "#59684b",
+    "mosslight": "#7e8d5b",
+    "mosstip": "#a4ac72",
+    "copperdark": "#543c39",
+    "coppershade": "#80533f",
+    "copper": "#ac744d",
+    "copperlight": "#d29b63",
+    "copperglint": "#edc78a"
   },
   "sprites": [
     {
@@ -128,7 +143,7 @@
         0.92
       ],
       "source": "tools/gloam/paper/cast_art.py",
-      "notes_zh": "低矮错位石片；苔帽、左右分离切面，允许正确法线镜像。"
+      "notes_zh": "低矮片岩碎块；锐角新断口、顶沿苔月、左右分离切面，锚点与画幅不变。"
     },
     {
       "name": "waystone",
@@ -148,7 +163,7 @@
         0.9574468085106383
       ],
       "source": "tools/gloam/paper/cast_art.py",
-      "notes_zh": "界石39×47；锚点(20,45)；苔帽、斜断层、旧路符和斜切面。"
+      "notes_zh": "界石39×47；锚点(20,45)与可见范围不变；交织凹刻路符、三层斜断阶、苔月帽和独立左右法线。"
     },
     {
       "name": "birch",

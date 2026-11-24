@@ -14,7 +14,7 @@ use bevy::{
     winit::WinitWindows,
 };
 
-/// Present only after the active renderer has placed the scene and loaded its assets.
+/// Present after both renderers have all their scene assets.
 #[derive(Resource)]
 pub struct SceneReady;
 
@@ -77,9 +77,6 @@ impl ViewOptions {
                 ));
             }
         }
-        if options.pure_2d && options.deep_focus {
-            return Err("纯 2D 使用清晰的正交画布；--deep-focus 仅用于关闭 HD-2D 的镜头景深".into());
-        }
         Ok(options)
     }
 }
@@ -101,6 +98,7 @@ impl Plugin for DesktopView {
                 seconds: 0.,
                 ms: Vec::with_capacity(768),
                 always_focused: true,
+                mode: None,
             });
             app.add_systems(
                 Update,
@@ -187,6 +185,7 @@ struct CaptureRun {
     seconds: f64,
     ms: Vec<f64>,
     always_focused: bool,
+    mode: Option<crate::SceneMode>,
 }
 
 fn sample_and_capture(
@@ -194,9 +193,20 @@ fn sample_and_capture(
     time: Res<Time<Real>>,
     mut run: ResMut<CaptureRun>,
     window: Single<(Entity, &Window), With<PrimaryWindow>>,
-    camera: Single<&Camera, With<crate::SceneCamera>>,
+    cameras: Query<(&Camera, &crate::SceneCamera)>,
     native: NonSend<WinitWindows>,
 ) {
+    let Some((camera, mode)) = cameras.iter().find(|(camera, _)| camera.is_active) else {
+        return;
+    };
+    if run.mode != Some(mode.0) {
+        run.mode = Some(mode.0);
+        run.warm = 0.;
+        run.warm_frames = 0;
+        run.seconds = 0.;
+        run.ms.clear();
+        run.always_focused = true;
+    }
     let dt = time.delta_secs_f64();
     if run.warm < 2. || run.warm_frames < 32 {
         run.warm += dt;

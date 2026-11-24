@@ -1,0 +1,12 @@
+{
+  "role": "美术参考；不接入运行时",
+  "tool": "generate_image",
+  "model": "openai-codex/gpt-image-2 (gpt-image-2-codex)",
+  "request": "request.json",
+  "input": "../hd2d.png",
+  "input_sha256": "f2883bd8e993dfc30a132ce7c6c6336aab245bbfea60f71b76555d1af7676931",
+  "original": "hd2d-to-pixel.webp",
+  "original_size_px": [1672, 941],
+  "original_sha256": "a549fb7584ae3261c5bc3d5ad6deea5b954c40e64a8fe974f795ee4f80432325",
+  "notes": "用真实 HD-2D 主窗口图作为同构图的像素重绘依据。生成图中的冷暖分组、浅沟断光、轮廓、苔石刻纹和布料层次用于指导独立素材；不把这张图作为游戏背景，也不把概念图当实机证据。"
+}

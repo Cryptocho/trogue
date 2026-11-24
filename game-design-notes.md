@@ -676,10 +676,11 @@ AI 策略应当能够保存和复用。
 
 **对照场景「苔径留灯」**：固定方向的斜俯视夜林，旅人在界石和路灯之间停步。两版均无战斗、弹幕或 UI。已有 HD-2D 版使用带法线的精灵和 3D 林道、草蕨、浅水、铜灯；这是技术验证，不是选型结论。
 
-- 实景入口：`tools/gloam/view.sh --2d` 是纯 2D 像素夜林，`tools/gloam/view.sh` 是 HD-2D。两版都支持滚轮缩放、`B` 切换 Bloom、`F` 切换薄雾、`F12` 截图、`Esc` 退出。HD-2D 的 `D` 切换镜头景深；像素夜林的 `←` / `→` / `0` 左照、右照、移走界石验光灯，`N` 切换精灵法线，`S` 切换地面投影。
+- 实景入口：`tools/gloam/view.sh` 打开唯一游戏窗口，**空格**在 HD-2D 和纯 2D 像素之间切换；`--2d` 只改初始画法。滚轮缩放、`B` 切换 Bloom、`F` 切换薄雾，三者切换画法时保留状态。`F12` 截当前画法，`Esc` 退出。HD-2D 的 `D` 切换镜头景深；像素夜林的 `←` / `→` / `0` 左照、右照、移走界石验光灯，`N` 切换精灵法线，`S` 切换地面投影。
 - 可重复取景：`tools/gloam/view.sh --capture captures/gloam/forest.png`。加 `--detail` 取近景；`--deep-focus`、`--no-bloom`、`--clear-air`、`--no-shadows`、`--flat-sprites` 可逐项对照。`--detail --stone-key left` 和 `--detail --stone-key right` 为等距白灯验光，常规场景没有这盏灯。素材就绪并预热、采样后才截图退出。取舍、出处与实测见[空间层次研究](reference/hd2d-spatial-depth.md)。
 - 运行资产在 `assets/gloam/`。HD-2D 用的 PixelLab 精灵见 `assets/gloam/sprites/manifest.json`，写实地表与 Blender 源在 `tools/gloam/`。像素版独立美术与色板在 `assets/gloam/paper/`，制作脚本在 `tools/gloam/paper/`；两版都不把参考截图作为场景背景。
 - [两种画法的实景对照](reference/gloam-comparison/index.html)与[纯 2D 灯光笔记](reference/gloam-comparison/study.md)保存在 `reference/`。核对同一块界石时，先比较相同取景的左右白灯，再比较两条路线的全景。
+- [由 HD-2D 实截图生成的像素重绘参考](reference/gloam-comparison/art-direction/hd2d-to-pixel.webp)只指导林道、树叶、石纹和光色；不是运行素材或实机画面。
 
 ### 12.2 摄像机
 

@@ -4,8 +4,15 @@ mod canvas;
 mod ground;
 
 use bevy::{asset::UntypedAssetId, prelude::*};
+use bevy::render::view::RenderLayers;
 
-use crate::{desktop::{KeySide, SceneReady, ViewOptions}, forest};
+use crate::{Comparison, SceneMode, desktop::{KeySide, ViewOptions}, forest};
+
+pub(super) use canvas::PixelOutput;
+const WORLD: RenderLayers = RenderLayers::layer(2);
+
+#[derive(Resource)]
+pub(super) struct PixelReady;
 
 const VIEW_HEIGHT: f32 = canvas::SIZE.y as f32 / 25.;
 pub(super) const DETAIL_SCALE: f32 = 25. / 42.;
@@ -58,7 +65,6 @@ fn finish_loading(
     assets: Res<PaperAssets>,
     server: Res<AssetServer>,
     flat: Query<(), With<Mesh2d>>,
-    solid: Query<(), With<Mesh3d>>,
     mut exit: EventWriter<AppExit>,
 ) {
     for &id in &assets.0 {
@@ -72,14 +78,21 @@ fn finish_loading(
             }
         }
     }
-    info!("苔径留灯 · 像素夜林已就绪：画布 {}×{}，Mesh2d={}，Mesh3d={}。", canvas::SIZE.x, canvas::SIZE.y, flat.iter().len(), solid.iter().len());
-    commands.insert_resource(SceneReady);
+    info!("像素夜林素材就绪：画布 {}×{}，二维绘制对象 {}。", canvas::SIZE.x, canvas::SIZE.y, flat.iter().len());
+    commands.insert_resource(PixelReady);
     commands.remove_resource::<PaperAssets>();
 }
 
-fn controls(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<PaperSettings>) {
+fn controls(
+    keys: Res<ButtonInput<KeyCode>>,
+    comparison: Res<Comparison>,
+    mut settings: ResMut<PaperSettings>,
+) {
     if keys.just_pressed(KeyCode::KeyF) {
         settings.fog = !settings.fog;
+    }
+    if comparison.mode != SceneMode::Pixel {
+        return;
     }
     if keys.just_pressed(KeyCode::KeyS) {
         settings.shadows = !settings.shadows;
