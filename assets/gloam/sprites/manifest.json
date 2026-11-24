@@ -1,0 +1,325 @@
+{
+  "version": 1,
+  "camera": "fixed three-quarter view, approximately 35 degrees down from horizontal",
+  "pixel_sampling": "nearest; RGBA alpha-cutout; one static frame per asset",
+  "coordinates": "crop and anchors use top-left image coordinates; y increases down; ground anchor may be at the bottom edge y=height",
+  "reference_policy_zh": "原创 PixelLab 生成；Rogue: Genesia 参考图未作为贴图或生成输入。",
+  "sources": "tools/gloam/sprites/sources.json",
+  "sprites": [
+    {
+      "name": "traveler",
+      "image": "gloam/sprites/traveler.png",
+      "raw_image": "gloam/sprites/raw/traveler_v1_candidate_1.png",
+      "job_id": "91147a51-c5ef-440d-bfe1-2e15006ad3d7",
+      "gallery_asset_id": "c5643d0d-6ce4-532c-955a-e314f621a484",
+      "candidate_index": 1,
+      "source_sha256": "73136213fd95fd77545fd80a75ae93a031b3cceac12dbf91b7db436213709d20",
+      "image_sha256": "bb3c6b6d24680bf77b7be77ca49d481b896fbbf50d51064d958d4a26fb8936b9",
+      "raw_size_px": [
+        96,
+        128
+      ],
+      "crop_xyxy": [
+        22,
+        22,
+        68,
+        108
+      ],
+      "visible_size_px": [
+        46,
+        86
+      ],
+      "visible_aspect_width_over_height": 0.5348837209302325,
+      "ground_anchor_px_top_left": [
+        28,
+        86
+      ],
+      "ground_anchor_uv_top_left": [
+        0.6086956521739131,
+        1.0
+      ],
+      "ground_anchor_bevy_center_offset_px": [
+        5.0,
+        -43.0
+      ],
+      "recommended_world_height_m": 1.55,
+      "notes_zh": "朝屏幕右侧的三分之四成年旅人。基点取两靴之间而非斗篷轮廓中心，因此裁切图基点向右偏 5 px。无武器、手持灯或辉光。",
+      "cleanup": "alpha threshold >=128, fully transparent RGB cleared, exact visible bounding-box crop; no resampling, palette change or repaint",
+      "normal": "gloam/sprites/traveler_normal.png",
+      "normal_job_id": "8d88bceb-b224-42f5-bf55-e995f526076c",
+      "normal_convention": "OpenGL: tangent +X screen-right, +Y screen-up, +Z toward viewer; linear texture",
+      "normal_tangent_strength": 0.7,
+      "normal_source_sha256": "50dcbaf3c2a770285575c51d11aa1d401d9c9cdff90dfe3d69f0c77377b71b8f"
+    },
+    {
+      "name": "oak",
+      "image": "gloam/sprites/oak.png",
+      "raw_image": "gloam/sprites/raw/oak_v3.png",
+      "job_id": "a9d123a9-2f1a-4e30-a46a-3e163bcda94f",
+      "gallery_asset_id": "87ae4955-94f4-5f3a-9509-1a81e9b64a24",
+      "candidate_index": 0,
+      "source_sha256": "3024b03e37581d1de1e47d65fd35ad88bcab07980f927c40e631d9c0e16970c8",
+      "image_sha256": "53600c429d1ae4d5d1285e6f8abd386bd66737c837f8d25cbd66d33cc1b7def5",
+      "raw_size_px": [
+        256,
+        256
+      ],
+      "crop_xyxy": [
+        2,
+        18,
+        254,
+        239
+      ],
+      "visible_size_px": [
+        252,
+        221
+      ],
+      "visible_aspect_width_over_height": 1.1402714932126696,
+      "ground_anchor_px_top_left": [
+        126,
+        221
+      ],
+      "ground_anchor_uv_top_left": [
+        0.5,
+        1.0
+      ],
+      "ground_anchor_bevy_center_offset_px": [
+        0.0,
+        -110.5
+      ],
+      "recommended_world_height_m": 6.3,
+      "notes_zh": "宽冠厚叶、粗糙分叉树干与根盘。基点为树干根盘中心，位于裁切图正下方中心。",
+      "cleanup": "alpha threshold >=128, fully transparent RGB cleared, exact visible bounding-box crop; no resampling, palette change or repaint",
+      "normal": "gloam/sprites/oak_normal.png",
+      "normal_job_id": "46bf6135-2ef6-4120-a2d8-a38c3c2fe493",
+      "normal_convention": "OpenGL: tangent +X screen-right, +Y screen-up, +Z toward viewer; linear texture",
+      "normal_tangent_strength": 0.7,
+      "normal_source_sha256": "fa4599a8fbaee61047f8e0f3bab54e955ecf61b555236133a224e905c2c8220b"
+    },
+    {
+      "name": "fir",
+      "image": "gloam/sprites/fir.png",
+      "raw_image": "gloam/sprites/raw/fir_v2.png",
+      "job_id": "960e6daf-9f62-4b64-956b-ca70c8b7e854",
+      "gallery_asset_id": "80be55eb-2513-5d6e-a24f-c02255b886c9",
+      "candidate_index": 0,
+      "source_sha256": "e68d3bbfdd6b8fe74e56a09bdff365eb478adf17797a005000c57cd718764ea4",
+      "image_sha256": "ad26efa937a123d58ac5f8ed0a09147e82ff7574b83ff43c129a413426a98ef5",
+      "raw_size_px": [
+        224,
+        288
+      ],
+      "crop_xyxy": [
+        26,
+        3,
+        210,
+        278
+      ],
+      "visible_size_px": [
+        184,
+        275
+      ],
+      "visible_aspect_width_over_height": 0.6690909090909091,
+      "ground_anchor_px_top_left": [
+        85,
+        275
+      ],
+      "ground_anchor_uv_top_left": [
+        0.46195652173913043,
+        1.0
+      ],
+      "ground_anchor_bevy_center_offset_px": [
+        -7.0,
+        -137.5
+      ],
+      "recommended_world_height_m": 7.0,
+      "notes_zh": "受风剪的非对称冷杉，细顶与末端树根完整；根干中心比裁切图中心向左 7 px。",
+      "cleanup": "alpha threshold >=128, fully transparent RGB cleared, exact visible bounding-box crop; no resampling, palette change or repaint",
+      "normal": "gloam/sprites/fir_normal.png",
+      "normal_job_id": "85f28fb7-1626-4ae4-8b30-76d3cd312ef7",
+      "normal_convention": "OpenGL: tangent +X screen-right, +Y screen-up, +Z toward viewer; linear texture",
+      "normal_tangent_strength": 0.7,
+      "normal_source_sha256": "3a3ae1e5118c340a805f14bcada857e332935a457cb8df492dc9d5578a684ae6"
+    },
+    {
+      "name": "snag",
+      "image": "gloam/sprites/snag.png",
+      "raw_image": "gloam/sprites/raw/snag_v1.png",
+      "job_id": "0cd7b612-878a-4896-9883-a75280e6f1c8",
+      "gallery_asset_id": "633fb763-d04a-56f5-92d0-95a8f7d4539b",
+      "candidate_index": 0,
+      "source_sha256": "94b2467f356beb34e03525273aec3d22718172ff0d90947b5743b3026a508acc",
+      "image_sha256": "48ed3ce8ade6487c7fc145f0bb27ec6d2c3e38689901fabc03e2040f9c254f83",
+      "raw_size_px": [
+        192,
+        256
+      ],
+      "crop_xyxy": [
+        7,
+        7,
+        188,
+        245
+      ],
+      "visible_size_px": [
+        181,
+        238
+      ],
+      "visible_aspect_width_over_height": 0.7605042016806722,
+      "ground_anchor_px_top_left": [
+        93,
+        238
+      ],
+      "ground_anchor_uv_top_left": [
+        0.5138121546961326,
+        1.0
+      ],
+      "ground_anchor_bevy_center_offset_px": [
+        2.5,
+        -119.0
+      ],
+      "recommended_world_height_m": 5.2,
+      "notes_zh": "分叉银灰枯树，完整枝梢与厚根干，少量根部苔色。基点比裁切图中心向右 2.5 px，基本可按底部中心使用。",
+      "cleanup": "alpha threshold >=128, fully transparent RGB cleared, exact visible bounding-box crop; no resampling, palette change or repaint",
+      "normal": "gloam/sprites/snag_normal.png",
+      "normal_job_id": "ed6c16e0-44aa-4691-80c0-6acb30e41df9",
+      "normal_convention": "OpenGL: tangent +X screen-right, +Y screen-up, +Z toward viewer; linear texture",
+      "normal_tangent_strength": 0.7,
+      "normal_source_sha256": "f03a30080ea76a9983f737864c1e5cfa3e299683d51dc60d958afaad0174bd40"
+    },
+    {
+      "name": "rock",
+      "image": "gloam/sprites/rock.png",
+      "raw_image": "gloam/sprites/raw/rock_v2.png",
+      "job_id": "307c3dfb-4706-486c-8b3b-313a7e5f49d2",
+      "gallery_asset_id": "2c9f7229-0d9e-518d-b4e5-1b19fe16f8b7",
+      "candidate_index": 0,
+      "source_sha256": "61bdc62fe096ea867cd9d3e9ee3031a263568daa0b9dad4da475feba31f2cffe",
+      "image_sha256": "3fc641f009f34a99b4a1ed32dd8cd7ecebc820d2256ce84bef56155fddf4c76a",
+      "raw_size_px": [
+        256,
+        192
+      ],
+      "crop_xyxy": [
+        39,
+        31,
+        219,
+        159
+      ],
+      "visible_size_px": [
+        180,
+        128
+      ],
+      "visible_aspect_width_over_height": 1.40625,
+      "ground_anchor_px_top_left": [
+        90,
+        128
+      ],
+      "ground_anchor_uv_top_left": [
+        0.5,
+        1.0
+      ],
+      "ground_anchor_bevy_center_offset_px": [
+        0.0,
+        -64.0
+      ],
+      "recommended_world_height_m": 1.8,
+      "notes_zh": "单块有体积的厚苔大石，完整上部苔面与岩底。基点就是裁切图底部中心，无特殊偏移。实际底部轮廓有透视斜坡。",
+      "cleanup": "alpha threshold >=128, fully transparent RGB cleared, exact visible bounding-box crop; no resampling, palette change or repaint",
+      "normal": "gloam/sprites/rock_normal.png",
+      "normal_job_id": "0d927ca5-860d-4934-9657-bc657b3c25e8",
+      "normal_convention": "OpenGL: tangent +X screen-right, +Y screen-up, +Z toward viewer; linear texture",
+      "normal_tangent_strength": 0.7,
+      "normal_source_sha256": "78857e3629099e718b92cf6557024ca47b999d0ea145596318d3b1d130819201"
+    },
+    {
+      "name": "waystone",
+      "image": "gloam/sprites/waystone.png",
+      "raw_image": "gloam/sprites/raw/waystone_v1_candidate_3.png",
+      "job_id": "faece8a4-f266-45f1-ab0a-cd77073c1147",
+      "gallery_asset_id": "d7dea912-470e-5f66-8b79-463ce52ea5e9",
+      "candidate_index": 3,
+      "source_sha256": "0d2b68e2429e98e45bdb823841f86933f2a94195b9b56b8e3e3427df8c83cd2f",
+      "image_sha256": "e42af32a9b9554c5b56609f130e50999b31fe46e68c6c8c998c7c240e3ce16ab",
+      "raw_size_px": [
+        96,
+        128
+      ],
+      "crop_xyxy": [
+        13,
+        14,
+        83,
+        115
+      ],
+      "visible_size_px": [
+        70,
+        101
+      ],
+      "visible_aspect_width_over_height": 0.693069306930693,
+      "ground_anchor_px_top_left": [
+        35,
+        101
+      ],
+      "ground_anchor_uv_top_left": [
+        0.5,
+        1.0
+      ],
+      "ground_anchor_bevy_center_offset_px": [
+        0.0,
+        -50.5
+      ],
+      "recommended_world_height_m": 1.72,
+      "notes_zh": "天然深灰劈裂片岩旧界石，不对称风化断顶、斜向裂层、浅旧交织刻纹和肩苔。按 1.72m 高时宽约 1.19m；底部中心基点，无特殊横向偏移。",
+      "cleanup": "alpha threshold >=128, fully transparent RGB cleared, exact visible bounding-box crop; no resampling, palette change or repaint",
+      "normal": "gloam/sprites/waystone_normal.png",
+      "normal_job_id": "e7952fc9-b540-4708-992a-3d20c6001770",
+      "normal_convention": "OpenGL: tangent +X screen-right, +Y screen-up, +Z toward viewer; linear texture",
+      "normal_tangent_strength": 0.7,
+      "normal_source_sha256": "959933e2c41eb1cb5efaf8f58c82984a59720de368bccb60a735a93b20305f1b"
+    },
+    {
+      "name": "birch",
+      "image": "gloam/sprites/birch.png",
+      "raw_image": "gloam/sprites/raw/birch_v2.png",
+      "job_id": "1e8c4af1-dc4b-4dc2-bb47-2e334975f143",
+      "gallery_asset_id": "2dcd224f-9845-5e0b-92e8-50065f256112",
+      "candidate_index": 0,
+      "source_sha256": "23e4cabd5215a802f87987491133067d1834af95785a0661ac4795f244ba3f22",
+      "image_sha256": "1eda27519c4c9cde83f281ecfa144ba8a8a456e9b19e78f9c4d0872bfe0e4c83",
+      "raw_size_px": [
+        224,
+        288
+      ],
+      "crop_xyxy": [
+        21,
+        18,
+        210,
+        271
+      ],
+      "visible_size_px": [
+        189,
+        253
+      ],
+      "visible_aspect_width_over_height": 0.7470355731225297,
+      "ground_anchor_px_top_left": [
+        84,
+        253
+      ],
+      "ground_anchor_uv_top_left": [
+        0.4444444444444444,
+        1.0
+      ],
+      "ground_anchor_bevy_center_offset_px": [
+        -10.5,
+        -126.5
+      ],
+      "recommended_world_height_m": 4.5,
+      "notes_zh": "一簇斜生双干银桦，疏散赭色和黄绿色小叶、奶灰斑驳树皮、自然透明空隙，无规整圆冠。共享根盘中心比裁切图中心向左 10.5 px，须使用明确基点避免站位偏移。",
+      "cleanup": "alpha threshold >=128, fully transparent RGB cleared, exact visible bounding-box crop; no resampling, palette change or repaint",
+      "normal": "gloam/sprites/birch_normal.png",
+      "normal_job_id": "408f59cc-737a-4724-a0f2-3e0f5a10d94e",
+      "normal_convention": "OpenGL: tangent +X screen-right, +Y screen-up, +Z toward viewer; linear texture",
+      "normal_tangent_strength": 0.7,
+      "normal_source_sha256": "e3a382239b7e99fe0de807e370fa78a96f4664de24519ee6acf43fd5cc7b3b54"
+    }
+  ]
+}

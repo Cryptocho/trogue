@@ -1,0 +1,50 @@
+{
+  "game": "Rogue: Genesia",
+  "creator": "Ouadi Huard",
+  "retrieved_on": "2026-11-24",
+  "purpose": "仅供美术与表现研究参考，不作为 Wanderstead 游戏资产分发。",
+  "rights": "未取得将这些图片、视频或其中资产用于另一款游戏的授权。IndieDB Presskit 明确允许包含本游戏内容的视频传播和视频商业化；该许可不等于游戏资产复用许可。",
+  "pages": {
+    "steam": "https://store.steampowered.com/app/2067920/Rogue_Genesia/",
+    "release_media": "https://press.piratepr.com/rogue-genesia-slashes-its-way-out-of-early-access-v10-is-out-now-on-steam",
+    "presskit": "https://www.indiedb.com/games/rogue-genesia/presskit",
+    "release_trailer": "https://www.youtube.com/watch?v=KK2MtbRgPlw"
+  },
+  "assets": [
+    {
+      "file": "night.jpg",
+      "url": "https://cdn.assets.prezly.com/ce20c546-18c4-4d5f-82d6-efc8568d6251/-/preview/-/format/auto/Night.png",
+      "width": 1920,
+      "height": 1080,
+      "notes": "响应实际为 JPEG，按实际格式命名。参考冷暖光、前景遮挡与角色融合。"
+    },
+    {
+      "file": "crystal-depth.jpg",
+      "url": "https://cdn.assets.prezly.com/c3164d41-5026-4d2c-93ae-7fa90a871d75/-/preview/-/format/auto/Rogue%20Genesia%20%20CrystalDepth%20resized.jpg",
+      "width": 2048,
+      "height": 1152,
+      "notes": "参考发光水晶、地表细节密度与暗场角色辨识度。"
+    },
+    {
+      "file": "winter.jpg",
+      "url": "https://cdn.assets.prezly.com/a1de86b9-3e2a-4cf1-a292-28cae4267f0c/-/preview/-/format/auto/Rogue%20Genesia%20%20Winter_1.png",
+      "width": 1920,
+      "height": 1080,
+      "notes": "响应实际为 JPEG，按实际格式命名。参考雪地配色、植被与密集特效下的可读性。"
+    },
+    {
+      "file": "gameplay.mp4",
+      "url": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2067920/extras/f09c98a88e0e60d841db77cf9d972155.mp4?t=1793685875",
+      "width": 600,
+      "height": 338,
+      "duration_seconds": 10,
+      "fps": 20,
+      "notes": "Steam 商店实机短片，非完整预告片；适合节奏参考，不适合高清材质分析。"
+    },
+    {
+      "file": "presskit.zip",
+      "url": "https://www.indiedb.com/media/zip/rogue-genesia/presskit/2269/general",
+      "notes": "旧版媒体包，共10个文件，包括角色宣传图、封面、Logo及4张截图；不是游戏素材源码包。"
+    }
+  ]
+}

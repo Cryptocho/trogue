@@ -3863,8 +3863,10 @@ name = "wanderstead"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "raw-window-handle",
  "serde",
  "serde_json",
+ "wgpu-types",
 ]
 
 [[package]]

@@ -1,0 +1,8 @@
+{
+  "asset": "原创旧道提灯",
+  "reference": "reference/rogue-genesia/night.jpg 仅用于冷暖构图研究；未采样参考像素。",
+  "timber": {"tool": "generate_image", "model": "openai-codex/gpt-image-2", "request": "timber-request.json", "original": "timber-original.webp", "width": 1024, "height": 1536, "processing": "384x576 sRGB 漫反射 + 从局部纹理坡度估算的线性切线法线。"},
+  "model": "Blender 4.5 bpy 原创建模，包含劈裂栗木、碎板岩基脚、棕绳、黄铜油灯与玻璃罩；无外购或下载资产。",
+  "rebuild": "blender-4.5 --background --factory-startup --python-exit-code 1 --python tools/gloam/make_lantern.py",
+  "output": "assets/gloam/waylight.glb"
+}

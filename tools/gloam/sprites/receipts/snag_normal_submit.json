@@ -1,0 +1,16 @@
+{
+  "text": "id: ed6c16e0-44aa-4691-80c0-6acb30e41df9\njob_id: ed6c16e0-44aa-4691-80c0-6acb30e41df9\nsource: 192x256px\nconvention: opengl (green up)\nkind: object\nlook: where the kind puts it\nasset_id: 823b6bef-29be-578b-aa84-a82632fa6178\nasset_status: pending (saved to the gallery when it completes)\nmode: pro\ncost: 0.5 generations\nstatus: processing (~15-60s)\n\nhint: get_image(job_id=\"ed6c16e0-44aa-4691-80c0-6acb30e41df9\")\nwithout get_image: GET https://api.pixellab.ai/mcp/images/ed6c16e0-44aa-4691-80c0-6acb30e41df9/download (423 + Retry-After until ready; ?index=N for the Nth of several images)",
+  "details": {
+    "serverName": "pixellab",
+    "mcpToolName": "create_normal_map",
+    "isError": false,
+    "rawContent": [
+      {
+        "type": "text",
+        "text": "id: ed6c16e0-44aa-4691-80c0-6acb30e41df9\njob_id: ed6c16e0-44aa-4691-80c0-6acb30e41df9\nsource: 192x256px\nconvention: opengl (green up)\nkind: object\nlook: where the kind puts it\nasset_id: 823b6bef-29be-578b-aa84-a82632fa6178\nasset_status: pending (saved to the gallery when it completes)\nmode: pro\ncost: 0.5 generations\nstatus: processing (~15-60s)\n\nhint: get_image(job_id=\"ed6c16e0-44aa-4691-80c0-6acb30e41df9\")\nwithout get_image: GET https://api.pixellab.ai/mcp/images/ed6c16e0-44aa-4691-80c0-6acb30e41df9/download (423 + Retry-After until ready; ?index=N for the Nth of several images)"
+      }
+    ],
+    "provider": "native",
+    "providerName": "OMP"
+  }
+}

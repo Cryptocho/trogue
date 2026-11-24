@@ -1,0 +1,15 @@
+{
+  "description": "Original polished HD-2D game pixel-art single isolated static sprite. Fixed camera looks down 35 degrees from above, orthographic-like three-quarter volume, not a flat side elevation. Clear readable silhouette, deliberately placed crisp pixel clusters, natural low-saturation midtone colors, detailed but not noisy, soft colored contour accents rather than heavy black outlines. Neutral broad diffuse daytime material color for later real-time lighting: no night tint, no glow, no colored rim light, no directional cast shadow, no ground, no platform, no scenery, no text, no checkerboard. Entire subject visible with a few transparent margin pixels, transparent RGBA background. One very large ancient MOSSY BOULDER, broad asymmetrical low mass approximately 3m wide and 1.8m high, a single continuous rounded angular granite rock with a distinctive higher left shoulder and sloped right side. Thick verdant muted olive and moss-green cushions cling across the upper surface and descend in patches, leaving substantial exposed grey stone faces. Weathered cracks, lichen flecks and mineral planes show believable heavy three-dimensional stone volume. Camera sees upper surface and front and right faces. Ground-contact base nearly horizontal, no grass, no shrubs, no ground plane, no detached pebbles. Natural grey stone midtones and green moss, not blue night shading, not tiny inventory icon, no hard black outline.",
+  "width": 192,
+  "height": 128,
+  "no_background": true,
+  "style_image_url": "https://api.pixellab.ai/mcp/images/24583196-e9b2-406a-9a18-b91997d88e12/download",
+  "style_copy": [
+    "outline",
+    "detail",
+    "shading",
+    "color_palette"
+  ],
+  "max_colors": 48,
+  "seed": 19381
+}

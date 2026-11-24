@@ -1,0 +1,61 @@
+{
+  "file_bytes": 17315940,
+  "default_scene": 0,
+  "scene_count": 1,
+  "mesh_count": 239,
+  "material_count": 3,
+  "image_count": 4,
+  "actual_ground_bounds_xyz": [
+    [
+      -24.0,
+      -0.03700000047683716,
+      -38.0
+    ],
+    [
+      24.0,
+      0.07988637685775757,
+      14.0
+    ]
+  ],
+  "exported_contact_heights_m": {
+    "hero_boulder": 0.0,
+    "traveller": -0.0,
+    "brass_lantern": 0.0,
+    "lantern_pole": 0.0
+  },
+  "minimum_upward_normal_y": 0.9750011563301086,
+  "external_png_roles": {
+    "sRGB_base_color": {
+      "name": "forest_albedo",
+      "uri": "forest_albedo.png",
+      "pixels": [
+        4096,
+        4096
+      ],
+      "bytes": 39685843
+    },
+    "linear_normal": {
+      "name": "forest_normal",
+      "uri": "forest_normal.png",
+      "pixels": [
+        4096,
+        4096
+      ],
+      "bytes": 16833175
+    },
+    "linear_roughness_G_metallic_B": {
+      "name": "forest_orm",
+      "uri": "forest_orm.png",
+      "pixels": [
+        4096,
+        4096
+      ],
+      "bytes": 10322017
+    }
+  },
+  "all_contact_errors_under_025m": true,
+  "no_lights_cameras_or_animation": true,
+  "grass_vertex_colour_exported": true,
+  "shallow_water_meshes": 3,
+  "note": "GLB metadata, buffers and contact triangles inspected; final Bevy lighting/appearance remains main-agent acceptance."
+}

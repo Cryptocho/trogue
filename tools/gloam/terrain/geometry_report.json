@@ -1,0 +1,42 @@
+{
+  "asset": "assets/gloam/terrain/floor.glb",
+  "default_scene": 0,
+  "bounds_game_xz": [
+    [
+      -24.0,
+      24.0
+    ],
+    [
+      -38.0,
+      14.0
+    ]
+  ],
+  "ground_y_range_m": [
+    -0.037,
+    0.07988637581379524
+  ],
+  "contact_heights_m": {
+    "traveller": -0.0,
+    "brass_lantern": -0.0,
+    "lantern_pole": 0.0,
+    "hero_boulder": 0.0
+  },
+  "triangles": 294557,
+  "mesh_objects": 239,
+  "vegetation_counts": {
+    "grass_clumps": 1297,
+    "distant_grass_clumps": 340,
+    "ferns": 101,
+    "curled_leaves": 1981,
+    "exposed_roots": 79,
+    "slate_chips": 257,
+    "shallow_water_ribbons": 3
+  },
+  "textures": {
+    "base_color": "sRGB",
+    "normal": "linear tangent-space OpenGL +Y",
+    "roughness": "linear glTF G channel"
+  },
+  "coordinate_conversion": "Blender (x,-z,y) then glTF +Y export, yielding exact game (x,y,z)",
+  "geometry_notes": "Opaque double-sided grass/fern/leaf polygons; no alpha sorting, no animation, no tall trees or props."
+}

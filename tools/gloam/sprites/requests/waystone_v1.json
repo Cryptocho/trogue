@@ -1,0 +1,14 @@
+{
+  "description": "Original polished HD-2D game pixel-art single isolated static sprite. Fixed camera looks down 35 degrees from above, orthographic-like three-quarter volume, not a flat side elevation. Clear readable silhouette, deliberately placed crisp pixel clusters, natural low-saturation midtone colors, detailed but not noisy, soft colored contour accents rather than heavy black outlines. Neutral broad diffuse daytime material color for later real-time lighting: no night tint, no glow, no colored rim light, no directional cast shadow, no ground, no platform, no scenery, no text, no checkerboard. Entire subject visible with a few transparent margin pixels, transparent RGBA background. One ancient upright WAYSTONE of split layered dark grey SCHIST, about 1.72m tall and 1.1m wide. A single irregular standing slab, rugged asymmetrical broken top, naturally sloping shoulder, obvious diagonal fissile layers, one jagged vertical cleft and coarse chipped stone faces. Broad slightly tapering lower base, believable heavy three-dimensional mass; not a smooth pebble, not a boulder pile. On its front face there is ONE very shallow worn ancient INTERLACED KNOT motif cut into the stone, faint eroded grooves, almost lost to weather; NO letters, NO numbers, NO writing. A little thin dull olive moss on top and one shoulder, a few pale grey lichen patches. Natural medium-value cool-grey stone with enough visible planes and cracks to receive later scene light. NOT a gravestone, no tombstone arch, no cross, no decorative frame, no runic glow, no pedestal, no base plinth, no ground and no grass. Entire single standing stone enclosed within transparent margins on all sides. Neutral diffuse albedo, no baked lighting.",
+  "width": 96,
+  "height": 128,
+  "no_background": true,
+  "style_image_url": "https://api.pixellab.ai/mcp/images/307c3dfb-4706-486c-8b3b-313a7e5f49d2/download",
+  "style_copy": [
+    "outline",
+    "detail",
+    "shading"
+  ],
+  "max_colors": 40,
+  "seed": 921604
+}

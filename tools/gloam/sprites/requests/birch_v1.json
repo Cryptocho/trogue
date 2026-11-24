@@ -1,0 +1,14 @@
+{
+  "description": "Original polished HD-2D game pixel-art single isolated static sprite. Fixed camera looks down 35 degrees from above, orthographic-like three-quarter volume, not a flat side elevation. Clear readable silhouette, deliberately placed crisp pixel clusters, natural low-saturation midtone colors, detailed but not noisy, soft colored contour accents rather than heavy black outlines. Neutral broad diffuse daytime material color for later real-time lighting: no night tint, no glow, no colored rim light, no directional cast shadow, no ground, no platform, no scenery, no text, no checkerboard. Entire subject visible with a few transparent margin pixels, transparent RGBA background. One graceful SILVER BIRCH clump about 4.5m tall, TWO leaning naturally grown slender trunks diverging from a single shared root base. The left trunk leans left, the taller right trunk leans gently right, irregular fine twig architecture and delicate drooping outer twigs. Chalky warm milk-grey and silver bark with authentic broken dark charcoal scars and peeling horizontal markings, softly shaded round trunks. SPARSE SMALL LEAVES in dusty yellow-green with a few muted ochre autumn leaves, airy open canopy with many natural transparent windows. Branch masses asymmetrical, loose and uneven, NOT a round dense crown and NOT two matching trees. The exposed silver branching trunks and open spaces must dominate the silhouette. A natural woodland birch accent, not a tidy ornamental park tree, not a willow, not a conifer. No fruit, no surrounding plants, no ground or grass. Whole tree including highest twigs and complete root flare visible; keep at least 8 transparent margin pixels on every canvas side. Natural neutral material midtones, no baked night blue.",
+  "width": 192,
+  "height": 256,
+  "no_background": true,
+  "style_image_url": "https://api.pixellab.ai/mcp/images/24583196-e9b2-406a-9a18-b91997d88e12/download",
+  "style_copy": [
+    "outline",
+    "detail",
+    "shading"
+  ],
+  "max_colors": 48,
+  "seed": 739401
+}

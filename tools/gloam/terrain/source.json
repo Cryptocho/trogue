@@ -1,0 +1,44 @@
+{
+  "title": "Wanderstead — Gloam forest floor / 原创夜林地面",
+  "art_source": {
+    "kind": "AI-generated material swatches, then deterministic texture synthesis and original procedural Blender geometry",
+    "tool": "generate_image",
+    "provider": "openai-codex",
+    "model": "gpt-image-2-codex (catalog openai-codex/gpt-image-2)",
+    "raw_output": "raw/forest_surface_atlas.png",
+    "raw_response": "raw/generation_result.txt",
+    "request": "parameters.json: generation",
+    "selected_candidate": 1,
+    "inspection": "Four usable orthographic photographic material swatches: moss, compacted soil, leaf duff, slate grit. No horizon, props, perspective or reference pixels. Crop inset removes atlas-region transitions.",
+    "reference_use": "reference/rogue-genesia/night.jpg studied only for damp quiet forest, broken vegetation silhouettes and fine-scale grazing-light detail. Not sampled or embedded.",
+    "external_asset_downloads": [],
+    "third_party_asset_license": "No downloaded third-party texture or mesh is used. Original generated image is retained with tool/model provenance; service terms continue to apply."
+  },
+  "pipeline": [
+    "uv sync --project tools/gloam/terrain",
+    "uv run --project tools/gloam/terrain tools/gloam/terrain/prepare_textures.py",
+    "blender-4.5 --background --factory-startup --python-exit-code 1 --python tools/gloam/terrain/build_floor.py",
+    "uv run --project tools/gloam/terrain tools/gloam/terrain/inspect_glb.py"
+  ],
+  "processing": [
+    "Four inset material crops; low-frequency illumination suppression preserves actual albedo microstructure.",
+    "Revision 2 retargets each source swatch to 3.6 metres: leaf and mineral groups remain readable at the actual 2560x1440 camera instead of dissolving into sand-like high-frequency detail.",
+    "Metre-based smoothly warped mirrored sampling uses a 94% primary / 6% secondary blend, preserving individual photographic forms. Sharper irregular moss islands, warm duff colonies and mineral pockets replace uniform material mixing.",
+    "OpenGL normal relief is filtered to centimetre-scale leaf ridges instead of sand noise. Linear packed ORM uses G=roughness; metallicFactor=0 makes all ground nonmetal regardless of the exporter's unused B fill value. Wet sediment edges have lower roughness.",
+    "Opaque folded arcing grass blades, 0.23-0.53 metre hero grasses in three lamplit colonies, broken shoulder bands, larger fern leaflets, grouped 5-12 cm fallen leaves and 9-28 cm slate fragments.",
+    "Undergrowth shares one vertex-colour PBR material and uses light-catching upward-biased grass normals; geometry sectors retain frustum culling.",
+    "Three irregular drainage ribbons depress the terrain; low-roughness water with sub-degree normal ripples meets dark wet sediment rather than forming regular discs.",
+    "The shallow-water material registers the forest albedo to the terrain on UV1, with ripples tiled independently on UV0. Screen-space highlights therefore lie over a continuous, textured silt bed.",
+    "A standard Separate glTF export is packaged into a geometry-only floor.glb with external PNG URI references. No runtime texture is also embedded in the GLB; the file stays below 100 MiB."
+  ],
+  "revision_2_feedback": "Main-agent Bevy screenshot captures/gloam/first-light.png: gray sand-like surface and black pin grasses. Revision changes only owned terrain art, never camera/light/sprite code.",
+  "integration": {
+    "path": "assets/gloam/terrain/floor.glb#Scene0",
+    "transform": "Identity: translation 0, rotation 0, scale 1",
+    "coordinates": "Bevy X-right, Y-up, Z-toward-camera; Blender source maps game (x,y,z) to (x,-z,y) before standard glTF Y-up export.",
+    "contacts": "Traveller (.55,.55), lamp projection (1.5,.83), lamp pole (2.07,.77), boulder (-3,-1) have flattened Y=0 patches. ground_height in terrain_field.py is the placement authority elsewhere.",
+    "casting": "Opaque actual geometry, including short plants, can cast and receive normal PBR shadows. No alpha blending or alpha-card sorting is required.",
+    "lighting": "No lamps, lights, camera, sky, emissive objects, UI or animations in exported Scene0. Main scene supplies lighting; sky reflections on the low-roughness drainage water require an EnvironmentMapLight or reflection probe."
+  },
+  "中文说明": "地面不是背景图；远景延伸到 Z=-38，地面无围边。角色与灯柱脚下保持水平，主角前方不放高蕨；细节使用物理尺度与真实几何。"
+}

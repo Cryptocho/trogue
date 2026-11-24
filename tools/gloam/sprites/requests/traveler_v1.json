@@ -1,0 +1,8 @@
+{
+  "description": "Original polished HD-2D game pixel-art single isolated static sprite. Fixed camera looks down 35 degrees from above, orthographic-like three-quarter volume, not a flat side elevation. Clear readable silhouette, deliberately placed crisp pixel clusters, natural low-saturation midtone colors, detailed but not noisy, soft colored contour accents rather than heavy black outlines. Neutral broad diffuse daytime material color for later real-time lighting: no night tint, no glow, no colored rim light, no directional cast shadow, no ground, no platform, no scenery, no text, no checkerboard. Entire subject visible with a few transparent margin pixels, transparent RGBA background. One quiet adult forest wayfarer, unambiguously facing three-quarter SCREEN RIGHT, nose and pale cheek visible on the right side of the head. Full standing body, relaxed arms, modest realistic stylized proportions around 5 heads tall, not chibi. Wind-tousled chestnut hair and exposed head, faded blue-teal short traveling cloak with hood folded behind neck, copper-red ochre scarf around the neck with a short loose end, muted brown linen trousers, dark worn leather boots. A small plain belt pouch only. Hands empty and at rest. No hat, no armor, no weapon, no staff, no lantern, no light source. Kind reserved expression. Two boots clearly meet the same small horizontal foot baseline. Clothing has soft convincing folds, cheeks and scarf are visually clear. About 1.55m tall.",
+  "width": 96,
+  "height": 128,
+  "no_background": true,
+  "max_colors": 40,
+  "seed": 14393
+}

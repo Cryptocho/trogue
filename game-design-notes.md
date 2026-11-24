@@ -682,6 +682,12 @@ AI 策略应当能够保存和复用。
 Demo 在较短时间内完成，
 验证了混合渲染技术的基本可行性。
 
+**静态实景「苔径留灯」**：斜俯视夜林。旅人、树木与界石是带切线法线的 2D 精灵；林道、草蕨、浅水和铜灯是受光的 3D 环境。场景没有战斗、弹幕或 UI。
+
+- 从 Wayland 桌面运行 `tools/gloam/view.sh`。滚轮缩放，`D` 切换倾斜焦面景深，`B` 切换 Bloom，`F` 切换贴地薄雾，`F12` 保存主窗口截图，`Esc` 退出。
+- 可重复取景：`tools/gloam/view.sh --capture captures/gloam/forest.png`。加 `--detail` 取近景；`--deep-focus`、`--no-bloom`、`--clear-air`、`--no-shadows`、`--flat-sprites` 可逐项对照。`--detail --stone-key left` 和 `--detail --stone-key right` 为等距白灯验光，常规场景没有这盏灯。素材就绪并预热、采样后才截图退出。取舍、出处与实测见[空间层次研究](reference/hd2d-spatial-depth.md)。
+- 运行资产在 `assets/gloam/`。PixelLab 精灵的原图、脚底锚点与法线对应表见 `assets/gloam/sprites/manifest.json`；地表与木纹的生成参数、Blender 制作脚本和来源保存在 `tools/gloam/`。参考截图不参与渲染。
+
 ### 12.2 摄像机
 
 确定采用：

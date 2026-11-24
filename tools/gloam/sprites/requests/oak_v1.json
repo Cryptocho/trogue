@@ -1,0 +1,8 @@
+{
+  "description": "Original polished HD-2D game pixel-art single isolated static sprite. Fixed camera looks down 35 degrees from above, orthographic-like three-quarter volume, not a flat side elevation. Clear readable silhouette, deliberately placed crisp pixel clusters, natural low-saturation midtone colors, detailed but not noisy, soft colored contour accents rather than heavy black outlines. Neutral broad diffuse daytime material color for later real-time lighting: no night tint, no glow, no colored rim light, no directional cast shadow, no ground, no platform, no scenery, no text, no checkerboard. Entire subject visible with a few transparent margin pixels, transparent RGBA background. One magnificent ancient broadleaf OAK TREE, entire crown and root base visible. About 6.5 meters tall with a broad irregular asymmetric rounded canopy and stout old branching trunk. Dense overlapping irregular lobes of naturally muted moss-green and olive foliage with a few slightly warm leaves, leaf clusters describe three-dimensional volume with dark cool gaps within crown. Beautiful old spreading branch architecture, gnarled fissured grey-brown bark, visible solid trunk occupying the bottom third, substantial weathered spreading roots. Crown is wider than trunk and not a perfect ball; a slightly broken opening on the right. A healthy dense temperate forest oak, not a bonsai, not a willow, not tropical. No grass tufts or ground at base, no detached fallen leaves. Mid-value natural albedo and subtle highlight clusters, no baked sunlight.",
+  "width": 256,
+  "height": 256,
+  "no_background": true,
+  "max_colors": 48,
+  "seed": 29416
+}

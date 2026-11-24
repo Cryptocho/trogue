@@ -1,0 +1,15 @@
+{
+  "description": "Original polished HD-2D game pixel-art single isolated static sprite. Fixed camera looks down 35 degrees from above, orthographic-like three-quarter volume, not a flat side elevation. Clear readable silhouette, deliberately placed crisp pixel clusters, natural low-saturation midtone colors, detailed but not noisy, soft colored contour accents rather than heavy black outlines. Neutral broad diffuse daytime material color for later real-time lighting: no night tint, no glow, no colored rim light, no directional cast shadow, no ground, no platform, no scenery, no text, no checkerboard. Entire subject visible with a few transparent margin pixels, transparent RGBA background. One ancient FORKED DEAD TREE SNAG about 5.2m tall, strong beautiful branching silhouette. Thick fissured weathered silver-grey and brown trunk forks into two large upward crooked limbs at differing heights, each ending in a handful of tapering broken branches. Clearly dead, NO leaf canopy. Bare sculptural twisting wood with hollows and peeling bark, muted olive moss only near low trunk and root crevices, two tiny pale shelf fungi. Wide sturdy root flare, thick lower trunk not a spindly twig, authentic old woodland anatomy. Full tree including uppermost branch tips and root base, substantial 3D volume. No surrounding plants, no ground, no fallen logs, no snow.",
+  "width": 192,
+  "height": 256,
+  "no_background": true,
+  "style_image_url": "https://api.pixellab.ai/mcp/images/24583196-e9b2-406a-9a18-b91997d88e12/download",
+  "style_copy": [
+    "outline",
+    "detail",
+    "shading",
+    "color_palette"
+  ],
+  "max_colors": 40,
+  "seed": 82410
+}

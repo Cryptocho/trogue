@@ -1,0 +1,21 @@
+{
+  "description": "Original polished HD-2D game pixel-art single isolated static sprite. Fixed camera looks down 35 degrees from above, orthographic-like three-quarter volume, not a flat side elevation. Clear readable silhouette, deliberately placed crisp pixel clusters, natural low-saturation midtone colors, detailed but not noisy, soft colored contour accents rather than heavy black outlines. Neutral broad diffuse daytime material color for later real-time lighting: no night tint, no glow, no colored rim light, no directional cast shadow, no ground, no platform, no scenery, no text, no checkerboard. Entire subject visible with a few transparent margin pixels, transparent RGBA background. FRAMING: Show a whole fir tree fully contained inside the middle of this canvas, with AT LEAST 16 transparent pixels above the highest twig and below the lowest root and on both sides. The tree must NOT touch any canvas edge. Zoom out. One mature WIND-SHEARED FIR TREE, about 7m tall. Dense layered needles form a beautiful irregular narrow conifer silhouette, upper leader bent slightly to the left by wind, asymmetrical staggered branch shelves. NOT a perfect geometric Christmas-tree triangle. Lower right limbs reach farther, upper left branches are weather-gnarled. Convincing dense blue-grey-green and deep muted olive needle tufts with rounded three-dimensional volumes, soft natural midtone highlights. Thick deeply grooved dark grey-brown trunk visible in lower quarter, stout branch junctions and spreading knuckled roots. Old damp mixed-forest fir, alive and substantial. Entire trunk and crown visible. No snow, no ornaments, no ground or surrounding grass. Preserve a complete thin pointed top leader and all tapering root ends. Aim for tree bounding box x=24..200, y=20..268. Do not crop the top or roots.",
+  "width": 224,
+  "height": 288,
+  "no_background": true,
+  "style_image_url": "https://api.pixellab.ai/mcp/images/24583196-e9b2-406a-9a18-b91997d88e12/download",
+  "style_copy": [
+    "outline",
+    "detail",
+    "shading",
+    "color_palette"
+  ],
+  "max_colors": 48,
+  "seed": 68216,
+  "reference_images": [
+    {
+      "url": "https://api.pixellab.ai/mcp/images/2569dc95-25b7-4166-a747-2c4eb529365d/download",
+      "usage": "fir shape and subdued natural material palette; zoom out enough to reveal a complete pointed top and all roots within transparent margins"
+    }
+  ]
+}

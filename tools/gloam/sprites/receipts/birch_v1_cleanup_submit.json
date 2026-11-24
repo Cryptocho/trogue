@@ -1,0 +1,16 @@
+{
+  "text": "id: 6740c59c-0b0d-46e2-a696-a8bed7b28bb0\njob_id: 6740c59c-0b0d-46e2-a696-a8bed7b28bb0\nsize: 192x256px (unchanged)\ntask: remove_simple_background\nasset_id: 8fb061fa-4d2d-5d3d-be39-5e89460e711d\nasset_status: pending (saved to your gallery when generation completes)\ncost: 1 generation\nstatus: processing (~10-30s)\n\nhint: get_image(job_id=\"6740c59c-0b0d-46e2-a696-a8bed7b28bb0\")\nwithout get_image: GET https://api.pixellab.ai/mcp/images/6740c59c-0b0d-46e2-a696-a8bed7b28bb0/download (423 + Retry-After until ready; ?index=N for the Nth of several images)",
+  "details": {
+    "serverName": "pixellab",
+    "mcpToolName": "remove_background",
+    "isError": false,
+    "rawContent": [
+      {
+        "type": "text",
+        "text": "id: 6740c59c-0b0d-46e2-a696-a8bed7b28bb0\njob_id: 6740c59c-0b0d-46e2-a696-a8bed7b28bb0\nsize: 192x256px (unchanged)\ntask: remove_simple_background\nasset_id: 8fb061fa-4d2d-5d3d-be39-5e89460e711d\nasset_status: pending (saved to your gallery when generation completes)\ncost: 1 generation\nstatus: processing (~10-30s)\n\nhint: get_image(job_id=\"6740c59c-0b0d-46e2-a696-a8bed7b28bb0\")\nwithout get_image: GET https://api.pixellab.ai/mcp/images/6740c59c-0b0d-46e2-a696-a8bed7b28bb0/download (423 + Retry-After until ready; ?index=N for the Nth of several images)"
+      }
+    ],
+    "provider": "native",
+    "providerName": "OMP"
+  }
+}

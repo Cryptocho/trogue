@@ -1,0 +1,33 @@
+{
+  "asset": "Wanderstead / Gloam / forest floor",
+  "seed": 841701,
+  "texture_resolution": 4096,
+  "bounds_game_xyz": {"x": [-24.0, 24.0], "z": [-38.0, 14.0]},
+  "ground_spacing_m": 0.26,
+  "contact_patches": [
+    {"name": "traveller", "x": 0.55, "z": 0.55, "flat_radius": 0.72},
+    {"name": "brass_lantern", "x": 1.5, "z": 0.83, "flat_radius": 0.44},
+    {"name": "lantern_pole", "x": 2.07, "z": 0.77, "flat_radius": 0.48},
+    {"name": "hero_boulder", "x": -3.0, "z": -1.0, "flat_radius": 1.45}
+  ],
+  "path_control_points_xz": [[-2.7, 14], [-2.5, 8], [-1.8, 4], [0.65, 0.7], [0.45, -2.3], [1.1, -5.5], [3.2, -10], [3.6, -15], [5.6, -20], [7.6, -27], [7.0, -38]],
+  "wet_channels": [
+    {"name": "left_foreground", "points": [[-4.0, 3.25], [-3.1, 2.94], [-2.35, 3.04], [-1.45, 2.52]], "half_width": 0.70, "level": -0.014},
+    {"name": "lamplight_foreground", "points": [[1.0, 2.62], [1.8, 2.36], [2.55, 2.53], [3.1, 2.25]], "half_width": 0.46, "level": -0.013},
+    {"name": "left_midground", "points": [[-6.5, -5.7], [-5.8, -5.3], [-4.9, -5.55]], "half_width": 0.34, "level": -0.012}
+  ],
+  "source": "raw/forest_surface_atlas.png",
+  "source_swatches": {"moss": [0, 0], "trail": [1, 0], "duff": [0, 1], "mineral": [1, 1]},
+  "source_swatch_width_m": 3.6,
+  "coordinate_system": "All script placement inputs use Bevy right-handed Y-up x,y,z. Blender vertices are (x,-z,y); glTF export applies Y-up conversion once.",
+  "base_color_space": "sRGB",
+  "normal_space": "linear OpenGL tangent-space, +Y",
+  "roughness_space": "linear; exported glTF metallicRoughness G channel",
+  "metallic": 0.0,
+  "generation": {
+    "tool": "generate_image",
+    "aspect_ratio": "1:1",
+    "image_size": "1024x1024",
+    "subject": "Production-ready photogrammetry-style BASE COLOR ALBEDO texture atlas, NOT a scene and NOT a landscape. A completely orthographic top-down flat scanned surface with zero perspective, shadowless even cross-polarized neutral daylight, four equal square swatches in an exact 2 by 2 grid with NO gaps, NO labels and NO border: TOP LEFT dense damp fine cushion moss, tiny low forest grasses and rich olive green bryophytes over brown humus, subtle organic variation and a few pine needles, no large plants; TOP RIGHT dark warm umber compacted moist forest trail soil, fine grains, flattened tiny brown leaves, sparse 1-2 cm grit, no puddle highlights; BOTTOM LEFT loose deciduous forest duff, decomposed oak and beech leaves, rusty ochre leaf pieces, pine needles and black humus, fine natural leaf litter without a dominant large leaf; BOTTOM RIGHT damp gray-brown rough slate fragments and granular compacted earth with sparse pale moss, small chips only. Each swatch represents a roughly 1.8 meter square material sample. The material completely fills each square edge to edge at the same physical scale. All four regions have natural balanced irregular detail but NO strong directional light, NO baked shadows, NO ambient occlusion wells, NO specular glints, NO vignetting, NO horizon, NO trees, NO objects, NO rocks larger than 8 cm, NO circular stains, NO arrangement. Real photographic forest microdetail, restrained earthy colors, physically plausible unlit reflectance. Seam-friendly swatches, mineral pores, convincing decomposed organic matter."
+  }
+}
