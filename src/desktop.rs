@@ -26,6 +26,7 @@ pub struct ViewOptions {
     pub deep_focus: bool,
     pub no_bloom: bool,
     pub no_shadows: bool,
+    pub no_reflections: bool,
     pub flat_sprites: bool,
     pub stone_key: Option<KeySide>,
     capture: Option<PathBuf>,
@@ -50,6 +51,8 @@ impl ViewOptions {
                 options.clear_air = true;
             } else if arg == "--deep-focus" {
                 options.deep_focus = true;
+            } else if arg == "--no-reflections" {
+                options.no_reflections = true;
             } else if arg == "--no-bloom" {
                 options.no_bloom = true;
             } else if arg == "--no-shadows" {
@@ -73,7 +76,7 @@ impl ViewOptions {
                 options.capture = Some(path);
             } else {
                 return Err(format!(
-                    "未知参数 {arg:?}；支持 --2d、--detail、--clear-air、--deep-focus、--no-bloom、--no-shadows、--flat-sprites、--stone-key left|right、--capture 路径.png"
+                    "未知参数 {arg:?}；支持 --2d、--detail、--clear-air、--deep-focus、--no-bloom、--no-shadows、--no-reflections、--flat-sprites、--stone-key left|right、--capture 路径.png"
                 ));
             }
         }

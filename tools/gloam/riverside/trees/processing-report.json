@@ -1,0 +1,91 @@
+{
+  "sprites": [
+    {
+      "name": "round",
+      "original": "raw/round-original.png",
+      "sha256": "7d6bfdea5443391916a35da579646283ed314807d7f6ef3f54cbf7bd975bf892",
+      "source_bounds_px": [
+        181,
+        118,
+        837,
+        916
+      ],
+      "size_px": [
+        100,
+        118
+      ],
+      "anchor_px": [
+        50.0,
+        116
+      ],
+      "source_intensity_range": [
+        12,
+        77
+      ],
+      "opaque_pixels": 6785,
+      "palette_size": 15,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "spruce",
+      "original": "raw/spruce-original.png",
+      "sha256": "f4693de7142ab8a1c81f01502ce1ae18a397ad3882fef2bb18de4e42524acfe9",
+      "source_bounds_px": [
+        200,
+        46,
+        813,
+        952
+      ],
+      "size_px": [
+        100,
+        132
+      ],
+      "anchor_px": [
+        49.5,
+        130
+      ],
+      "source_intensity_range": [
+        20,
+        86
+      ],
+      "opaque_pixels": 6404,
+      "palette_size": 16,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "cypress",
+      "original": "raw/cypress-original.png",
+      "sha256": "645135806956916489b839fed11f161b0d9e639dd3ce9174fbd60f3e0ec900b1",
+      "source_bounds_px": [
+        392,
+        92,
+        627,
+        953
+      ],
+      "size_px": [
+        36,
+        108
+      ],
+      "anchor_px": [
+        18.5,
+        106
+      ],
+      "source_intensity_range": [
+        4,
+        77
+      ],
+      "opaque_pixels": 2103,
+      "palette_size": 15,
+      "alpha_values": [
+        0,
+        255
+      ]
+    }
+  ]
+}

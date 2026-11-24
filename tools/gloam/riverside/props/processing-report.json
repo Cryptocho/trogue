@@ -1,0 +1,41 @@
+{
+  "lamp": {
+    "size_px": [
+      26,
+      104
+    ],
+    "alpha_values": [
+      0,
+      255
+    ],
+    "opaque_pixel_count": 1060,
+    "rgb_colour_count": 21,
+    "sha256": "7f3c1c7355760efdbbb1e327b37596809e6b745cbc9ac68919ebaa08e0834a54"
+  },
+  "traveler": {
+    "size_px": [
+      21,
+      37
+    ],
+    "alpha_values": [
+      0,
+      255
+    ],
+    "opaque_pixel_count": 550,
+    "rgb_colour_count": 23,
+    "sha256": "1df631584e876fb75836cc093d28c46907bf0effa664b145e1881e6c631267b9"
+  },
+  "stone": {
+    "size_px": [
+      32,
+      42
+    ],
+    "alpha_values": [
+      0,
+      255
+    ],
+    "opaque_pixel_count": 1082,
+    "rgb_colour_count": 23,
+    "sha256": "66e90ab2626d3a2089c5099258c3df08ab0691c5544df0e3d578b1c7e93dd77c"
+  }
+}

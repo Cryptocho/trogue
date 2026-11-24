@@ -36,7 +36,7 @@ impl SceneMode {
     fn title(self) -> &'static str {
         match self {
             Self::Hd => "苔径留灯 · HD-2D",
-            Self::Pixel => "苔径留灯 · 纯 2D 像素",
+            Self::Pixel => "青灯河湾 · 纯 2D 像素",
         }
     }
 }

@@ -1,8 +1,8 @@
-//! World lighting and Bloom finish on the art grid. Only palette lookup and
-//! integer enlargement touch the native window; no high-res fog or overlays.
+//! Art, reflections, HDR lamplight and fog all finish on the native pixel grid.
+//! The window copies whole texels: light can grade smoothly without softening an outline.
 use bevy::{
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
-    image::{ImageLoaderSettings, ImageSampler},
+    image::ImageSampler,
     prelude::*,
     render::{
         camera::{RenderTarget, ScalingMode},
@@ -14,7 +14,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use super::{PaperAssets, VIEW_HEIGHT, WORLD};
+use super::{VIEW_HEIGHT, WORLD};
 use crate::{Comparison, SceneCamera, SceneMode, lantern_bloom, pixel_scale};
 
 pub(super) const SIZE: UVec2 = UVec2::new(512, 288);
@@ -27,21 +27,19 @@ pub(super) struct PixelCanvas;
 
 impl Plugin for PixelCanvas {
     fn build(&self, app: &mut App) {
-        app.add_plugins(Material2dPlugin::<IndexedFrame>::default())
+        app.add_plugins(Material2dPlugin::<PixelFrame>::default())
             .add_systems(Startup, open)
             .add_systems(Update, fit);
     }
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Clone)]
-struct IndexedFrame {
+struct PixelFrame {
     #[texture(0)]
     frame: Handle<Image>,
-    #[texture(1)]
-    colors: Handle<Image>,
 }
 
-impl Material2d for IndexedFrame {
+impl Material2d for PixelFrame {
     fn fragment_shader() -> ShaderRef {
         "gloam/paper/present.wgsl".into()
     }
@@ -50,11 +48,9 @@ impl Material2d for IndexedFrame {
 fn open(
     mut commands: Commands,
     comparison: Res<Comparison>,
-    server: Res<AssetServer>,
-    mut pending: ResMut<PaperAssets>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<IndexedFrame>>,
+    mut materials: ResMut<Assets<PixelFrame>>,
 ) {
     let mut target = Image::new_uninit(
         Extent3d { width: SIZE.x, height: SIZE.y, depth_or_array_layers: 1 },
@@ -66,7 +62,7 @@ fn open(
     target.sampler = ImageSampler::nearest();
     let frame = images.add(target);
     let mut world_view = commands.spawn((
-        Name::new("苔径留灯 · 原生像素画布"),
+        Name::new("青灯河湾 · 原生像素画布"),
         SceneCamera(SceneMode::Pixel),
         Camera2d,
         Camera {
@@ -90,15 +86,10 @@ fn open(
     if comparison.bloom {
         world_view.insert(lantern_bloom());
     }
-    let colors: Handle<Image> = server.load_with_settings("gloam/paper/palette.png", |s: &mut ImageLoaderSettings| {
-        s.is_srgb = true;
-        s.sampler = ImageSampler::nearest();
-    });
-    pending.0.push(colors.id().untyped());
     commands.spawn((
         Name::new("整数像素呈现"),
         Mesh2d(meshes.add(Rectangle::new(SIZE.x as f32, SIZE.y as f32))),
-        MeshMaterial2d(materials.add(IndexedFrame { frame, colors })),
+        MeshMaterial2d(materials.add(PixelFrame { frame })),
         PRESENT,
     ));
     commands.spawn((
@@ -119,7 +110,7 @@ fn open(
 
 fn fit(
     window: Single<&Window, With<PrimaryWindow>>,
-    mut canvas: Single<&mut Transform, With<MeshMaterial2d<IndexedFrame>>>,
+    mut canvas: Single<&mut Transform, With<MeshMaterial2d<PixelFrame>>>,
     mut last: Local<Option<(UVec2, f32)>>,
 ) {
     let size = window.physical_size();

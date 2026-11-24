@@ -1,0 +1,53 @@
+{
+  "title": "Riverside native tree assets / 河岸独立整株树",
+  "generator": {
+    "tool": "generate_image",
+    "provider": "openai-codex",
+    "model": "gpt-image-2-codex",
+    "catalog_model": "openai-codex/gpt-image-2",
+    "output_size_px": [1024, 1024],
+    "quality": "medium",
+    "reference_image_input": "input/riverside-study-02.webp",
+    "reference_original": "reference/gloam-comparison/art-direction/riverside-study-02.webp",
+    "user_direction_copy": "input/user-riverside.png",
+    "reference_role": "The complete approved study was supplied as an actual input.path in all three saved requests. It guided style, proportions and density only. No landscape pixels were cut out, copied, sampled as runtime art or baked into the sprites.",
+    "request_files": ["request-round.json", "request-spruce.json", "request-cypress.json"],
+    "raw_response_files": ["raw/round-result.txt", "raw/spruce-result.txt", "raw/cypress-result.txt"],
+    "raw_originals": ["raw/round-original.png", "raw/spruce-original.png", "raw/cypress-original.png"],
+    "selection": "All three first-generation originals were opened, then the processed albedo/normal/left-light/right-light review and native reference comparison were opened. Selected these originals because their species silhouettes match the requested compact round crown, uneven drooping spruce tiers and full narrow cypress. Processing corrected mattes and native-scale contour/color density; no further image generation was needed.",
+    "terms": "AI-generated original assets; generator service terms apply. The supplied project reference is retained for provenance, not redistributed as runtime art. No third-party asset download."
+  },
+  "reproduce_processing": "uv run --project tools/gloam/terrain tools/gloam/riverside/trees/prepare.py",
+  "generation_commands": [
+    "generate_image @tools/gloam/riverside/trees/request-round.json > tools/gloam/riverside/trees/raw/round-result.txt",
+    "generate_image @tools/gloam/riverside/trees/request-spruce.json > tools/gloam/riverside/trees/raw/spruce-result.txt",
+    "generate_image @tools/gloam/riverside/trees/request-cypress.json > tools/gloam/riverside/trees/raw/cypress-result.txt"
+  ],
+  "reproduction_note": "Retained original PNGs make processing deterministic. Generation itself is nondeterministic and the tool selects a configured model; the exact observed model is above and in each raw response. prepare.py can retain the returned /tmp image when the corresponding retained original does not yet exist. For a new generation candidate, preserve old originals before replacing them.",
+  "runtime_manifest": "assets/gloam/riverside/trees/manifest.json",
+  "native_canvas": [512, 288],
+  "sprites": [
+    {"name": "round", "size_px": [100, 118], "anchor_px": [50, 116], "palette_colors": 15, "canopy_geometry": "Four overlapping rounded crown lobes, independent cylindrical trunk"},
+    {"name": "spruce", "size_px": [100, 132], "anchor_px": [49.5, 130], "palette_colors": 16, "canopy_geometry": "Six uneven branch-tier lobes, independent cylindrical trunk"},
+    {"name": "cypress", "size_px": [36, 108], "anchor_px": [18.5, 106], "palette_colors": 15, "canopy_geometry": "Three vertically overlapping tapered lobes, independent short root foot"}
+  ],
+  "processing": [
+    "Honor real source alpha when present; otherwise remove magenta key by chroma. Keep the largest connected tree, fill unintended alpha pinholes and remove detached translucent dust.",
+    "Tight source bounds are recorded in processing-report.json. Resample premultiplied RGB with coverage-aware box filtering into the native target bounds with two transparent border pixels. This prevents magenta/white matte contamination. Coverage threshold gives strictly binary alpha.",
+    "Remap generated connected foliage paint into nine neutral olive/blue-green albedo pigments and bark into six umber pigments, preserving species-specific paint structure while removing source exposure. Add a one-native-pixel deep-ink outer contour, not a blurred border.",
+    "Normals use smooth overlapping ellipsoid crown/branch-tier volumes and separate row-local trunk cylinders, not albedo brightness. Encoded linear RGB, OpenGL convention: +X right, +Y image-up, +Z toward the viewer. Exact same dimensions and binary alpha as each color sprite.",
+    "Anchor is the median center of the lowest actual opaque root-support pixels, at their lower edge. No ground, emission, cast shadow, reflection or halo is in either runtime texture."
+  ],
+  "inspection_evidence": {
+    "processed_light_review": "review.png",
+    "native_reference_comparison": "native-comparison.png",
+    "processing_report": "processing-report.json",
+    "review_note": "Offline diagnostic artwork, NOT a Bevy screenshot or engine verification. Both white-light previews were visibly inspected; the near canopy/trunk side changes with the light direction while the opposite side darkens. Native assets remain readable at the reference's 432x288 comparison scale."
+  },
+  "limits": [
+    "Foliage normals approximate rounded clusters and branch tiers; they are not a reconstructed mesh or per-leaf normals. They cannot create external occlusion, cast shadows, reflections or self-shadowing without game-side rendering.",
+    "The round crown intentionally has a calm darker upper mass, like the reference. Albedo keeps only restrained material variation; it is brighter than a fully exposed night screenshot so game ambient/light can establish night and lamp-side volume.",
+    "No Bevy build, game run, formatter, test or git operation was performed. Final actual camera, moved-lamp response, shadow and water reflection acceptance remain with the integrating main agent."
+  ],
+  "中文说明": "这是用已确认风格图作为真实图像条件重新生成的三株树，不是从风景截图抠图。原图、请求、输入副本、模型、加工脚本及审阅图全部留在 tools 源目录；运行目录只含颜色、法线和 manifest。"
+}

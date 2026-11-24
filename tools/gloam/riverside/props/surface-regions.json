@@ -1,0 +1,69 @@
+{
+  "lamp": {
+    "anchor_px": [13.5, 104.0],
+    "emitter_px": [13.0, 23.0],
+    "normal_regions": [
+      {"label": "roof left sloping plane / 左坡帽", "polygon": [[0,13],[10,5],[13,5],[17,15],[12,17],[4,15]], "normal": [-0.32,0.64,0.70]},
+      {"label": "roof right sloping plane / 右坡帽", "polygon": [[13,5],[17,5],[25,13],[24,15],[18,16],[16,14]], "normal": [0.62,0.48,0.62]},
+      {"label": "roof front bevel", "polygon": [[0,14],[6,15],[13,16],[18,15],[21,15],[19,18],[11,18],[5,17]], "normal": [0,-0.45,0.89]},
+      {"label": "finial crown", "rectangle": [11,0,14,2], "normal": [0,0.65,0.76]},
+      {"label": "finial side", "rectangle": [14,2,16,5], "normal": [0.65,0,0.76]},
+      {"label": "glass front", "rectangle": [5,18,14,28], "normal": [0.03,0,1]},
+      {"label": "glass side", "polygon": [[16,19],[21,17],[21,25],[18,28],[16,28]], "normal": [0.68,0,0.73]},
+      {"label": "front left frame bevel", "rectangle": [4,18,4,27], "normal": [-0.65,0,0.76]},
+      {"label": "central lantern mullion", "rectangle": [15,19,15,28], "normal": [0.45,0,0.89]},
+      {"label": "outer right frame", "rectangle": [21,18,22,27], "normal": [0.80,0,0.60]},
+      {"label": "lantern bottom upper lip", "polygon": [[5,29],[15,29],[19,28],[21,29],[19,31],[7,31]], "normal": [0,0.58,0.81]},
+      {"label": "lantern base front", "polygon": [[5,31],[20,31],[17,34],[10,34]], "normal": [0,-0.28,0.96]},
+      {"label": "wooden post left bevel", "rectangle": [10,35,11,103], "normal": [-0.52,0,0.85]},
+      {"label": "wooden post front", "rectangle": [12,35,13,103], "normal": [-0.08,0,1]},
+      {"label": "wooden post right face", "rectangle": [14,35,16,103], "normal": [0.62,0,0.78]},
+      {"label": "post ring top", "rectangle": [9,67,16,68], "normal": [0,0.72,0.69]},
+      {"label": "post ring front", "rectangle": [9,69,16,70], "normal": [0,-0.08,1]},
+      {"label": "post ring right end", "rectangle": [16,68,17,70], "normal": [0.75,0,0.66]}
+    ],
+    "emission_regions": [
+      {"label": "front glass only", "polygon": [[5,18],[9,18],[9,19],[14,19],[14,28],[7,28],[7,27],[6,27],[6,26],[5,26]], "value": 255},
+      {"label": "right glass only", "polygon": [[16,19],[19,18],[20,17],[20,24],[19,26],[18,27],[16,28]], "value": 220}
+    ]
+  },
+  "traveler": {
+    "anchor_px": [10.5, 37.0],
+    "normal_regions": [
+      {"label": "hood broad back", "polygon": [[7,2],[10,2],[16,7],[16,10],[12,13],[7,14],[4,12],[4,9]], "normal": [0,0.08,1]},
+      {"label": "hood left curve", "polygon": [[7,1],[7,5],[5,10],[6,13],[4,14],[3,12],[3,9],[5,5]], "normal": [-0.62,0.12,0.78]},
+      {"label": "hood crown", "polygon": [[7,0],[10,0],[15,4],[18,7],[16,8],[12,5],[9,2],[6,5]], "normal": [0.08,0.68,0.73]},
+      {"label": "hood right curve", "polygon": [[16,6],[18,7],[18,10],[17,12],[14,14],[11,15],[9,14],[13,12],[16,10]], "normal": [0.64,0.04,0.77]},
+      {"label": "hood lower curl", "polygon": [[4,13],[8,14],[13,13],[15,14],[12,16],[7,16],[5,15]], "normal": [0,-0.48,0.88]},
+      {"label": "cape shoulders", "polygon": [[5,16],[8,16],[11,18],[15,15],[17,16],[17,19],[13,21],[7,19],[3,21]], "normal": [0,0.43,0.90]},
+      {"label": "cape left side", "polygon": [[4,18],[6,19],[4,24],[4,29],[6,31],[3,31],[0,30],[0,25],[2,21]], "normal": [-0.65,0.05,0.76]},
+      {"label": "cape right side", "polygon": [[17,18],[20,22],[20,30],[17,31],[15,30],[17,27],[17,23],[15,21]], "normal": [0.66,0.03,0.75]},
+      {"label": "cape broad middle", "polygon": [[7,20],[13,20],[16,23],[16,29],[12,32],[6,31],[5,26]], "normal": [0.04,0,1]},
+      {"label": "cape center folded ridge", "polygon": [[11,20],[13,21],[12,25],[13,29],[11,31],[10,27]], "normal": [0.30,0.04,0.95]},
+      {"label": "belt front", "rectangle": [8,25,16,27], "normal": [0,0,1]},
+      {"label": "belt right curve", "rectangle": [17,24,20,27], "normal": [0.62,0,0.78]},
+      {"label": "belt pouch", "rectangle": [3,24,7,28], "normal": [-0.12,0,0.99]},
+      {"label": "pouch flap upper edge", "rectangle": [3,24,7,24], "normal": [0,0.72,0.69]},
+      {"label": "cape hem front", "rectangle": [4,30,16,32], "normal": [0,-0.25,0.97]},
+      {"label": "left boot top", "rectangle": [6,33,9,34], "normal": [-0.20,0.62,0.76]},
+      {"label": "left boot front", "rectangle": [5,35,10,36], "normal": [-0.28,0,0.96]},
+      {"label": "right boot top", "rectangle": [13,33,16,34], "normal": [0.20,0.62,0.76]},
+      {"label": "right boot front", "rectangle": [12,35,17,36], "normal": [0.28,0,0.96]}
+    ]
+  },
+  "stone": {
+    "anchor_px": [16.0, 42.0],
+    "normal_regions": [
+      {"label": "stone broad front", "polygon": [[6,10],[19,11],[22,16],[23,26],[26,39],[7,40],[2,31],[4,22]], "normal": [-0.05,0.02,1]},
+      {"label": "left irregular bevel", "polygon": [[5,8],[8,10],[7,18],[6,23],[3,28],[5,34],[7,37],[5,40],[2,39],[0,30],[2,24],[3,19],[3,11]], "normal": [-0.62,0.06,0.78]},
+      {"label": "right structural face", "polygon": [[25,8],[28,13],[28,18],[29,22],[29,25],[31,26],[31,34],[29,36],[28,40],[24,40],[23,30],[22,27],[22,18],[20,15],[22,12],[24,11]], "normal": [0.72,0.02,0.69]},
+      {"label": "top chipped plane and attached moss cap", "polygon": [[13,0],[18,0],[23,3],[26,7],[25,10],[22,12],[19,10],[16,12],[11,10],[8,11],[4,12],[4,8],[8,4]], "normal": [-0.08,0.72,0.69]},
+      {"label": "cap front hanging moss edge", "polygon": [[7,10],[11,11],[14,10],[17,12],[20,12],[22,11],[22,15],[21,18],[19,16],[18,13],[15,12],[14,14],[10,13],[8,12]], "normal": [-0.04,0.25,0.97]},
+      {"label": "top right exposed rock chip", "polygon": [[17,2],[20,2],[24,5],[25,8],[22,9],[20,8],[17,7],[14,6]], "normal": [0.30,0.62,0.72]},
+      {"label": "left fissure inner bevel", "polygon": [[8,14],[9,15],[8,20],[6,23],[6,22],[7,18]], "normal": [-0.30,0.02,0.95]},
+      {"label": "short lower fissure inner bevel", "polygon": [[19,26],[20,27],[20,30],[18,33],[18,34],[17,34],[18,30],[19,29]], "normal": [0.28,-0.02,0.96]},
+      {"label": "attached moss left foot", "polygon": [[1,36],[4,35],[7,38],[10,40],[7,41],[2,39]], "normal": [-0.22,0.40,0.89]},
+      {"label": "attached moss right foot", "polygon": [[24,36],[28,36],[28,39],[24,41],[21,41],[20,40]], "normal": [0.28,0.36,0.89]}
+    ]
+  }
+}

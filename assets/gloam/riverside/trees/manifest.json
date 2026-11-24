@@ -1,0 +1,43 @@
+{
+  "sprites": [
+    {
+      "name": "round",
+      "size_px": [
+        100,
+        118
+      ],
+      "anchor_px": [
+        50.0,
+        116
+      ],
+      "image": "gloam/riverside/trees/round.png",
+      "normal": "gloam/riverside/trees/round_normal.png"
+    },
+    {
+      "name": "spruce",
+      "size_px": [
+        100,
+        132
+      ],
+      "anchor_px": [
+        49.5,
+        130
+      ],
+      "image": "gloam/riverside/trees/spruce.png",
+      "normal": "gloam/riverside/trees/spruce_normal.png"
+    },
+    {
+      "name": "cypress",
+      "size_px": [
+        36,
+        108
+      ],
+      "anchor_px": [
+        18.5,
+        106
+      ],
+      "image": "gloam/riverside/trees/cypress.png",
+      "normal": "gloam/riverside/trees/cypress_normal.png"
+    }
+  ]
+}

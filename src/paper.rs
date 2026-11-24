@@ -1,7 +1,8 @@
-//! The same clearing on a 2D canvas. Map depth affects sorting, never size.
+//! A bank, six relightable cutouts and their water reflections on one pixel grid.
 mod actors;
 mod canvas;
 mod ground;
+mod stage;
 
 use bevy::{asset::UntypedAssetId, prelude::*};
 use bevy::render::view::RenderLayers;
@@ -14,14 +15,10 @@ const WORLD: RenderLayers = RenderLayers::layer(2);
 #[derive(Resource)]
 pub(super) struct PixelReady;
 
-const VIEW_HEIGHT: f32 = canvas::SIZE.y as f32 / 25.;
+const VIEW_HEIGHT: f32 = canvas::SIZE.y as f32 / stage::PPM;
 pub(super) const DETAIL_SCALE: f32 = 25. / 42.;
 pub(super) const WIDE_SCALE: f32 = 25. / 22.;
 const GROUND_SCALE: f32 = 0.568;
-
-fn on_map(x: f32, z: f32) -> Vec2 {
-    Vec2::new(x, -(z + 0.3) * GROUND_SCALE)
-}
 
 fn sort_key(z: f32) -> f32 {
     10.0 + z * 0.1
@@ -35,6 +32,7 @@ struct PaperSettings {
     fog: bool,
     shadows: bool,
     flat_sprites: bool,
+    reflections: bool,
     key: f32,
 }
 
@@ -47,6 +45,7 @@ impl Plugin for PaperPlugin {
             fog: !options.clear_air,
             shadows: !options.no_shadows,
             flat_sprites: options.flat_sprites,
+            reflections: !options.no_reflections,
             key: match options.stone_key {
                 Some(KeySide::Left) => -1.0,
                 Some(KeySide::Right) => 1.0,
@@ -56,6 +55,7 @@ impl Plugin for PaperPlugin {
         app.insert_resource(settings)
             .init_resource::<PaperAssets>()
             .add_plugins((canvas::PixelCanvas, ground::GroundPlugin, actors::ActorPlugin))
+            .add_systems(PreStartup, stage::load)
             .add_systems(Update, (controls, finish_loading.run_if(resource_exists::<PaperAssets>)));
     }
 }
@@ -78,7 +78,7 @@ fn finish_loading(
             }
         }
     }
-    info!("像素夜林素材就绪：画布 {}×{}，二维绘制对象 {}。", canvas::SIZE.x, canvas::SIZE.y, flat.iter().len());
+    info!("青灯河湾素材就绪：画布 {}×{}，二维绘制对象 {}。", canvas::SIZE.x, canvas::SIZE.y, flat.iter().len());
     commands.insert_resource(PixelReady);
     commands.remove_resource::<PaperAssets>();
 }
@@ -96,6 +96,9 @@ fn controls(
     }
     if keys.just_pressed(KeyCode::KeyS) {
         settings.shadows = !settings.shadows;
+    }
+    if keys.just_pressed(KeyCode::KeyR) {
+        settings.reflections = !settings.reflections;
     }
     if keys.just_pressed(KeyCode::KeyN) {
         settings.flat_sprites = !settings.flat_sprites;

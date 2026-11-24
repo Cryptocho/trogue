@@ -1,0 +1,46 @@
+{
+  "title": "河岸校准图独立三主体 / Riverside focal props",
+  "reference": {
+    "approved_image": "reference/gloam-comparison/art-direction/riverside-study-02.webp",
+    "preserved_copy": "input/riverside-study-02.webp",
+    "sha256": "13ad0ca5ef00b3f3381668392299a80c439f36adf6f9817cc748c7c9beccd273",
+    "role": "Actual image input in EACH generate_image request; isolated sprites were newly generated, never cut from this landscape.",
+    "excluded_style_sources": ["previous HD-2D assets", "previous pixel night-forest assets"]
+  },
+  "generation": {
+    "tool": "generate_image",
+    "provider": "openai-codex",
+    "model": "gpt-image-2-codex (catalog openai-codex/gpt-image-2)",
+    "requests": ["requests/lamp.json", "requests/traveler.json", "requests/stone.json"],
+    "responses": ["raw/lamp-response.txt", "raw/traveler-response.txt", "raw/stone-response.txt"],
+    "raw_outputs": ["raw/lamp.webp", "raw/traveler.png", "raw/stone.png"],
+    "terms": "https://openai.com/policies/terms-of-use/",
+    "external_asset_downloads": []
+  },
+  "reproduction": [
+    "generate_image @tools/gloam/riverside/props/requests/lamp.json >tools/gloam/riverside/props/raw/lamp-response.txt",
+    "generate_image @tools/gloam/riverside/props/requests/traveler.json >tools/gloam/riverside/props/raw/traveler-response.txt",
+    "generate_image @tools/gloam/riverside/props/requests/stone.json >tools/gloam/riverside/props/raw/stone-response.txt",
+    "uv run --project tools/gloam/terrain tools/gloam/riverside/props/process.py --extract"
+  ],
+  "normal_convention": {
+    "encoding": "linear RGB: round((normalized_vector * 0.5 + 0.5) * 255)",
+    "axes": "+X image right / +Y image up / +Z toward viewer",
+    "method": "Manually authored geometric surface regions, not albedo-gradient emboss. Normal alpha exactly matches sprite alpha."
+  },
+  "runtime": "Only RGBA, normal, lamp linear grayscale emission and manifest in assets/gloam/riverside/props/. Previews and original files remain in tools/.",
+  "scope": "Static single-direction sprites only. No animation or unseen back-side geometry is claimed. Runtime relighting and water reflections are not verified here; the main agent owns game integration and runtime verification.",
+  "processing": [
+    "Each isolated object was newly generated using the approved full reference as actual image input; no scenery pixels are used in the runtime sprites.",
+    "Chroma/alpha key, largest connected component, cropped premultiplied BOX reduction to the target native footprint, limited palette with no dithering, and binary coverage. Raw lamp is genuinely WEBP; traveler and stone are PNG.",
+    "Hand-authored structural normal planes are preserved in surface-regions.json; normal regions follow roof slopes, glass faces, post, hood curvature, cloak folds, stone cap/front/right bevel and two sparse fissures.",
+    "Only geometric glass regions intersected with actual yellow glass material emit. Emission is uncoloured linear grayscale; ordinary objects have no emission. Light centre is in native top-left image coordinates.",
+    "Opened actual final nearest-neighbour albedo/normal sheet, opposite-white-light diagnostic and glass-only emission sheet. Silhouettes are clean on light and green backgrounds with no floor, baked exterior shadow, glow, reflection, white rim or fake checkerboard.",
+    "Original user-riverside.png was visually compared as a direction cross-check only; it is not the generation style source."
+  ],
+  "limitations": [
+    "The stone side is intrinsically a little darker in the model albedo; normal response changes visibly with opposite offline lights, but the normal does not invent unseen geometry.",
+    "Single-frame rear-three-quarter traveler looks up/right; there are no additional facings or animation frames.",
+    "The material diagnostics are offline image processing, never presented as Bevy gameplay evidence."
+  ]
+}

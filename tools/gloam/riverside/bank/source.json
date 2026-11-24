@@ -1,0 +1,12 @@
+{
+  "role": "原创河湾地面材料包，不是场景背景",
+  "tool": "generate_image",
+  "model": "openai-codex/gpt-image-2 (gpt-image-2-codex)",
+  "condition": "reference/gloam-comparison/art-direction/riverside-study-02.webp",
+  "request": "request.json",
+  "original": "original.webp",
+  "original_size": [1536,1024],
+  "sha256": "f15357550919dda68842f3d393b7606fc4e31661ae8593023be1cee9399e0f5c",
+  "selection": "原图确实分为草皮、潮土两个横带，无树、灯或倒影。只保留少量生成的草记号和嵌石断面，转换为近色的原生像素笔触；河岸形状与水域另画，倒影由实时精灵产生。",
+  "build": "uv run --project tools/gloam/terrain tools/gloam/riverside/bank/prepare.py"
+}

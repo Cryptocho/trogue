@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>苔径留灯 · 像素游戏与 HD-2D 对照</title>
+<title>青灯河湾 · 像素实景与参考</title>
 <style>
 :root { color-scheme: dark; background: #141819; color: #eee8dc; font: 16px/1.55 system-ui,sans-serif; }
 body { max-width: 1800px; margin: auto; padding: .9rem; }
@@ -10,28 +10,31 @@ header, nav { display:flex; align-items:center; flex-wrap:wrap; gap: .5rem 1.2re
 header { justify-content:space-between; } h1 { font-size:1.35rem; margin:0; } select { font:inherit; }
 main { display:grid; gap:.75rem; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:.85rem; }
 main.solo { grid-template-columns:1fr; } figure { margin:0; } img { width:100%; height:auto; display:block; aspect-ratio:16 / 9; }
-img[src^="2d"] { image-rendering:pixelated; }
+img {object-fit:contain} img[src^="2d"], img[src^="riverside/"] { image-rendering:pixelated; }
 figcaption { margin-bottom:.25rem; color:#e4c597; font-weight:600; } p { color:#c0c4c3; margin:.7rem 0; }
 a { color:#b7d5e4; } @media(max-width:760px){ main { grid-template-columns:1fr; } }
 </style>
 <header>
-  <h1>苔径留灯 · 像素游戏与 HD-2D</h1>
+  <h1>青灯河湾 · 实景对照</h1>
   <nav aria-label="比较方式">
-    <label>取景 <select id="pair"><option>夜林全景</option><option>旅人与界石近景</option><option>像素界石：同一盏灯换边</option></select></label>
+    <label>取景 <select id="pair"><option>河湾实机 / 选定的参考</option><option>河湾 / HD-2D 夜林</option><option>倒影开 / 关</option><option>河湾界石：左灯 / 右灯</option><option>河湾近景 / 全景</option><option>历史：旧夜林的两种画法</option></select></label>
     <label>显示 <select id="layout"><option>并排</option><option>只看图 A</option><option>只看图 B</option></select></label>
   </nav>
 </header>
 <main>
-  <figure><figcaption>A · 纯 2D 像素</figcaption><a href="2d.png"><img src="2d.png" alt="用原生像素画出的夜林"></a></figure>
-  <figure><figcaption>B · HD-2D</figcaption><a href="hd2d.png"><img src="hd2d.png" alt="HD-2D 夜林全景"></a></figure>
+  <figure><figcaption>A · 青灯河湾 · 实机</figcaption><a href="riverside/wide.png"><img src="riverside/wide.png" alt="青灯河湾原生主窗口截图"></a></figure>
+  <figure><figcaption>B · 风格参考 · 非实机</figcaption><a href="art-direction/riverside-study-02.webp"><img src="art-direction/riverside-study-02.webp" alt="选作画风依据的生成参考图"></a></figure>
 </main>
-<p>游戏里运行 <code>tools/gloam/view.sh</code>，按空格在同一个窗口切换画法。点图可打开主窗口原图。像素版绘制在 512×288，最终整幅放大五倍；HD-2D 保留写实地表和透视镜头。</p>
-<p><a href="art-direction/hd2d-to-pixel.webp">由 HD-2D 实截图生成的像素重绘参考（非实机）</a> · <a href="study.md">实际改动与验收</a></p>
+<p>运行 <code>tools/gloam/view.sh --2d</code> 进入河湾。空格切到原 HD-2D 夜林；R 只开关水中倒影。两幅场景布局不同，不是同一个地形。点图可打开原图。</p>
+<p><a href="riverside/study.md">河湾素材来源与实机验证</a> · <a href="art-direction/user-riverside.png">用户给的风格图</a> · <a href="study.md">历史夜林对照</a></p>
 <script>
 const pairs = [
-    [['像素夜林 · 全景', '2d.png'], ['HD-2D · 全景', 'hd2d.png']],
-    [['像素夜林 · 近景', '2d-detail.png'], ['HD-2D · 近景', 'hd2d-detail.png']],
-    [['像素界石 · 左灯', '2d-key-left.png'], ['像素界石 · 右灯', '2d-key-right.png']],
+    [['青灯河湾 · 实机', 'riverside/wide.png'], ['选定的风格参考 · 非实机', 'art-direction/riverside-study-02.webp']],
+    [['青灯河湾 · 纯 2D', 'riverside/wide.png'], ['苔径留灯 · HD-2D', 'hd2d.png']],
+    [['精灵倒影开启', 'riverside/wide.png'], ['关闭倒影，水光保留', 'riverside/no-mirrors.png']],
+    [['苔石 · 左灯', 'riverside/left.png'], ['苔石 · 右灯', 'riverside/right.png']],
+    [['河湾 · 近景', 'riverside/detail.png'], ['河湾 · 全景', 'riverside/wide.png']],
+    [['旧夜林 · 像素', '2d.png'], ['旧夜林 · HD-2D', 'hd2d.png']],
 ];
 const pair = document.querySelector('#pair'), layout = document.querySelector('#layout');
 function update() {

@@ -667,20 +667,19 @@ AI 策略应当能够保存和复用。
 
 ### 12.1 美术风格
 
-美术路线尚未确定。用同一个静态场景比较两种候选：
+美术路线尚未确定。保留早期同机位夜林对照，并用独立的河湾场景检查新的像素画风：
 
 - **纯 2D 像素游戏**：地表、草木、旅人和石灯都用成簇的像素与有限色阶造型。整幅画面用同一像素网格；法线、接地阴影、湿地反光和薄雾也在该网格内工作。这不是把写实地面铺在二维平面上。
 - **HD-2D**：2D 精灵与受光的 3D 环境结合，环境可使用普通或体素模型。
 
-对照条件是同一条路、同一个人和同一盏灯，不要求画风相同。看地面材质好不好认、角色是否落地、石面亮暗是否随灯换边，以及目标桌面上的帧时间；两条路线仍待选择。
+早期夜林对齐同一条路、同一个人和同一盏灯；当前河湾依照作者选定的风格参考重新布景，不是相同地形的性能对照。两条路线都要看地面材质、角色是否站稳和石面能否随灯换亮面。
 
-**对照场景「苔径留灯」**：固定方向的斜俯视夜林，旅人在界石和路灯之间停步。两版均无战斗、弹幕或 UI。已有 HD-2D 版使用带法线的精灵和 3D 林道、草蕨、浅水、铜灯；这是技术验证，不是选型结论。
+**当前实景**：纯 2D 为「青灯河湾」，低纹理草岸围出暗蓝河道；独立树、兜帽旅人、苔石和立灯均可受光，灯与树在水面产生受岸线裁切的倒影。HD-2D 仍是「苔径留灯」夜林。两版均无战斗、弹幕或 UI。
 
-- 实景入口：`tools/gloam/view.sh` 打开唯一游戏窗口，**空格**在 HD-2D 和纯 2D 像素之间切换；`--2d` 只改初始画法。滚轮缩放、`B` 切换 Bloom、`F` 切换薄雾，三者切换画法时保留状态。`F12` 截当前画法，`Esc` 退出。HD-2D 的 `D` 切换镜头景深；像素夜林的 `←` / `→` / `0` 左照、右照、移走界石验光灯，`N` 切换精灵法线，`S` 切换地面投影。
-- 可重复取景：`tools/gloam/view.sh --capture captures/gloam/forest.png`。加 `--detail` 取近景；`--deep-focus`、`--no-bloom`、`--clear-air`、`--no-shadows`、`--flat-sprites` 可逐项对照。`--detail --stone-key left` 和 `--detail --stone-key right` 为等距白灯验光，常规场景没有这盏灯。素材就绪并预热、采样后才截图退出。取舍、出处与实测见[空间层次研究](reference/hd2d-spatial-depth.md)。
-- 运行资产在 `assets/gloam/`。HD-2D 用的 PixelLab 精灵见 `assets/gloam/sprites/manifest.json`，写实地表与 Blender 源在 `tools/gloam/`。像素版独立美术与色板在 `assets/gloam/paper/`，制作脚本在 `tools/gloam/paper/`；两版都不把参考截图作为场景背景。
-- [两种画法的实景对照](reference/gloam-comparison/index.html)与[纯 2D 灯光笔记](reference/gloam-comparison/study.md)保存在 `reference/`。核对同一块界石时，先比较相同取景的左右白灯，再比较两条路线的全景。
-- [由 HD-2D 实截图生成的像素重绘参考](reference/gloam-comparison/art-direction/hd2d-to-pixel.webp)只指导林道、树叶、石纹和光色；不是运行素材或实机画面。
+- 实景入口：`tools/gloam/view.sh --2d` 直接进河湾；去掉 `--2d` 从 HD-2D 夜林开始。**空格**同窗切换，滚轮缩放、`B` 切换 Bloom、`F` 切换雾，`F12` 截当前窗口、`Esc` 退出。HD-2D 用 `D` 切换景深；河湾用 `R` 切换水中精灵倒影（不会关掉水底青光），`←` / `→` / `0` 左照、右照、移走验光灯，`N` 切换精灵法线，`S` 切换地面影。
+- 可重复取景：`tools/gloam/view.sh --2d --capture /tmp/riverside.png`。加 `--detail` 取近景；`--no-reflections` 关闭河湾倒影，`--detail --stone-key left|right` 检查石面。`--clear-air`、`--no-bloom`、`--no-shadows`、`--flat-sprites` 保留。截图在素材就绪并预热、采样后保存。
+- 河湾运行资产在 `assets/gloam/riverside/`，原始生成结果、提示词、加工脚本在 `tools/gloam/riverside/`。以[选定的河岸参考](reference/gloam-comparison/art-direction/riverside-study-02.webp)作为真实图像输入逐件生成，没把整张参考贴进游戏。
+- [实景与参考对照](reference/gloam-comparison/index.html) · [河湾的来源、操作与验证](reference/gloam-comparison/riverside/study.md) · [先前的同构图夜林研究](reference/gloam-comparison/study.md)。
 
 ### 12.2 摄像机
 

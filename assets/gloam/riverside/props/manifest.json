@@ -1,0 +1,48 @@
+{
+  "sprites": [
+    {
+      "name": "lamp",
+      "size_px": [
+        26,
+        104
+      ],
+      "anchor_px": [
+        13.5,
+        104.0
+      ],
+      "image": "gloam/riverside/props/lamp.png",
+      "normal": "gloam/riverside/props/lamp-normal.png",
+      "emission": "gloam/riverside/props/lamp-emission.png",
+      "emitter_px": [
+        13.0,
+        23.0
+      ]
+    },
+    {
+      "name": "traveler",
+      "size_px": [
+        21,
+        37
+      ],
+      "anchor_px": [
+        10.5,
+        37.0
+      ],
+      "image": "gloam/riverside/props/traveler.png",
+      "normal": "gloam/riverside/props/traveler-normal.png"
+    },
+    {
+      "name": "stone",
+      "size_px": [
+        32,
+        42
+      ],
+      "anchor_px": [
+        16.0,
+        42.0
+      ],
+      "image": "gloam/riverside/props/stone.png",
+      "normal": "gloam/riverside/props/stone-normal.png"
+    }
+  ]
+}
